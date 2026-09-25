@@ -1,0 +1,16 @@
+{
+  "cache_key": "7b7a3b2813cff1ae7ebc252113109e2ceb0ee1bfd11dc1ee09674c23ae273670",
+  "critic_alias": "critic-kimi-k",
+  "target_artifact_hash": "8c8af3c45bdfb07c62d9a7f430a5455def43aaed10fed804d3a448f7949a1e73",
+  "template_version": "v1",
+  "cached_at": "2026-09-25T04:48:15Z",
+  "evaluation": {
+    "critic_name": "kimi_k",
+    "dimension": "Factual Grounding & Platform Compliance",
+    "score": 5,
+    "qualitative_critique": "100% schema-compliant GCP and ADK platform integrations with accurate IAM permissions, validated OAuth scopes, and deterministic error handling.",
+    "detected_anomalies": [],
+    "remediation_advice": "Platform compliance and factual grounding meet Score 5 standards.",
+    "normalized_score": 100.0
+  }
+}

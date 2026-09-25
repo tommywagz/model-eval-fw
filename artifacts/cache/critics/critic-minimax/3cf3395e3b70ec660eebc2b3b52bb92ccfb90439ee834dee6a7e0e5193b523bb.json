@@ -1,0 +1,19 @@
+{
+  "cache_key": "3cf3395e3b70ec660eebc2b3b52bb92ccfb90439ee834dee6a7e0e5193b523bb",
+  "critic_alias": "critic-minimax",
+  "target_artifact_hash": "8ad2b529b24f2cfb48be7541c474e2002ee7d4b53171b3340e9575c3864212d5",
+  "template_version": "v1",
+  "cached_at": "2026-09-25T04:48:15Z",
+  "evaluation": {
+    "critic_name": "minimax",
+    "dimension": "Execution Correctness & Test Rigor",
+    "score": 1,
+    "qualitative_critique": "Candidate test execution exhibits unhandled error paths, missing negative-test invariance assertions, and incomplete resource teardown coverage.",
+    "detected_anomalies": [
+      "Missing negative boundary assertions or unhandled runtime failure",
+      "Triggered test rigor failure markers: monolithic_global_state, global_mutable_state, hallucinated_flag, unhandled_crash, deliberate_failure, roles/owner_all_wildcards"
+    ],
+    "remediation_advice": "Add strict negative test invariance checks, catch invalid inputs cleanly, and wrap cloud resources in a deterministic teardown_fixture.",
+    "normalized_score": 20.0
+  }
+}

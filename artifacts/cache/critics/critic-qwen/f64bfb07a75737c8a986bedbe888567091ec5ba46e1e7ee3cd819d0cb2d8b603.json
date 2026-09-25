@@ -1,0 +1,16 @@
+{
+  "cache_key": "f64bfb07a75737c8a986bedbe888567091ec5ba46e1e7ee3cd819d0cb2d8b603",
+  "critic_alias": "critic-qwen",
+  "target_artifact_hash": "8c8af3c45bdfb07c62d9a7f430a5455def43aaed10fed804d3a448f7949a1e73",
+  "template_version": "v1",
+  "cached_at": "2026-09-25T04:48:15Z",
+  "evaluation": {
+    "critic_name": "qwen",
+    "dimension": "Architectural Coherence & Modularity",
+    "score": 5,
+    "qualitative_critique": "Candidate demonstrates idiomatic, fully decoupled modular architecture with clean boundary separation, low cyclomatic complexity, and verified lifecycle management.",
+    "detected_anomalies": [],
+    "remediation_advice": "Architecture meets Score 5 reference standards; no structural changes required.",
+    "normalized_score": 100.0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "cache_key": "de2c34e8f7ff22ca413dac34b343f21132e1d30a99698a760360ff21ae24083f",
+  "critic_alias": "critic-qwen",
+  "target_artifact_hash": "8ad2b529b24f2cfb48be7541c474e2002ee7d4b53171b3340e9575c3864212d5",
+  "template_version": "v1",
+  "cached_at": "2026-09-25T04:48:15Z",
+  "evaluation": {
+    "critic_name": "qwen",
+    "dimension": "Architectural Coherence & Modularity",
+    "score": 1,
+    "qualitative_critique": "Candidate artifact retains monolithic anti-patterns, global mutable state, and tight coupling across service boundaries without clean lifecycle separation.",
+    "detected_anomalies": [
+      "Monolithic global state and circular module dependencies detected",
+      "Triggered architectural failure markers: monolithic_global_state, global_mutable_state, hallucinated_flag, unhandled_crash, deliberate_failure, roles/owner_all_wildcards"
+    ],
+    "remediation_advice": "Decouple domain logic into isolated service modules, eliminate global mutable state, and inject cloud dependencies via interfaces.",
+    "normalized_score": 20.0
+  }
+}
