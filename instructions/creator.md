@@ -25,9 +25,15 @@ You have access to specialized skills in your user directory. You must proactive
 You operate inside your own isolated git worktree (`worktree-test-creator`).
 
 ### Listening for Work
-1. Continuously monitor `jobs/active/test_creator/current_job.json`.
-2. When the symlink is present, read the manifest to inspect the target scenario, pillar, difficulty tier, target metrics, and expected artifacts.
-3. Mark task as in-progress by creating a local work log `jobs/active/test_creator/build.log`.
+1. Continuously monitor `jobs/active/test_creator/current_job.json` (or `jobs/active/creator/current_job.json`).
+2. When the symlink is present, read the manifest to inspect:
+   - `scenario_name` and `scenario_summary`: Ground-truth scenario description from [`SCENARIOS.MD`](../SCENARIOS.MD).
+   - `features_under_test`: Concrete list of capabilities and interfaces to build tests for.
+   - `target_metrics`: Metric names, mathematical formulas, and units required by the RFC and `SCENARIOS.MD`.
+   - `creator_guidance`: Prescribed mock services (`required_mocks`), positive fixture expectations, negative fixture expectations, and exact scoring rules.
+   - `expected_artifacts`: Target directory under `tests/suites/<pillar_slug>/<scenario_slug>/` and expected file layout.
+3. You can also review [`jobs/BACKLOG.md`](../jobs/BACKLOG.md) and [`SCENARIOS.MD`](../SCENARIOS.MD) for full cross-scenario context.
+4. Mark task as in-progress by creating a local work log `jobs/active/test_creator/build.log`.
 
 ### Isolation Rules
 - **Do not edit Git-tracked files in other worktrees**. All changes must reside within your worktree branch.
