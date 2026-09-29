@@ -1,0 +1,23 @@
+{
+  "autoApprove": true,
+  "agents": {
+    "orchestrator": {
+      "model": "gemini-3.8-flash-high",
+      "systemPromptFile": ".agents/instructions/orchestrator.md",
+      "autoApprove": true,
+      "worktree": false
+    },
+    "creator": {
+      "model": "opus-5.5-high",
+      "systemPromptFile": ".agents/instructions/creator.md",
+      "autoApprove": true,
+      "worktree": true
+    },
+    "tester": {
+      "model": "gemini-launch-candidate",
+      "systemPromptFile": ".agents/instructions/tester.md",
+      "autoApprove": true,
+      "worktree": true
+    }
+  }
+}

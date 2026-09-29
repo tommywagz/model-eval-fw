@@ -1,0 +1,1176 @@
+#!/usr/bin/env bash
+#
+# Usage:
+#   work [--no-root] [--restart] <session_name> [num_worktrees] [base_branch]
+#   work --clean <session_name>
+#
+# Options:
+#   --restart   Restart this session after authentication to reload agent settings.
+#               Keeps worktrees, branches and jobs; stops running pane processes.
+#   --no-root   Give every agent its own worktree and leave the repo root alone.
+#               Overrides "worktree": false and the orchestrator default below.
+#
+# Environment:
+#   WORK_DEFAULT_MODEL   Vertex model for any agent that names none (including all
+#                        of the fallback roster). Unset means jetski's own default.
+#   WORK_AUTO_APPROVE    true/1/yes/on adds --dangerously-skip-permissions to the
+#                        fallback roster's panes. Agents from a jetski.json use
+#                        that file's autoApprove.
+#
+# Behavior:
+#   - Automatically authenticates using `gcloud auth application-default login` on
+#     EVERY launch or resume, connecting to the Google Cloud project rooted in your
+#     Application Default Credentials (ADC), before creating or attaching to the
+#     tmux session. --clean skips authentication.
+#   - Restricts model selection strictly to Vertex-found models (via `jetski models`).
+#   - If no worktrees exist yet for this session, creates <num_worktrees> of them.
+#     - Each worktree is created in ../<session_name>-worker-<slug>/
+#     - Each worktree is based on <base_branch> (defaults to 'main').
+#   - If worktrees already exist for this session, reuses them as-is
+#     (num_worktrees is ignored in that case).
+#   - If --clean is specified, removes all worktrees and branches for this session.
+#   - If no base_branch is specified, defaults to 'main'.
+#   - If no tmux session exists for this session name, creates one,
+#   - Splits a session window into one pane per worktree branch.
+#   - Each pane cd's into its worktree and runs `jetski`.
+#   - If a tmux session already exists, attaches to it after completing the
+#     Vertex ADC authentication preflight.
+#   - Sets JETSKI_CONFIG and GOOGLE_CLOUD_PROJECT in every pane and passes
+#     --project <adc_project> to jetski so all subagent panes connect to the
+#     same ADC project and configuration.
+#   - Displays all of the panes in a tiled layout by splitting the window
+#     vertically and horizontally in an alternating manner to show each worktree branch.
+#
+# Where the squad comes from (first match wins):
+#   1. A `jetski.json` with agent entries — see below.
+#   2. Otherwise `.agents/*.md`: each `<name>.md` sitting directly in `.agents/`
+#      becomes agent `<name>`, with that file as its first prompt. Files in
+#      subdirectories (e.g. `.agents/skills/`) are ignored, since those are skill
+#      definitions rather than agent prompts. Model comes from
+#      WORK_DEFAULT_MODEL, autoApprove from WORK_AUTO_APPROVE.
+#   3. Otherwise a lone `orchestrator` in the repo root, plus `num_worktrees`
+#      plain numbered worktrees running bare `jetski`.
+#   In every case an agent named `orchestrator` takes pane 0 in the repo root, so
+#   the first pane is the one that can merge, with or without any configuration.
+#
+# jetski.json workflow (optional):
+#   - On start, looks for a `jetski.json` in the directory the script is run
+#     from (falling back to the repo root). Without that file, the squad is
+#     derived from `.agents/*.md` as described above.
+#   - Each agent entry in it looks like:
+#       "orchestrator": {
+#         "model": "gemini-3.1-pro-high",
+#         "systemPromptFile": ".agents/orchestrator.md",
+#         "autoApprove": true
+#       }
+#     Entries may sit at the top level or under an "agents"/"agent" key.
+#   - Agents are consumed in the order they appear, one per pane:
+#       * <agent_name> names the worktree branch and directory
+#         (agent-<session_name>-<agent_name>)
+#       * the pane's title is set to <agent_name>
+#       * that pane runs `jetski --project <adc_project> --model <model> --prompt-interactive "<systemPromptFile>"`,
+#         so the .md file is the first prompt sent interactively to that agent
+#       * "autoApprove": true adds `--dangerously-skip-permissions` to that pane's
+#         jetski command; false or absent leaves it off. A top-level "autoApprove"
+#         sets the default for every agent that doesn't state its own.
+#   - num_worktrees defaults to the number of agents that need a worktree. Panes
+#     beyond the configured agents fall back to numbered branches and plain
+#     `jetski`.
+#   - Models must be Vertex models found via `jetski models` (optional `vertex/`,
+#     `google-vertex/`, or `google/` prefixes are automatically normalized).
+#
+# The root agent (orchestrator):
+#   - An agent whose entry sets "worktree": false does NOT get a worktree. It runs
+#     in the repo root itself, on whatever branch is checked out there — normally
+#     <base_branch> / 'main'. That is what an orchestrator needs: it merges worker
+#     branches into main, which is impossible from a worktree on its own branch.
+#   - An agent named "orchestrator" defaults to "worktree": false, so the common
+#     case needs no configuration. Set "worktree": true to override and give it a
+#     worktree like any other agent, or pass --no-root to do that to every agent.
+#   - Root agents always take the FIRST pane(s), whatever order they appear in
+#     jetski.json, so pane 0 is the repo root on main. Worktree agents follow in
+#     config order, then any unconfigured extra worktrees.
+#   - Configuring more than one root agent is allowed but warned about: they would
+#     share one working tree and one branch, and would overwrite each other.
+#   - Total panes = root agents + worktrees, so `num_worktrees` still counts only
+#     the worktrees.
+#
+# Shared job state:
+#   - Git worktrees do not share working files, so agents cannot coordinate
+#     through an ordinary tracked directory: one agent's write is invisible to
+#     the others until it is committed and merged.
+#   - So there is exactly one physical `jobs/` directory, in the repo root, and
+#     every worktree gets a `jobs` symlink pointing at it. Every pane can then
+#     read and write shared state through the plain relative path `jobs/...`.
+#   - The directory (plus `jobs/inbox/` and `jobs/status/`) is created if it does
+#     not exist, and each configured agent gets a skeleton
+#     `jobs/inbox/<agent>.json` and `jobs/status/<agent>.json` if it has none.
+#     Existing files are never overwritten.
+#   - Add `/jobs` to the repo's .gitignore. No trailing slash: in a worktree
+#     `jobs` is a symlink, which git treats as a file, and a `/jobs/`
+#     directory-only pattern would leave it showing up as untracked.
+#   - `--clean` does not touch the shared `jobs/` directory, so a backlog and its
+#     progress survive tearing the session down and bringing it back up.
+#
+# Examples:
+#   work agent-squad 3 main
+#   work agent-squad                  # squad from jetski.json or .agents/*.md
+#   work --no-root agent-squad        # no agent in the repo root
+#   WORK_AUTO_APPROVE=true work agent-squad
+#   work --clean agent-squad
+
+set -e
+
+# =============================================================================
+# 1. Parse launch and cleanup arguments
+# =============================================================================
+CLEAN_MODE=false
+RESTART_MODE=false
+NO_ROOT=false
+POSITIONAL=()
+
+# Flags are collected wherever they appear, so `work squad --no-root` and
+# `work --no-root squad` both mean the same thing. Without this, a trailing flag
+# would be read as num_worktrees.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --clean)
+      CLEAN_MODE=true
+      shift
+      ;;
+    --restart)
+      RESTART_MODE=true
+      shift
+      ;;
+    --no-root)
+      NO_ROOT=true
+      shift
+      ;;
+    --)
+      # Everything after -- is positional, even if it looks like a flag.
+      shift
+      while [ $# -gt 0 ]; do
+        POSITIONAL+=("$1")
+        shift
+      done
+      ;;
+    -*)
+      echo "Error: unknown option '$1'."
+      echo "Usage: work [--clean] [--no-root] [--restart] <session_name> [num_worktrees] [base_branch]"
+      exit 1
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+set -- ${POSITIONAL[@]+"${POSITIONAL[@]}"}
+
+SESSION_NAME="${1}"
+NUM_WORKTREES="${2:-3}"
+BASE_BRANCH="${3:-main}"
+
+# Remember whether the caller pinned a pane count; if not, a configured
+# jetski.json gets to decide it.
+if [ -n "${2:-}" ]; then
+  NUM_WORKTREES_EXPLICIT=true
+
+  # Catch a stray argument here rather than letting it flow into a branch name.
+  if ! [[ "$NUM_WORKTREES" =~ ^[0-9]+$ ]]; then
+    echo "Error: num_worktrees must be a non-negative integer, got '$NUM_WORKTREES'."
+    echo "Usage: work [--clean] [--no-root] [--restart] <session_name> [num_worktrees] [base_branch]"
+    exit 1
+  fi
+else
+  NUM_WORKTREES_EXPLICIT=false
+fi
+
+if [ -z "$SESSION_NAME" ]; then
+  echo "Error: Session name required."
+  echo "Usage: work [--clean] [--no-root] [--restart] <session_name> [num_worktrees] [base_branch]"
+  exit 1
+fi
+
+# =============================================================================
+# 2. Resolve the repository and session worktree paths
+# =============================================================================
+
+# Ensure command is run inside a Git repository
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: Must be run inside a Git repository."
+  exit 1
+fi
+
+INVOCATION_DIR=$(pwd)
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Worktree location structure: <repo_parent>/<session_name>-worker-<slug>/
+WORKTREE_PARENT=$(cd "${REPO_ROOT}/.." && pwd)
+BRANCH_PREFIX="agent-${SESSION_NAME}-"
+
+# =============================================================================
+# Helpers: discover session worktrees and match array entries
+# =============================================================================
+
+# Every worktree path belonging to this session: the ones git has registered on
+# an agent-<session_name>-<slug> branch (so worktrees left over from an older
+# location are still found), plus any directory sitting in the worktree
+# location that git no longer tracks.
+session_worktrees() {
+  {
+    git worktree list --porcelain |
+      awk -v prefix="refs/heads/${BRANCH_PREFIX}" '
+        /^worktree / { path = substr($0, 10) }
+        /^branch /   { if (index(substr($0, 8), prefix) == 1) print path }
+      '
+
+    find "$WORKTREE_PARENT" -maxdepth 1 -type d \
+      -name "${SESSION_NAME}-worker-*" 2>/dev/null
+  } | sort -u -V
+}
+
+in_array() {
+  local needle="$1"
+  shift
+  local item
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
+
+# =============================================================================
+# Helpers: ADC project resolution and Vertex model discovery/validation
+# =============================================================================
+
+# Resolves the Google Cloud project rooted in Application Default Credentials (ADC),
+# falling back to jetski.json project settings, environment variables, or gcloud config.
+resolve_adc_project() {
+  local config_file="$1"
+  local proj=""
+
+  if command -v python3 >/dev/null 2>&1; then
+    proj=$(python3 - "$config_file" <<'PY'
+import json
+import os
+import sys
+
+config_file = sys.argv[1] if len(sys.argv) > 1 else ""
+
+# 1. Check ADC credentials file (project rooted in ADC)
+adc_paths = []
+if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    adc_paths.append(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+gcloud_dir = os.environ.get("CLOUDSDK_CONFIG") or os.path.expanduser("~/.config/gcloud")
+adc_paths.append(os.path.join(gcloud_dir, "application_default_credentials.json"))
+
+for path in adc_paths:
+    if path and os.path.isfile(path):
+        try:
+            with open(path) as handle:
+                data = json.load(handle)
+            if isinstance(data, dict):
+                candidate = data.get("quota_project_id") or data.get("project_id")
+                if isinstance(candidate, str) and candidate.strip():
+                    print(candidate.strip())
+                    sys.exit(0)
+        except Exception:
+            pass
+
+# 2. Check jetski.json configuration file
+if config_file and os.path.isfile(config_file):
+    try:
+        with open(config_file) as handle:
+            cfg = json.load(handle)
+        if isinstance(cfg, dict):
+            candidate = cfg.get("project") or cfg.get("projectId")
+            if not candidate and isinstance(cfg.get("vertex"), dict):
+                candidate = cfg["vertex"].get("project") or cfg["vertex"].get("projectId")
+            if not candidate:
+                for key in ("provider", "providers"):
+                    providers = cfg.get(key)
+                    if isinstance(providers, dict):
+                        for prov in providers.values():
+                            if isinstance(prov, dict):
+                                opts = prov.get("options") or prov.get("settings") or {}
+                                if isinstance(opts, dict):
+                                    candidate = opts.get("project") or opts.get("projectId")
+                                    if candidate:
+                                        break
+                        if candidate:
+                            break
+            if isinstance(candidate, str) and candidate.strip():
+                print(candidate.strip())
+                sys.exit(0)
+    except Exception:
+        pass
+
+# 3. Check environment variables
+for env_key in ("GOOGLE_CLOUD_PROJECT", "GOOGLE_VERTEX_PROJECT", "CLOUDSDK_CORE_PROJECT"):
+    candidate = os.environ.get(env_key, "").strip()
+    if candidate:
+        print(candidate)
+        sys.exit(0)
+PY
+    ) || true
+  elif command -v jq >/dev/null 2>&1; then
+    local adc_file="${GOOGLE_APPLICATION_CREDENTIALS:-${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}/application_default_credentials.json}"
+    if [ -f "$adc_file" ]; then
+      proj=$(jq -r '.quota_project_id // .project_id // empty' "$adc_file" 2>/dev/null) || proj=""
+    fi
+    if [ -z "$proj" ] && [ -n "$config_file" ] && [ -f "$config_file" ]; then
+      proj=$(jq -r '.project // .projectId // .vertex.project // .vertex.projectId // (.provider // .providers // {} | to_entries[]?.value | (.options // .settings // {}) | .project // .projectId) // empty' "$config_file" 2>/dev/null | head -n 1) || proj=""
+    fi
+    if [ -z "$proj" ]; then
+      proj="${GOOGLE_CLOUD_PROJECT:-${GOOGLE_VERTEX_PROJECT:-${CLOUDSDK_CORE_PROJECT:-}}}"
+    fi
+  fi
+
+  if [ -z "$proj" ] && command -v gcloud >/dev/null 2>&1; then
+    proj=$(gcloud config get-value project 2>/dev/null | tr -d '\r') || proj=""
+    [ "$proj" = "(unset)" ] && proj=""
+  fi
+
+  printf '%s' "$proj"
+}
+
+# Queries available Vertex models from jetski.
+discover_vertex_models() {
+  if command -v jetski >/dev/null 2>&1; then
+    jetski models 2>/dev/null || true
+  fi
+}
+
+# Validates that a model is a Vertex model and normalizes provider prefixes.
+# Returns the canonical model ID on stdout, or exits non-zero if invalid.
+resolve_vertex_model() {
+  local raw_model="$1"
+  local agent_label="$2"
+  local found_models="$3"
+
+  [ -n "$raw_model" ] || return 0
+
+  # Reject non-Vertex provider prefixes
+  case "$(printf '%s' "$raw_model" | tr '[:upper:]' '[:lower:]')" in
+    openai/* | anthropic/* | openrouter/* | ollama/* | cohere/* | mistral/* | deepseek/* | groq/* | together/* | fireworks/* | perplexity/*)
+      echo "Error: $agent_label specifies non-Vertex model '$raw_model'. Only Vertex models are supported." >&2
+      return 1
+      ;;
+  esac
+
+  # Strip optional Vertex provider prefixes so jetski receives the clean model ID
+  local stripped="$raw_model"
+  case "$stripped" in
+    publishers/google/models/*) stripped="${stripped#publishers/google/models/}" ;;
+    google-vertex/*) stripped="${stripped#google-vertex/}" ;;
+    vertex/*) stripped="${stripped#vertex/}" ;;
+    google/*) stripped="${stripped#google/}" ;;
+  esac
+
+  # If jetski models returned a catalog of found Vertex models, validate against it
+  if [ -n "$found_models" ]; then
+    local matched_id=""
+    local line id name
+    local lower_stripped
+    lower_stripped=$(printf '%s' "$stripped" | tr '[:upper:]' '[:lower:]')
+
+    while IFS=$'\t' read -r id name; do
+      [ -n "$id" ] || continue
+      local lower_id lower_name
+      lower_id=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
+      lower_name=$(printf '%s' "${name:-}" | tr '[:upper:]' '[:lower:]')
+      if [ "$lower_stripped" = "$lower_id" ] || { [ -n "$lower_name" ] && [ "$lower_stripped" = "$lower_name" ]; }; then
+        matched_id="$id"
+        break
+      fi
+    done <<<"$found_models"
+
+    if [ -z "$matched_id" ]; then
+      while IFS=$'\t' read -r id name; do
+        [ -n "$id" ] || continue
+        local lower_id
+        lower_id=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
+        if [ "$lower_id" = "${lower_stripped}-high" ]; then
+          matched_id="$id"
+          break
+        elif [ -z "$matched_id" ] && [[ "$lower_id" == "${lower_stripped}-"* ]]; then
+          matched_id="$id"
+        fi
+      done <<<"$found_models"
+    fi
+
+    if [ -n "$matched_id" ]; then
+      printf '%s' "$matched_id"
+      return 0
+    else
+      echo "Error: Model '$raw_model' ($agent_label) was not found in available Vertex models." >&2
+      echo "Available Vertex models:" >&2
+      while IFS=$'\t' read -r id name; do
+        [ -n "$id" ] || continue
+        if [ -n "$name" ]; then
+          echo "  - $id ($name)" >&2
+        else
+          echo "  - $id" >&2
+        fi
+      done <<<"$found_models"
+      return 1
+    fi
+  fi
+
+  printf '%s' "$stripped"
+  return 0
+}
+
+# =============================================================================
+# 3. Cleanup mode: remove the session, worktrees and branches; keep jobs/
+# =============================================================================
+if [ "$CLEAN_MODE" = true ]; then
+  echo "Cleaning up session and worktrees for: '$SESSION_NAME'..."
+
+  # 1. Kill tmux session if running
+  if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "  -> Killing tmux session '$SESSION_NAME'..."
+    tmux kill-session -t "$SESSION_NAME"
+  else
+    echo "  -> No active tmux session '$SESSION_NAME' found."
+  fi
+
+  # 2. Force remove this session's worktrees
+  WT_PATHS=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && WT_PATHS+=("$line")
+  done < <(session_worktrees)
+
+  if [ "${#WT_PATHS[@]}" -gt 0 ]; then
+    for WT_PATH in "${WT_PATHS[@]}"; do
+      echo "  -> Removing worktree: $WT_PATH"
+      git worktree remove --force "$WT_PATH" 2>/dev/null || rm -rf "$WT_PATH"
+
+      # Older layouts nested worktrees below the worktree location; drop the
+      # empty directories they leave behind (a no-op while still in use).
+      WT_PARENT_DIR=$(dirname "$WT_PATH")
+      if [ "$WT_PARENT_DIR" != "$WORKTREE_PARENT" ]; then
+        rmdir -p "$WT_PARENT_DIR" 2>/dev/null || true
+      fi
+    done
+  else
+    echo "  -> No worktrees found for session '$SESSION_NAME'."
+  fi
+
+  # 3. Delete this session's branches
+  BRANCH_NAMES=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && BRANCH_NAMES+=("$line")
+  done < <(
+    git for-each-ref --format='%(refname:short)' "refs/heads/${BRANCH_PREFIX}*"
+  )
+
+  for BRANCH_NAME in "${BRANCH_NAMES[@]}"; do
+    echo "  -> Deleting branch: $BRANCH_NAME"
+    git branch -D "$BRANCH_NAME" >/dev/null 2>&1 || true
+  done
+
+  # 4. Prune stale git worktree records
+  git worktree prune
+
+  # The shared job state deliberately outlives the session: the backlog and the
+  # progress recorded against it are the point of running this at all.
+  if [ -d "${REPO_ROOT}/jobs" ]; then
+    echo "  -> Leaving shared job state in place: ${REPO_ROOT}/jobs"
+  fi
+
+  echo "Cleanup complete!"
+  exit 0
+fi
+
+# =============================================================================
+# 4. Launch or resume: select and validate the project jetski.json
+# =============================================================================
+
+# Use the project-level config that supplies the agent roster. The invocation
+# directory wins so a caller can intentionally launch from a nested project;
+# otherwise the repository-root config is used.
+CONFIG_FILE=""
+for CANDIDATE in "${INVOCATION_DIR}/jetski.json" "${REPO_ROOT}/jetski.json" \
+                 "${INVOCATION_DIR}/opencode.json" "${REPO_ROOT}/opencode.json"; do
+  if [ -f "$CANDIDATE" ]; then
+    CONFIG_FILE="$CANDIDATE"
+    break
+  fi
+done
+
+if [ -n "$CONFIG_FILE" ]; then
+  if ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
+    echo "Error: reading $CONFIG_FILE requires python3 or jq to parse agent settings."
+    exit 1
+  fi
+
+  # Validate JSON syntax immediately before running authentication or touching tmux
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$CONFIG_FILE" >/dev/null 2>&1; then
+      echo "Error: Could not parse $CONFIG_FILE (invalid JSON)."
+      exit 1
+    fi
+  elif ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
+    echo "Error: Could not parse $CONFIG_FILE (invalid JSON)."
+    exit 1
+  fi
+fi
+
+# Discover Vertex models up front and validate any default model or configured agents
+FOUND_VERTEX_MODELS=$(discover_vertex_models)
+
+DEFAULT_VERTEX_MODEL=""
+if [ -n "${WORK_DEFAULT_MODEL:-}" ]; then
+  if ! DEFAULT_VERTEX_MODEL=$(resolve_vertex_model "$WORK_DEFAULT_MODEL" "WORK_DEFAULT_MODEL" "$FOUND_VERTEX_MODELS"); then
+    exit 1
+  fi
+fi
+
+# =============================================================================
+# 5. Read and validate the configured agent roster (Vertex models only)
+# =============================================================================
+# Emits one "<name>|<model>|<systemPromptFile>|<autoApprove>|<worktree>" line per
+# agent entry, in the order the entries appear in the file, where | is US (0x1f).
+FIELD_SEP=$'\x1f'
+ROOT_AGENT_DEFAULT_NAME="orchestrator"
+
+parse_agent_config() {
+  local config_file="$1"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$config_file" "$ROOT_AGENT_DEFAULT_NAME" <<'PY'
+import json, sys
+
+AGENT_KEYS = ("model", "systemPromptFile", "autoApprove", "worktree")
+
+
+def entries(obj):
+    if not isinstance(obj, dict):
+        return []
+    return [
+        (name, cfg)
+        for name, cfg in obj.items()
+        if isinstance(cfg, dict) and any(key in cfg for key in AGENT_KEYS)
+    ]
+
+
+def truthy(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes", "on")
+    return bool(value)
+
+
+try:
+    with open(sys.argv[1]) as handle:
+        config = json.load(handle)
+except Exception as exc:
+    print("could not read config: %s" % exc, file=sys.stderr)
+    sys.exit(1)
+
+agents = entries(config.get("agents")) + entries(config.get("agent")) or entries(config)
+
+default_auto = truthy(config.get("autoApprove")) if isinstance(config, dict) else False
+root_name = sys.argv[2].strip().lower()
+
+for name, cfg in agents:
+    auto = default_auto if cfg.get("autoApprove") is None else truthy(cfg["autoApprove"])
+    if cfg.get("worktree") is None:
+        name_lower = name.strip().lower()
+        worktree = (name_lower != root_name) and not ("orchestrator" in name_lower)
+    else:
+        worktree = truthy(cfg["worktree"])
+    print("\x1f".join([
+        name,
+        str(cfg.get("model", "")),
+        str(cfg.get("systemPromptFile", "")),
+        "true" if auto else "false",
+        "true" if worktree else "false",
+    ]))
+PY
+  else
+    jq -r --arg root_name "$ROOT_AGENT_DEFAULT_NAME" '
+      def truthy:
+        if type == "boolean" then .
+        elif type == "string" then (ascii_downcase | . == "true" or . == "1" or . == "yes" or . == "on")
+        elif type == "number" then . != 0
+        else false
+        end;
+
+      (.autoApprove | truthy) as $default_auto
+      | ($root_name | ascii_downcase) as $root
+      | (.agents // .agent // .)
+      | to_entries[]
+      | select((.value | type) == "object")
+      | select(.value.model != null or .value.systemPromptFile != null
+               or .value.autoApprove != null or .value.worktree != null)
+      | [
+          .key,
+          (.value.model // ""),
+          (.value.systemPromptFile // ""),
+          (if .value.autoApprove == null then $default_auto else (.value.autoApprove | truthy) end),
+          (if .value.worktree == null
+             then (((.key | ascii_downcase) != $root) and ((.key | ascii_downcase | contains("orchestrator")) | not))
+             else (.value.worktree | truthy) end)
+        ]
+      | map(tostring)
+      | join("\u001f")
+    ' "$config_file"
+  fi
+}
+
+AGENT_NAMES=()
+AGENT_MODELS=()
+AGENT_PROMPTS=()
+AGENT_AUTO_APPROVE=()
+AGENT_WANTS_WORKTREE=()
+
+register_agent() {
+  local name="$1"
+  local model="$2"
+  local prompt_rel="$3"
+  local auto="$4"
+  local wants_worktree="$5"
+  local prompt_base="$6"
+
+  if ! [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "  -> Skipping agent '$name': name may only contain letters, digits, '.', '_' and '-'."
+    return 0
+  fi
+
+  local resolved_model=""
+  if [ -n "$model" ]; then
+    if ! resolved_model=$(resolve_vertex_model "$model" "agent '$name'" "$FOUND_VERTEX_MODELS"); then
+      exit 1
+    fi
+  else
+    resolved_model="$DEFAULT_VERTEX_MODEL"
+  fi
+
+  local prompt_path=""
+  if [ -n "$prompt_rel" ]; then
+    case "$prompt_rel" in
+      /*) prompt_path="$prompt_rel" ;;
+      *) prompt_path="${prompt_base}/${prompt_rel}" ;;
+    esac
+
+    if [ ! -f "$prompt_path" ]; then
+      echo "  -> Agent '$name': prompt file '$prompt_path' not found; starting it without a first prompt."
+      prompt_path=""
+    elif [ ! -s "$prompt_path" ]; then
+      echo "  -> Agent '$name': prompt file '$prompt_path' is empty; starting it without a first prompt."
+      prompt_path=""
+    fi
+  fi
+
+  AGENT_NAMES+=("$name")
+  AGENT_MODELS+=("$resolved_model")
+  AGENT_PROMPTS+=("$prompt_path")
+
+  if [ "$auto" = "true" ]; then
+    AGENT_AUTO_APPROVE+=("true")
+    echo "  -> Agent '$name': autoApprove is on; its pane runs 'jetski --dangerously-skip-permissions'."
+  else
+    AGENT_AUTO_APPROVE+=("false")
+  fi
+
+  if [ "$wants_worktree" = "false" ]; then
+    AGENT_WANTS_WORKTREE+=("false")
+    echo "  -> Agent '$name': no worktree; it runs in the repo root on the checked-out branch."
+  else
+    AGENT_WANTS_WORKTREE+=("true")
+  fi
+}
+
+if [ -n "$CONFIG_FILE" ]; then
+  echo "Reading agent configuration from: $CONFIG_FILE"
+  CONFIG_DIR=$(cd "$(dirname "$CONFIG_FILE")" && pwd)
+
+  while IFS="$FIELD_SEP" read -r AGENT_NAME AGENT_MODEL PROMPT_REL AUTO_APPROVE WANTS_WORKTREE; do
+    [ -n "$AGENT_NAME" ] || continue
+    register_agent "$AGENT_NAME" "$AGENT_MODEL" "$PROMPT_REL" "$AUTO_APPROVE" \
+      "$WANTS_WORKTREE" "$CONFIG_DIR"
+  done < <(parse_agent_config "$CONFIG_FILE")
+fi
+
+# =============================================================================
+# 6. Authenticate with gcloud auth to connect to ADC project
+# =============================================================================
+
+if [ ! -t 0 ]; then
+  echo "Error: Vertex authentication requires an interactive terminal."
+  echo "Run 'gcloud auth application-default login' in a terminal, then run work again."
+  exit 1
+fi
+
+# Discover the project rooted in ADC before gcloud login
+ADC_PROJECT=$(resolve_adc_project "$CONFIG_FILE")
+
+if ! command -v gcloud >/dev/null 2>&1; then
+  echo "Error: 'gcloud' is not installed. Install the Google Cloud CLI to authenticate Vertex ADC."
+  exit 1
+fi
+
+echo "Authenticating Google Application Default Credentials (ADC) for Vertex..."
+if [ -n "$ADC_PROJECT" ]; then
+  echo "  -> Connecting to project rooted in ADC: $ADC_PROJECT"
+  GCLOUD_ADC_LOGIN=(gcloud auth application-default login "--project=$ADC_PROJECT")
+else
+  echo "  -> No pre-existing ADC project detected; launching gcloud ADC login..."
+  GCLOUD_ADC_LOGIN=(gcloud auth application-default login)
+fi
+
+if ! "${GCLOUD_ADC_LOGIN[@]}"; then
+  echo "Error: Google Application Default Credentials login did not complete; no tmux session or worktrees were changed."
+  exit 1
+fi
+
+# Re-resolve ADC project after login in case login created/updated application_default_credentials.json
+if [ -z "$ADC_PROJECT" ]; then
+  ADC_PROJECT=$(resolve_adc_project "$CONFIG_FILE")
+fi
+
+if [ -n "$ADC_PROJECT" ]; then
+  echo "  -> Connected to ADC project: $ADC_PROJECT"
+  gcloud config set project "$ADC_PROJECT" >/dev/null 2>&1 || true
+fi
+
+# =============================================================================
+# 7. Resume an existing tmux session
+# =============================================================================
+
+# A restart is explicit because replacing panes stops their running processes.
+# Authentication has already succeeded; worktrees and shared state stay intact.
+if [ "$RESTART_MODE" = true ] && tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  echo "Restarting tmux session '$SESSION_NAME' with the current agent configuration."
+  tmux kill-session -t "$SESSION_NAME"
+fi
+
+# If a tmux session already exists for this name, just attach to it.
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  echo "tmux session '$SESSION_NAME' already exists. Attaching..."
+  echo "  -> Existing panes keep their launch models. Use work --restart $SESSION_NAME to reload jetski.json without cleaning worktrees."
+  if [ -z "$TMUX" ]; then
+    tmux attach-session -t "$SESSION_NAME"
+  else
+    tmux switch-client -t "$SESSION_NAME"
+  fi
+  exit 0
+fi
+
+# =============================================================================
+# 8. Fall back to .agents/*.md, then the built-in orchestrator
+# =============================================================================
+FALLBACK_AUTO=false
+case "$(printf '%s' "${WORK_AUTO_APPROVE:-}" | tr '[:upper:]' '[:lower:]')" in
+  true | 1 | yes | on) FALLBACK_AUTO=true ;;
+esac
+
+if [ "${#AGENT_NAMES[@]}" -eq 0 ]; then
+  if [ -n "$CONFIG_FILE" ]; then
+    echo "No agent entries found in $CONFIG_FILE; using built-in defaults."
+  fi
+
+  AGENTS_DIR=""
+  for CANDIDATE in "${INVOCATION_DIR}/.agents" "${REPO_ROOT}/.agents"; do
+    if [ -d "$CANDIDATE" ]; then
+      AGENTS_DIR=$(cd "$CANDIDATE" && pwd)
+      break
+    fi
+  done
+
+  # Only .md files sitting directly in .agents/ are agent prompts; a
+  # subdirectory like .agents/skills/ holds skill definitions, not agents.
+  if [ -n "$AGENTS_DIR" ] && compgen -G "${AGENTS_DIR}/*.md" >/dev/null 2>&1; then
+    echo "No agent configuration; deriving the squad from ${AGENTS_DIR}/*.md"
+
+    for PROMPT_FILE in "$AGENTS_DIR"/*.md; do
+      [ -f "$PROMPT_FILE" ] || continue
+
+      FALLBACK_NAME=$(basename "$PROMPT_FILE" .md)
+      FALLBACK_WORKTREE=true
+      FALLBACK_NAME_LOWER=$(printf '%s' "$FALLBACK_NAME" | tr '[:upper:]' '[:lower:]')
+      if [ "$FALLBACK_NAME_LOWER" = "$ROOT_AGENT_DEFAULT_NAME" ] || [[ "$FALLBACK_NAME_LOWER" == *"orchestrator"* ]]; then
+        FALLBACK_WORKTREE=false
+      fi
+
+      register_agent "$FALLBACK_NAME" "" "$PROMPT_FILE" "$FALLBACK_AUTO" \
+        "$FALLBACK_WORKTREE" "$AGENTS_DIR"
+    done
+  fi
+
+  # Still nothing: no config and no prompt files. Add just the orchestrator, so
+  # pane 0 is still the repo root on the base branch, and leave the remaining
+  # panes as plain numbered worktrees running bare 'jetski'.
+  if [ "${#AGENT_NAMES[@]}" -eq 0 ] && [ "$NO_ROOT" = false ]; then
+    echo "No agent configuration and no .agents/*.md found."
+    echo "  -> Defaulting pane 0 to '$ROOT_AGENT_DEFAULT_NAME' in the repo root; the rest are plain worktrees."
+    register_agent "$ROOT_AGENT_DEFAULT_NAME" "" "" "$FALLBACK_AUTO" false ""
+  fi
+fi
+
+# =============================================================================
+# 9. Assign root agents and worktree agents; determine worktree count
+# =============================================================================
+
+NUM_AGENTS="${#AGENT_NAMES[@]}"
+
+# Split the agents into the ones that live in the repo root (an orchestrator,
+# which has to be on main to merge worker branches) and the ones that get their
+# own worktree. Root agents take the first panes regardless of config order.
+ROOT_AGENTS=()
+WORKTREE_AGENTS=()
+for ((i = 0; i < NUM_AGENTS; i++)); do
+  # --no-root overrides everything: every agent gets its own worktree and the
+  # repo root is left alone.
+  if [ "$NO_ROOT" = false ] && [ "${AGENT_WANTS_WORKTREE[$i]}" = "false" ]; then
+    ROOT_AGENTS+=("$i")
+  else
+    WORKTREE_AGENTS+=("$i")
+  fi
+done
+NUM_ROOT_AGENTS="${#ROOT_AGENTS[@]}"
+NUM_WORKTREE_AGENTS="${#WORKTREE_AGENTS[@]}"
+
+if [ "$NUM_AGENTS" -gt 0 ]; then
+  echo "Configured agents (in order): ${AGENT_NAMES[*]}"
+
+  if [ "$NO_ROOT" = true ]; then
+    echo "  -> --no-root: nothing runs in the repo root; every agent gets a worktree."
+  fi
+
+  if [ "$NUM_ROOT_AGENTS" -gt 1 ]; then
+    echo "  -> WARNING: $NUM_ROOT_AGENTS agents are configured without a worktree."
+    echo "     They will all share the repo root and the same branch, and will"
+    echo "     overwrite each other's edits. Give all but one a worktree."
+  fi
+
+  if [ "$NUM_ROOT_AGENTS" -eq 0 ] && [ "$NO_ROOT" = false ]; then
+    echo "  -> Note: no agent runs in the repo root, so pane 0 is a worktree. Name an"
+    echo "     agent '$ROOT_AGENT_DEFAULT_NAME', or set \"worktree\": false on one, to"
+    echo "     put it on '$BASE_BRANCH' where it can merge the others' branches."
+  fi
+
+  # num_worktrees counts worktrees, not panes: a root agent needs neither. Guard
+  # against zeroing it out when the only agent is a root agent — the numbered
+  # worktree default still applies to the remaining panes in that case.
+  if [ "$NUM_WORKTREES_EXPLICIT" = false ] && [ "$NUM_WORKTREE_AGENTS" -gt 0 ]; then
+    NUM_WORKTREES="$NUM_WORKTREE_AGENTS"
+  fi
+fi
+
+# Worktree <-> agent naming: the Nth worktree belongs to the Nth agent that asked
+# for one, and any extra worktree falls back to its 1-based position (the
+# pre-config behavior).
+worktree_slug() {
+  local index="$1"
+  if [ "$index" -lt "$NUM_WORKTREE_AGENTS" ]; then
+    printf '%s' "${AGENT_NAMES[${WORKTREE_AGENTS[$index]}]}"
+  else
+    printf '%s' "$((index + 1))"
+  fi
+}
+
+# =============================================================================
+# 10. Reuse existing session worktrees or create new ones
+# =============================================================================
+WT_PATHS=()
+while IFS= read -r line; do
+  [ -n "$line" ] && WT_PATHS+=("$line")
+done < <(session_worktrees)
+
+if [ "${#WT_PATHS[@]}" -gt 0 ]; then
+  echo "Found ${#WT_PATHS[@]} existing worktree(s) for session '$SESSION_NAME'; reusing them (ignoring num_worktrees)."
+else
+  echo "Creating $NUM_WORKTREES worktrees in: $WORKTREE_PARENT"
+
+  if [ "$NUM_WORKTREE_AGENTS" -gt "$NUM_WORKTREES" ]; then
+    echo "  -> Note: $NUM_WORKTREE_AGENTS agents want a worktree but only $NUM_WORKTREES requested; the extra agents are skipped."
+  fi
+
+  for ((i = 0; i < NUM_WORKTREES; i++)); do
+    SLUG=$(worktree_slug "$i")
+    BRANCH_NAME="${BRANCH_PREFIX}${SLUG}"
+    WT_PATH="${WORKTREE_PARENT}/${SESSION_NAME}-worker-${SLUG}"
+
+    echo "Adding Git worktree: $WT_PATH (Branch: $BRANCH_NAME)"
+    if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
+      git worktree add "$WT_PATH" "$BRANCH_NAME"
+    else
+      git worktree add -b "$BRANCH_NAME" "$WT_PATH" "$BASE_BRANCH"
+    fi
+
+    WT_PATHS+=("$WT_PATH")
+  done
+fi
+
+# =============================================================================
+# 11. Map agents to panes: root agents, configured workers, extra worktrees
+# =============================================================================
+PANE_PATHS=()
+PANE_AGENTS=()
+
+# Root agents first, so pane 0 is the repo root on the base branch.
+for AGENT_INDEX in ${ROOT_AGENTS[@]+"${ROOT_AGENTS[@]}"}; do
+  PANE_PATHS+=("$REPO_ROOT")
+  PANE_AGENTS+=("$AGENT_INDEX")
+done
+
+# Resolve identity from Git, including worktrees retained from older layouts.
+worktree_agent_slug() {
+  local path="$1"
+  local branch
+  branch=$(git -C "$path" symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=""
+  case "$branch" in
+    "$BRANCH_PREFIX"*) printf '%s' "${branch#"$BRANCH_PREFIX"}" ;;
+    *)
+      local name
+      name=$(basename "$path")
+      printf '%s' "${name#"${SESSION_NAME}-worker-"}"
+      ;;
+  esac
+}
+
+# Then one pane per worktree agent, in config order.
+for AGENT_INDEX in ${WORKTREE_AGENTS[@]+"${WORKTREE_AGENTS[@]}"}; do
+  WANTED="${AGENT_NAMES[$AGENT_INDEX]}"
+  for WT_PATH in "${WT_PATHS[@]}"; do
+    if [ "$(worktree_agent_slug "$WT_PATH")" = "$WANTED" ]; then
+      PANE_PATHS+=("$WT_PATH")
+      PANE_AGENTS+=("$AGENT_INDEX")
+    fi
+  done
+done
+
+# Then any worktree no agent claimed, running plain 'jetski'.
+for WT_PATH in "${WT_PATHS[@]}"; do
+  in_array "$WT_PATH" ${PANE_PATHS[@]+"${PANE_PATHS[@]}"} && continue
+
+  STALE_ROOT=false
+  for AGENT_INDEX in ${ROOT_AGENTS[@]+"${ROOT_AGENTS[@]}"}; do
+    if [ "$(worktree_agent_slug "$WT_PATH")" = "${AGENT_NAMES[$AGENT_INDEX]}" ]; then
+      echo "  -> Skipping stale worktree $(basename "$WT_PATH"): '${AGENT_NAMES[$AGENT_INDEX]}'"
+      echo "     now runs in the repo root. Remove it with:"
+      echo "       git worktree remove --force $WT_PATH"
+      STALE_ROOT=true
+      break
+    fi
+  done
+  [ "$STALE_ROOT" = true ] && continue
+
+  PANE_PATHS+=("$WT_PATH")
+  PANE_AGENTS+=("-1")
+done
+
+NUM_WORKTREES="${#WT_PATHS[@]}"
+NUM_PANES="${#PANE_PATHS[@]}"
+
+if [ "$NUM_PANES" -eq 0 ]; then
+  echo "Error: nothing to run — no worktrees and no root agents."
+  exit 1
+fi
+
+# The root agent merges worker branches, so flag anything that would stop it.
+if [ "$NUM_ROOT_AGENTS" -gt 0 ]; then
+  ROOT_BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+  echo "Root pane: $REPO_ROOT (branch '$ROOT_BRANCH')"
+
+  if [ "$ROOT_BRANCH" != "$BASE_BRANCH" ]; then
+    echo "  -> WARNING: the repo root is on '$ROOT_BRANCH', not '$BASE_BRANCH'. The"
+    echo "     orchestrator merges into whatever is checked out here, so its work"
+    echo "     will land on '$ROOT_BRANCH'. Check out '$BASE_BRANCH' first if that"
+    echo "     is not what you want."
+  fi
+
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+    echo "  -> WARNING: the repo root has uncommitted changes. An orchestrator that"
+    echo "     merges worker branches needs a clean tree, and worktrees are created"
+    echo "     from the last commit on '$BASE_BRANCH' — uncommitted work will not be"
+    echo "     visible to the workers. Commit before relying on it."
+  fi
+fi
+
+# =============================================================================
+# 12. Create shared job state and link it into every worktree
+# =============================================================================
+SHARED_JOBS_DIR="${REPO_ROOT}/jobs"
+
+if [ ! -d "$SHARED_JOBS_DIR" ]; then
+  echo "Creating shared job directory: $SHARED_JOBS_DIR"
+fi
+mkdir -p "${SHARED_JOBS_DIR}/inbox" "${SHARED_JOBS_DIR}/status"
+
+seed_json_if_missing() {
+  local path="$1"
+  local body="$2"
+
+  if [ ! -f "$path" ]; then
+    printf '%s\n' "$body" >"$path"
+    echo "  -> Seeded $(basename "$(dirname "$path")")/$(basename "$path")"
+  fi
+}
+
+seed_json_if_missing "${SHARED_JOBS_DIR}/backlog.json" \
+  "{\"schema_version\":1,\"owner\":\"orchestrator\",\"note\":\"Seeded empty by the work script. Populate from the skill descriptions in README.md.\",\"updated_at\":null,\"stages\":[\"PENDING\",\"FINDING\",\"CREATING\",\"EVALUATING\",\"MERGED\",\"COMPLETED\",\"REQUIRES_HUMAN_REVIEW\"],\"tasks\":[]}"
+
+for AGENT_NAME in "${AGENT_NAMES[@]:-}"; do
+  [ -n "$AGENT_NAME" ] || continue
+
+  seed_json_if_missing "${SHARED_JOBS_DIR}/inbox/${AGENT_NAME}.json" \
+    "{\"schema_version\":1,\"_hint\":\"Written by the orchestrator ONLY. Read it; report back in jobs/status/${AGENT_NAME}.json.\",\"owner\":\"orchestrator\",\"agent\":\"${AGENT_NAME}\",\"state\":\"IDLE\",\"state_values\":[\"IDLE\",\"DISPATCHED\",\"REWORK\",\"STAND_DOWN\"],\"dispatched_at\":null,\"attempt\":0,\"task\":null,\"todo\":[],\"feedback\":[]}"
+
+  seed_json_if_missing "${SHARED_JOBS_DIR}/status/${AGENT_NAME}.json" \
+    "{\"schema_version\":1,\"_hint\":\"Written by ${AGENT_NAME} ONLY. Overwrite it freely; everyone else reads it.\",\"owner\":\"${AGENT_NAME}\",\"agent\":\"${AGENT_NAME}\",\"branch\":null,\"worktree\":null,\"state\":\"BOOTING\",\"state_values\":[\"BOOTING\",\"WAITING\",\"WORKING\",\"BLOCKED\",\"COMPLETED\",\"FAILED\"],\"task_id\":null,\"step\":null,\"updated_at\":null,\"todo\":[],\"artifacts\":[],\"commits\":[],\"blocked_on\":null,\"message\":\"\"}"
+done
+
+for WT_PATH in "${WT_PATHS[@]}"; do
+  [ "$WT_PATH" = "$REPO_ROOT" ] && continue
+
+  JOBS_LINK="${WT_PATH}/jobs"
+
+  if [ -L "$JOBS_LINK" ]; then
+    if [ "$(readlink "$JOBS_LINK")" != "$SHARED_JOBS_DIR" ]; then
+      ln -sfn "$SHARED_JOBS_DIR" "$JOBS_LINK"
+      echo "  -> Repointed $(basename "$WT_PATH")/jobs at $SHARED_JOBS_DIR"
+    fi
+  elif [ -e "$JOBS_LINK" ]; then
+    echo "  -> WARNING: $(basename "$WT_PATH")/jobs exists and is not a symlink;"
+    echo "     leaving it alone. That pane will NOT see shared job state."
+  else
+    ln -s "$SHARED_JOBS_DIR" "$JOBS_LINK"
+  fi
+done
+
+echo "Shared job state: $SHARED_JOBS_DIR (symlinked as 'jobs' in each worktree)"
+
+for WT_PATH in "${WT_PATHS[@]}"; do
+  [ "$WT_PATH" = "$REPO_ROOT" ] && continue
+  [ -e "${WT_PATH}/jobs" ] || continue
+
+  if ! git -C "$WT_PATH" check-ignore -q jobs 2>/dev/null; then
+    echo "  -> WARNING: 'jobs' is not gitignored on branch '$BASE_BRANCH', so it shows"
+    echo "     up as untracked in every worktree and agents may commit shared state."
+    echo "     Add '/jobs' (no trailing slash — in a worktree it is a symlink, which"
+    echo "     git treats as a file) to .gitignore and commit it to '$BASE_BRANCH'."
+  fi
+  break
+done
+
+# =============================================================================
+# 13. Create the tmux window and tile its panes
+# =============================================================================
+
+WINDOW_NAME="workers"
+
+# Create tmux session with one pane per agent, each running jetski
+tmux new-session -d -s "$SESSION_NAME" -n "$WINDOW_NAME" -c "${PANE_PATHS[0]}"
+
+# Enable mouse support (click panes to focus, drag borders to resize, scroll wheel)
+tmux set-option -t "$SESSION_NAME" mouse on
+
+# Show the pane titles, so each agent's pane is identifiable at a glance.
+tmux set-option -w -t "${SESSION_NAME}:${WINDOW_NAME}" pane-border-status top
+tmux set-option -w -t "${SESSION_NAME}:${WINDOW_NAME}" pane-border-format ' #{pane_title} '
+
+# Track panes by tmux pane id; ids are stable across splits and re-layouts,
+# unlike positional pane indexes.
+PANE_IDS=("$(tmux list-panes -t "${SESSION_NAME}:${WINDOW_NAME}" -F '#{pane_id}')")
+
+# Split the window vertically and horizontally in an alternating manner so the
+# panes form a tiled grid.
+for ((i = 1; i < NUM_PANES; i++)); do
+  if ((i % 2 == 1)); then
+    SPLIT_AXIS="-h" # side by side
+  else
+    SPLIT_AXIS="-v" # stacked
+  fi
+
+  NEW_PANE=$(tmux split-window "$SPLIT_AXIS" -P -F '#{pane_id}' \
+    -t "${PANE_IDS[i - 1]}" -c "${PANE_PATHS[$i]}")
+  PANE_IDS+=("$NEW_PANE")
+
+  tmux select-layout -t "${SESSION_NAME}:${WINDOW_NAME}" tiled >/dev/null
+done
+
+# =============================================================================
+# 14. Launch each pane with jetski, selected config, ADC project, model & prompt
+# =============================================================================
+
+if [ -n "$CONFIG_FILE" ]; then
+  echo "Project config for all panes: JETSKI_CONFIG=$CONFIG_FILE"
+fi
+if [ -n "$ADC_PROJECT" ]; then
+  echo "Vertex ADC project for all panes: $ADC_PROJECT"
+fi
+
+# Start the agents once the layout is settled, so jetski draws at final size
+for ((i = 0; i < NUM_PANES; i++)); do
+  AGENT_INDEX="${PANE_AGENTS[$i]}"
+  PANE_TITLE=$(basename "${PANE_PATHS[$i]}")
+  JETSKI_CMD="jetski"
+  ENV_VARS=()
+
+  # Pin every pane, including the root, to the selected project configuration.
+  if [ -n "$CONFIG_FILE" ]; then
+    ENV_VARS+=("JETSKI_CONFIG=$(printf '%q' "$CONFIG_FILE")")
+  fi
+
+  # Connect every pane to the Google Cloud project rooted in ADC
+  if [ -n "$ADC_PROJECT" ]; then
+    ENV_VARS+=("GOOGLE_CLOUD_PROJECT=$(printf '%q' "$ADC_PROJECT")")
+    ENV_VARS+=("GOOGLE_VERTEX_PROJECT=$(printf '%q' "$ADC_PROJECT")")
+    JETSKI_CMD+=" --project $(printf '%q' "$ADC_PROJECT")"
+  fi
+
+  if [ "$AGENT_INDEX" -ge 0 ]; then
+    PANE_TITLE="${AGENT_NAMES[$AGENT_INDEX]}"
+
+    if [ -n "${AGENT_MODELS[$AGENT_INDEX]}" ]; then
+      JETSKI_CMD+=" --model $(printf '%q' "${AGENT_MODELS[$AGENT_INDEX]}")"
+    fi
+
+    if [ "${AGENT_AUTO_APPROVE[$AGENT_INDEX]}" = "true" ]; then
+      JETSKI_CMD+=" --dangerously-skip-permissions"
+    fi
+
+    if [ -n "${AGENT_PROMPTS[$AGENT_INDEX]}" ]; then
+      JETSKI_CMD+=" --prompt-interactive \"\$(cat $(printf '%q' "${AGENT_PROMPTS[$AGENT_INDEX]}"))\""
+    fi
+  else
+    if [ -n "$DEFAULT_VERTEX_MODEL" ]; then
+      JETSKI_CMD+=" --model $(printf '%q' "$DEFAULT_VERTEX_MODEL")"
+    fi
+
+    if [ "$FALLBACK_AUTO" = "true" ]; then
+      JETSKI_CMD+=" --dangerously-skip-permissions"
+    fi
+  fi
+
+  if [ "${#ENV_VARS[@]}" -gt 0 ]; then
+    FULL_CMD="${ENV_VARS[*]} ${JETSKI_CMD}"
+  else
+    FULL_CMD="${JETSKI_CMD}"
+  fi
+
+  tmux select-pane -t "${PANE_IDS[$i]}" -T "$PANE_TITLE"
+  tmux set-option -p -t "${PANE_IDS[$i]}" pane-border-format " ${PANE_TITLE} "
+  tmux send-keys -t "${PANE_IDS[$i]}" "$FULL_CMD" C-m
+done
+
+tmux select-pane -t "${PANE_IDS[0]}"
+
+echo "tmux session '$SESSION_NAME' created with $NUM_PANES panes running jetski"
+echo "($NUM_ROOT_AGENTS in the repo root, $NUM_WORKTREES in worktrees)."
+echo "Attaching..."
+
+# =============================================================================
+# 15. Attach from a shell or switch the current tmux client
+# =============================================================================
+
+if [ -z "$TMUX" ]; then
+  tmux attach-session -t "$SESSION_NAME"
+else
+  tmux switch-client -t "$SESSION_NAME"
+fi
