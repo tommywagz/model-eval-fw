@@ -1,4 +1,6 @@
 # Git isolation for multi-agent worktrees and jobs blackboard
+/jobs
+jobs
 jobs/
 .worktrees/
 artifacts/

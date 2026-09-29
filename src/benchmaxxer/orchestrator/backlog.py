@@ -168,12 +168,51 @@ class BacklogManager:
 
         (self.jobs_dir / "BACKLOG.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+    def get_active_job_id(self) -> Optional[str]:
+        """Check if any scenario is currently active in creation or verification.
+
+        Returns the job_id if an active scenario is in flight, or None.
+        """
+        for active_dir in (
+            self.active_creator_dir,
+            self.active_test_creator_dir,
+            self.active_tester_dir,
+            self.active_test_tester_dir,
+        ):
+            c_file = active_dir / "current_job.json"
+            if c_file.exists():
+                try:
+                    data = json.loads(c_file.read_text(encoding="utf-8"))
+                    if isinstance(data, dict) and "job_id" in data:
+                        return str(data["job_id"])
+                except Exception:
+                    pass
+                return "in_progress"
+
+        if self.verification_queue_dir.exists():
+            v_files = sorted(self.verification_queue_dir.glob("*.json"))
+            if v_files:
+                return v_files[0].stem
+        return None
+
     def dispatch_next_job(
         self,
-        worker_dir_name: str = "test_creator",
+        worker_dir_name: str = "creator",
+        force: bool = False,
     ) -> Optional[Dict[str, Any]]:
-        """Atomically dispatch the next pending manifest to the active worker directory."""
+        """Atomically dispatch the next pending manifest to the active worker directory.
+
+        Enforces that only one scenario test suite is queued at a time unless force=True.
+        """
         self.ensure_directories()
+        if not force:
+            in_flight = self.get_active_job_id()
+            if in_flight:
+                raise RuntimeError(
+                    f"Cannot dispatch next job: scenario '{in_flight}' is already active. "
+                    "The orchestrator only queues up one scenario test suite at a time."
+                )
+
         pending_files = sorted(self.pending_dir.glob("*.json"))
         if not pending_files:
             return None
@@ -182,13 +221,18 @@ class BacklogManager:
         job_id = next_job_link.stem
 
         # Support both 'test_creator' and 'creator' directory paths
-        worker_dirs = [
-            self.jobs_dir / "active" / worker_dir_name,
-        ]
-        if worker_dir_name == "test_creator":
-            worker_dirs.append(self.jobs_dir / "active" / "creator")
-        elif worker_dir_name == "test_tester":
-            worker_dirs.append(self.jobs_dir / "active" / "tester")
+        if worker_dir_name in ("test_creator", "creator"):
+            worker_dirs = [
+                self.jobs_dir / "active" / "creator",
+                self.jobs_dir / "active" / "test_creator",
+            ]
+        elif worker_dir_name in ("test_tester", "tester"):
+            worker_dirs = [
+                self.jobs_dir / "active" / "tester",
+                self.jobs_dir / "active" / "test_tester",
+            ]
+        else:
+            worker_dirs = [self.jobs_dir / "active" / worker_dir_name]
 
         manifest_file = self.manifests_dir / f"{job_id}.json"
         manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
@@ -204,6 +248,19 @@ class BacklogManager:
                 active_link.symlink_to(Path("..") / ".." / "manifests" / f"{job_id}.json")
             except OSError:
                 active_link.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
+
+        # Update inbox/creator.json or inbox/tester.json if present (used by work script)
+        agent_inbox_name = "creator" if "creator" in worker_dir_name else "tester"
+        inbox_file = self.jobs_dir / "inbox" / f"{agent_inbox_name}.json"
+        if inbox_file.exists():
+            try:
+                inbox_data = json.loads(inbox_file.read_text(encoding="utf-8"))
+                inbox_data["state"] = "DISPATCHED"
+                inbox_data["task"] = job_id
+                inbox_data["dispatched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                inbox_file.write_text(json.dumps(inbox_data, indent=2), encoding="utf-8")
+            except Exception:
+                pass
 
         # Remove from pending
         next_job_link.unlink()

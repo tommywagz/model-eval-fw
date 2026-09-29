@@ -79,3 +79,39 @@ def test_backlog_manager_populates_manifests_symlinks_and_backlog_md(tmp_path: P
     active_data = json.loads(active_job_file.read_text(encoding="utf-8"))
     assert active_data["job_id"] == "job-01-oauth-api-enablement"
     assert active_data["features_under_test"] is not None
+
+
+def test_dispatch_next_job_enforces_single_active_scenario(tmp_path: Path) -> None:
+    jobs_dir = tmp_path / "jobs"
+    manager = BacklogManager(jobs_dir=jobs_dir, scenarios_file="SCENARIOS.MD")
+    manager.populate_backlog_from_scenarios()
+
+    # Dispatch first job
+    job1 = manager.dispatch_next_job("creator")
+    assert job1 is not None
+    assert job1["job_id"] == "job-01-oauth-api-enablement"
+
+    # Attempting to dispatch second job while job1 is active must raise RuntimeError
+    import pytest
+    with pytest.raises(RuntimeError, match="is already active"):
+        manager.dispatch_next_job("creator")
+
+    # Clear active job (simulating handoff to verification queue)
+    (jobs_dir / "active" / "creator" / "current_job.json").unlink()
+    (jobs_dir / "active" / "test_creator" / "current_job.json").unlink()
+
+    # If verification_queue has a job, dispatch must still be blocked
+    v_link = jobs_dir / "verification_queue" / "job-01-oauth-api-enablement.json"
+    v_link.symlink_to(Path("..") / "manifests" / "job-01-oauth-api-enablement.json")
+    with pytest.raises(RuntimeError, match="is already active"):
+        manager.dispatch_next_job("creator")
+
+    # Move to completed
+    v_link.unlink()
+    c_link = jobs_dir / "completed" / "job-01-oauth-api-enablement.json"
+    c_link.symlink_to(Path("..") / "manifests" / "job-01-oauth-api-enablement.json")
+
+    # Now dispatching the second job is allowed
+    job2 = manager.dispatch_next_job("creator")
+    assert job2 is not None
+    assert job2["job_id"] == "job-02-storage-operations"
