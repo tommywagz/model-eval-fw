@@ -32,7 +32,25 @@ class OpenAICompatibleClient(BaseModelClient):
             **kwargs,
         )
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "mock-api-key")
+        alias_lower = alias.lower()
+        env_key: Optional[str] = None
+        if "minimax" in alias_lower:
+            env_key = os.environ.get("MINIMAX_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        elif "kimi" in alias_lower or "moonshot" in alias_lower:
+            env_key = (
+                os.environ.get("KIMI_API_KEY")
+                or os.environ.get("MOONSHOT_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+            )
+        elif "qwen" in alias_lower:
+            env_key = (
+                os.environ.get("QWEN_API_KEY")
+                or os.environ.get("DASHSCOPE_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+            )
+        else:
+            env_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_ADMIN_KEY")
+        self.api_key = api_key or env_key or "mock-api-key"
         self.sdk_client = sdk_client
 
     def _invoke_live(

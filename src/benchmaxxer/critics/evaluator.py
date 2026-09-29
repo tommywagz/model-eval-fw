@@ -28,6 +28,11 @@ class CriticEvaluation(BaseModel):
     detected_anomalies: List[str] = Field(default_factory=list)
     remediation_advice: Optional[str] = None
     normalized_score: float = Field(ge=0.0, le=100.0)
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    latency_ms: float = 0.0
 
 
 class PanelEvaluationSummary(BaseModel):
@@ -41,6 +46,11 @@ class PanelEvaluationSummary(BaseModel):
     evaluations: Dict[str, CriticEvaluation]
     anomaly_count: int = 0
     passed_threshold: bool = True
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+    total_estimated_cost_usd: float = 0.0
+    total_latency_ms: float = 0.0
 
     def to_telemetry_dict(self) -> Dict[str, Any]:
         return {
@@ -49,6 +59,11 @@ class PanelEvaluationSummary(BaseModel):
             "invariance_controls": self.invariance_controls,
             "anomaly_count": self.anomaly_count,
             "passed_threshold": self.passed_threshold,
+            "total_input_tokens": int(self.total_input_tokens),
+            "total_output_tokens": int(self.total_output_tokens),
+            "total_tokens": int(self.total_tokens),
+            "total_estimated_cost_usd": round(float(self.total_estimated_cost_usd), 6),
+            "total_latency_ms": round(float(self.total_latency_ms), 3),
             "critics": {
                 k: v.model_dump() for k, v in self.evaluations.items()
             },
@@ -233,6 +248,13 @@ class CriticEvaluator:
             default_critic_name=self.critic_name,
             default_dimension=self.rubric.display_name,
         )
+        evaluation.input_tokens = int(response.input_tokens)
+        evaluation.output_tokens = int(response.output_tokens)
+        evaluation.total_tokens = int(response.input_tokens) + int(response.output_tokens)
+        evaluation.estimated_cost_usd = self.client.estimate_cost(
+            int(response.input_tokens), int(response.output_tokens)
+        )
+        evaluation.latency_ms = round(float(response.latency_ms), 3)
 
         # 4. Store in Critic Evaluation Cache
         if not self.no_cache:
@@ -258,6 +280,12 @@ def aggregate_panel_evaluations(
     norm_scores = [ev.normalized_score for ev in evaluations.values()]
     anomalies = sum(len(ev.detected_anomalies) for ev in evaluations.values())
 
+    total_in = sum(int(ev.input_tokens) for ev in evaluations.values())
+    total_out = sum(int(ev.output_tokens) for ev in evaluations.values())
+    total_tok = total_in + total_out
+    total_cost = round(sum(float(ev.estimated_cost_usd) for ev in evaluations.values()), 6)
+    total_lat = round(sum(float(ev.latency_ms) for ev in evaluations.values()), 3)
+
     avg_score = round(sum(scores) / len(scores), 3)
     avg_norm = round(sum(norm_scores) / len(norm_scores), 2)
 
@@ -271,4 +299,9 @@ def aggregate_panel_evaluations(
         evaluations=evaluations,
         anomaly_count=anomalies,
         passed_threshold=avg_norm >= passing_normalized_threshold,
+        total_input_tokens=total_in,
+        total_output_tokens=total_out,
+        total_tokens=total_tok,
+        total_estimated_cost_usd=total_cost,
+        total_latency_ms=total_lat,
     )

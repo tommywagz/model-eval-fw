@@ -96,11 +96,31 @@ def render_run_inspection(
         "Pillar:", str(pillar),
         "Execution Mode:", f"{exec_mode.upper()} | Status: {status_badge}",
     )
+    timing_info = run_data.get("timing") or {}
+    token_info = run_data.get("token_usage") or {}
+    dur_ms = float(run_data.get("duration_ms") or timing_info.get("duration_ms") or run_data.get("latency_ms", 0.0))
+    dur_sec = float(run_data.get("duration_seconds") or timing_info.get("duration_seconds") or round(dur_ms / 1000.0, 6))
+    total_tok = int(
+        run_data.get("total_tokens")
+        or token_info.get("total_tokens")
+        or (int(run_data.get("input_tokens", 0)) + int(run_data.get("output_tokens", 0)))
+    )
+    total_cost = float(
+        token_info.get("total_estimated_cost_usd")
+        or run_data.get("estimated_cost_usd", 0.0)
+    )
+
     meta_table.add_row(
-        "Latency / Tokens:",
-        f"{run_data.get('latency_ms', 0.0)} ms | in={run_data.get('input_tokens', 0)}, out={run_data.get('output_tokens', 0)}",
+        "Test Duration / Latency:",
+        f"{dur_ms:.2f} ms ({dur_sec:.4f}s) | model={run_data.get('latency_ms', 0.0)} ms",
         "Estimated Cost:",
-        f"${float(run_data.get('estimated_cost_usd', 0.0)):.6f} USD",
+        f"${total_cost:.6f} USD (cand=${float(run_data.get('estimated_cost_usd', 0.0)):.6f})",
+    )
+    meta_table.add_row(
+        "Token Usage:",
+        f"total={total_tok} (cand_in={run_data.get('input_tokens', 0)}, cand_out={run_data.get('output_tokens', 0)})",
+        "Suite Slug:",
+        str(run_data.get("suite_slug", timing_info.get("suite_slug", "agent_skill_creation"))),
     )
 
     out_console.print(

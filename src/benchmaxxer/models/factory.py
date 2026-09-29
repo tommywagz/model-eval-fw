@@ -122,6 +122,9 @@ def _resolve_registry_path(config_path: Optional[str | Path] = None) -> Optional
 
 def load_model_registry(config_path: Optional[str | Path] = None) -> Dict[str, Dict[str, Any]]:
     """Load the model catalog from configs/models.yaml with built-in fallbacks."""
+    from benchmaxxer.telemetry.tokens import load_project_dotenv
+
+    load_project_dotenv()
     registry = {k: dict(v) for k, v in DEFAULT_MODELS_FALLBACK.items()}
     resolved = _resolve_registry_path(config_path)
     if resolved:
@@ -142,9 +145,14 @@ def get_model_client(
     no_cache: bool = False,
     replay: bool = False,
     cache_dir: Optional[str | Path] = None,
+    dotenv_path: Optional[str | Path] = None,
     **overrides: Any,
 ) -> BaseModelClient:
     """Factory method returning a configured BaseModelClient instance for the given alias."""
+    import os
+    from benchmaxxer.telemetry.tokens import load_project_dotenv
+
+    load_project_dotenv(dotenv_path=dotenv_path)
     registry = load_model_registry(config_path=config_path)
     if alias not in registry:
         raise KeyError(
@@ -152,6 +160,12 @@ def get_model_client(
         )
 
     cfg = dict(registry[alias])
+    env_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("VERTEX_PROJECT_ID")
+    if env_project and "project_id" not in overrides:
+        cfg["project_id"] = env_project
+    env_location = os.environ.get("VERTEX_LOCATION")
+    if env_location and "location" not in overrides and "location" not in registry[alias]:
+        cfg["location"] = env_location
     cfg.update(overrides)
 
     provider_key = str(cfg.pop("provider", "vertex_genai"))

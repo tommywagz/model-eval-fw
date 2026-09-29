@@ -51,6 +51,11 @@ class ParsedScenario:
                     "fixtures/negative/",
                 ],
             },
+            "telemetry_requirements": {
+                "timer_integration": "ExecutionTimer (test, suite, and framework level duration_ms and duration_seconds)",
+                "token_cost_integration": "TokensScriptBridge (@.agents/scripts/tokens) + project .env",
+                "levels": ["test", "suite", "framework"],
+            },
             "status": "pending",
         }
 
