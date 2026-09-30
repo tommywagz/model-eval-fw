@@ -1,0 +1,13 @@
+{
+  "service_account": "benchmaxxer-sa@benchmaxxer-eval-sandbox.iam.gserviceaccount.com",
+  "enabled_apis": [
+    "aiplatform.googleapis.com",
+    "run.googleapis.com",
+    "bigquery.googleapis.com"
+  ],
+  "granted_roles": [
+    "roles/aiplatform.user",
+    "roles/run.invoker"
+  ],
+  "oauth_scopes": [
+    "https://www.googleapis.com/auth/cloud-platform"
