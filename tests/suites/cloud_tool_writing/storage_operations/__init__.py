@@ -1,0 +1,1 @@
+"""Storage (Easy) blackbox suite."""
