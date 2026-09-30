@@ -68,7 +68,9 @@ class BacklogManager:
             manifest_path.write_text(json.dumps(m_dict, indent=2), encoding="utf-8")
             manifest_dicts.append(m_dict)
 
-            # Create atomic symlink in jobs/pending/
+            # Create atomic symlink in jobs/pending/ if not already completed or failed
+            if (self.completed_dir / f"{sc.job_id}.json").exists() or (self.failed_dir / f"{sc.job_id}.json").exists():
+                continue
             pending_link = self.pending_dir / f"{sc.job_id}.json"
             if pending_link.is_symlink() or pending_link.exists():
                 pending_link.unlink()
@@ -274,7 +276,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--init",
         action="store_true",
-        default=True,
+        default=False,
         help="Parse SCENARIOS.MD and generate canonical job manifests and backlog",
     )
     parser.add_argument(
