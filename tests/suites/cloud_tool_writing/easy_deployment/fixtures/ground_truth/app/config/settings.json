@@ -1,0 +1,8 @@
+{
+  "service_name": "inventory-api",
+  "version": "1.0.0",
+  "items": [
+    {"sku": "SKU-1001", "name": "widget", "quantity": 42},
+    {"sku": "SKU-1002", "name": "gadget", "quantity": 7}
+  ]
+}

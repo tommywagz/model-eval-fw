@@ -1,0 +1,22 @@
+# Build inventory-api and push it to the project's Artifact Registry repository.
+substitutions:
+  _SERVICE: inventory-api
+  _REPO: us-central1-docker.pkg.dev/${PROJECT_ID}/apps
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_REPO}/${_SERVICE}:v1", "."]
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REPO}/${_SERVICE}:v1"]
+    waitFor: ["build"]
+
+images:
+  - "${_REPO}/${_SERVICE}:v1"
+
+options:
+  dynamic_substitutions: true   # _REPO references ${PROJECT_ID}
+  logging: CLOUD_LOGGING_ONLY
+timeout: 600s

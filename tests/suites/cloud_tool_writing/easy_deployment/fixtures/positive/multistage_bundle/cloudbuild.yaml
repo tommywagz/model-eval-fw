@@ -1,0 +1,13 @@
+# One bash step builds two tags and pushes the whole repository.
+steps:
+  - id: build-and-push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker build --build-arg PY_VERSION=3.12 -f Dockerfile \
+          -t gcr.io/$PROJECT_ID/inventory-api:$BUILD_ID \
+          -t gcr.io/$PROJECT_ID/inventory-api:stable . &&
+        docker push --all-tags gcr.io/$PROJECT_ID/inventory-api
+timeout: 900s

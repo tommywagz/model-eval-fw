@@ -1,0 +1,9 @@
+{
+  "project_id": "bm-sandbox-project",
+  "region": "us-central1",
+  "service_name": "inventory-api",
+  "container_port": 8080,
+  "health_path": "/healthz",
+  "artifact_registry_repositories": ["us-central1-docker.pkg.dev/bm-sandbox-project/apps"],
+  "container_registry_host": "gcr.io"
+}
