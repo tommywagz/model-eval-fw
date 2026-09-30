@@ -1,0 +1,13 @@
+{
+  "project_id": "bm-sandbox-project",
+  "filestore_instance": "bm-datasets",
+  "filestore_location": "us-central1-b",
+  "mount_point": "/mnt/datasets",
+  "dataset_dir": "sentiment-v1",
+  "tpu_node_id": "bm-train-node",
+  "allowed_accelerator_families": ["v4", "v5litepod"],
+  "base_model": "publishers/google/models/gemma-2b",
+  "hyperparameters": {"epochs": 3, "learning_rate": 0.1, "batch_size": 16, "lora_rank": 8},
+  "output_dir": "/mnt/datasets/outputs/gemma-2b-sentiment",
+  "checkpoint_uri": "gs://bm-sandbox-models/gemma-2b-sentiment/final/"
+}
