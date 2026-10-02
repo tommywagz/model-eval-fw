@@ -1,4 +1,4 @@
-"""Vertex AI Endpoint provider for deployed Model Garden open-weights models (Qwen, Kimi K, Llama, Gemma)."""
+"""Vertex AI Endpoint provider for deployed Model Garden models (critic-qwen)."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ class VertexEndpointClient(BaseModelClient):
 
     def __init__(
         self,
-        alias: str = "llama-3.1-70b",
-        model_name: str = "meta/llama-3.1-70b-instruct",
+        alias: str = "critic-qwen",
+        model_name: str = "Qwen/Qwen2.5-72B-Instruct",
         endpoint_resource_name: Optional[str] = None,
         mode: str = "mock",
         project_id: str = "benchmaxxer-eval-sandbox",

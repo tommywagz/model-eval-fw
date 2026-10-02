@@ -45,8 +45,6 @@ def test_model_registry_contains_candidates_and_critics() -> None:
         "gemini-1.5-pro",
         "gemini-1.5-flash",
         "claude-3-5-sonnet",
-        "llama-3.1-70b",
-        "gemma-2-27b",
         "critic-qwen",
         "critic-minimax",
         "critic-kimi-k",
@@ -61,7 +59,6 @@ def test_model_registry_contains_candidates_and_critics() -> None:
     [
         ("gemini-1.5-pro", VertexGenAIClient),
         ("claude-3-5-sonnet", VertexAnthropicClient),
-        ("llama-3.1-70b", VertexEndpointClient),
         ("critic-qwen", VertexEndpointClient),
         ("critic-minimax", OpenAICompatibleClient),
         ("critic-kimi-k", OpenAICompatibleClient),
