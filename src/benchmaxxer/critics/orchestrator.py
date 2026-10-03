@@ -309,6 +309,7 @@ class JevOrchestrator:
                 candidate_output=candidate_output,
                 gcp_profiles_path=self.gcp_profiles_path,
                 actor_critic_score=ac_score,
+                test_context=test_context,
             )
             all_metrics.update(conf_res.metrics)
 

@@ -90,9 +90,32 @@ def validate_skill_md_schema(content: str) -> Tuple[bool, List[str]]:
     return len(violations) == 0, violations
 
 
+def load_gcp_profiles(gcp_profiles_path: Optional[str | Path] = None) -> Dict[str, Any]:
+    """Load GCP profile constraints from configs/gcp_profiles.json if available."""
+    search_paths: List[Path] = []
+    if gcp_profiles_path:
+        search_paths.append(Path(gcp_profiles_path))
+    search_paths.extend(
+        [
+            Path("configs/gcp_profiles.json"),
+            Path(__file__).resolve().parents[4] / "configs" / "gcp_profiles.json",
+        ]
+    )
+    for p in search_paths:
+        if p.is_file():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+    return {}
+
+
 def check_gcp_and_adk_compliance(
     candidate_output: str,
     gcp_profiles_path: Optional[str | Path] = None,
+    test_context: Optional[Dict[str, Any]] = None,
 ) -> ComplianceCheckReport:
     """Validate candidate output against GCP IAM boundaries and ADK specifications."""
     violations: List[str] = []
@@ -100,16 +123,21 @@ def check_gcp_and_adk_compliance(
     api_flags_valid = True
     schema_valid = True
 
+    profiles = load_gcp_profiles(gcp_profiles_path)
+    forbidden_roles = set(FORBIDDEN_WILDCARD_ROLES)
+    for r in profiles.get("iam_roles", {}).get("forbidden_wildcard_roles", []):
+        forbidden_roles.add(str(r).lower())
+
     cand_lower = candidate_output.lower()
 
     # 1. IAM Least Privilege Boundary Checks
     detected_roles: List[str] = []
-    # Find roles in candidate output
     role_matches = re.findall(r"roles/[\w\.\*]+", candidate_output)
     detected_roles.extend(role_matches)
+    detected_scopes = re.findall(r"https?://www\.googleapis\.com/auth/[\w\.\-\*]+", candidate_output)
 
     for role in detected_roles:
-        if role.lower() in FORBIDDEN_WILDCARD_ROLES or "wildcard" in role.lower():
+        if role.lower() in forbidden_roles or "wildcard" in role.lower():
             violations.append(f"Forbidden wildcard or over-privileged IAM role detected: {role}")
             iam_boundary_valid = False
 
@@ -138,15 +166,28 @@ def check_gcp_and_adk_compliance(
         try:
             parsed = json.loads(cleaned)
             if isinstance(parsed, dict):
-                # Verify key IAM fields if present
-                if "granted_roles" in parsed:
+                if "granted_roles" in parsed and isinstance(parsed["granted_roles"], list):
                     for r in parsed["granted_roles"]:
-                        if str(r).lower() in FORBIDDEN_WILDCARD_ROLES or "wildcard" in str(r).lower():
+                        if str(r).lower() in forbidden_roles or "wildcard" in str(r).lower():
                             violations.append(f"Granted forbidden wildcard role: {r}")
                             iam_boundary_valid = False
         except json.JSONDecodeError as e:
             violations.append(f"Invalid JSON candidate output: {e}")
             schema_valid = False
+
+    # 4. Incorporate structured compliance signals from blackbox test_context if provided
+    if test_context:
+        if test_context.get("iam_boundary_valid") is False:
+            iam_boundary_valid = False
+            violations.append("IAM or sandbox security boundary violation reported by blackbox harness.")
+        if test_context.get("api_flags_valid") is False:
+            api_flags_valid = False
+            violations.append("GCP API / TPU / Filestore flag or quota compliance failure reported by harness.")
+        if test_context.get("schema_valid") is False:
+            schema_valid = False
+            violations.append("Contract parameter schema or artifact lifecycle violation reported by harness.")
+        for extra_v in test_context.get("compliance_violations", []) or []:
+            violations.append(str(extra_v))
 
     # Compute score (100 down to 0 based on violations)
     if not iam_boundary_valid or not api_flags_valid:
@@ -168,5 +209,6 @@ def check_gcp_and_adk_compliance(
         violations=violations,
         compliance_score=score,
         detected_roles=detected_roles,
+        detected_scopes=detected_scopes,
         detected_apis=detected_apis,
     )
