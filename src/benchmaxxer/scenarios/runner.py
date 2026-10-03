@@ -7,6 +7,11 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from benchmaxxer.critics import (
+    JevAggregateEvaluation,
+    JevOrchestrator,
+    JevScenarioEvaluation,
+)
 from benchmaxxer.critics.panel import ActorCriticPanel
 from benchmaxxer.execution.sandbox import ExecutionSandbox
 from benchmaxxer.models.factory import get_model_client
@@ -540,7 +545,20 @@ def execute_scenario_run(
         else {}
     )
 
-    # 4. Compute Scenario Target Metrics
+    # 4. Execute Jev Orchestration (Jev-Noul, Jev-Classification, Jev-Confidence Vector)
+    jev_orchestrator = JevOrchestrator(mode=mode)
+    jev_scenario_eval = jev_orchestrator.evaluate_scenario(
+        scenario_id=scenario_id,
+        candidate_output=candidate_output,
+        baseline_code=baseline_code,
+        sandbox=sandbox,
+        lifecycle=lifecycle,
+        test_context=test_context,
+        assertions=assertions,
+        actor_critic_scores=ac_telemetry,
+    )
+
+    # Compute Scenario Target Metrics
     metrics_dict: Dict[str, Any] = {
         "actor_critic_quality_score": panel_summary.composite_normalized_score,
         "execution_completeness_rate": deterministic_pass_rate,
@@ -550,11 +568,18 @@ def execute_scenario_run(
         "test_suite_pass_rate": panel_summary.evaluations["minimax"].normalized_score,
         "platform_compliance_score": panel_summary.evaluations["kimi_k"].normalized_score,
     }
+    # Enrich with ground-truth target metrics evaluated by the assigned Jev critic(s)
+    metrics_dict.update(jev_scenario_eval.target_metrics)
+    metrics_dict["rubric_score"] = jev_scenario_eval.rubric_score
+    metrics_dict["rubric_rating"] = jev_scenario_eval.rubric_rating
+    metrics_dict["normalized_score"] = jev_scenario_eval.normalized_score
+    metrics_dict["difficulty_weight"] = jev_scenario_eval.difficulty_weight
 
     overall_passed = (
         not has_failure_markers
         and deterministic_pass_rate >= 75.0
         and panel_summary.passed_threshold
+        and jev_scenario_eval.passed
     )
     exit_code = 0 if overall_passed else 1
 
@@ -594,6 +619,7 @@ def execute_scenario_run(
         estimated_cost_usd=candidate_cost_usd,
         metrics_dict=metrics_dict,
         actor_critic_scores=ac_telemetry,
+        jev_evaluation=jev_scenario_eval.to_dict(),
         exit_code=exit_code,
         trace_path=str(logger.traces_dir / f"{run_id}.json"),
         difficulty=spec["difficulty"],
@@ -616,6 +642,10 @@ def execute_scenario_run(
     result = record.to_full_dict()
     result["passed"] = overall_passed
     result["teardown_verified"] = lifecycle.all_destroyed
+    result["jev_evaluation"] = jev_scenario_eval.to_dict()
+    result["rubric_score"] = jev_scenario_eval.rubric_score
+    result["rubric_rating"] = jev_scenario_eval.rubric_rating
+    result["composite_score"] = float(jev_scenario_eval.rubric_score)
 
     # 7. Optional Interactive Calibration Mode (--manual-eval)
     if manual_eval:
@@ -627,6 +657,7 @@ def execute_scenario_run(
         result["manual_eval_report"] = manual_report
 
     return result
+
 
 
 def execute_suite_run(
@@ -704,6 +735,37 @@ def execute_suite_run(
         tokens_script_telemetry=suite_provider_delta,
     )
 
+    # Jev Suite Aggregation
+    jev_orchestrator = JevOrchestrator(mode=mode)
+    suite_scenarios_eval: List[JevScenarioEvaluation] = []
+    for r in test_results:
+        jev_dict = r.get("jev_evaluation")
+        if jev_dict:
+            suite_scenarios_eval.append(
+                JevScenarioEvaluation(
+                    scenario_id=jev_dict["scenario_id"],
+                    difficulty=jev_dict["difficulty"],
+                    difficulty_weight=jev_dict["difficulty_weight"],
+                    eval_methods=jev_dict["eval_methods"],
+                    target_metrics=jev_dict["target_metrics"],
+                    rubric_score=jev_dict["rubric_score"],
+                    rubric_rating=jev_dict["rubric_rating"],
+                    normalized_score=jev_dict["normalized_score"],
+                    passed=jev_dict["passed"],
+                    details=jev_dict.get("details", ""),
+                )
+            )
+
+    suite_jev = (
+        jev_orchestrator.aggregate_evaluations(
+            evaluations=suite_scenarios_eval,
+            level="suite",
+            model_alias=model_alias,
+        )
+        if suite_scenarios_eval
+        else None
+    )
+
     passed_count = sum(1 for r in test_results if r.get("passed"))
     total_count = len(test_results)
     all_passed = passed_count == total_count and total_count > 0
@@ -723,6 +785,10 @@ def execute_suite_run(
         "passed_count": passed_count,
         "passed": all_passed,
         "pass_rate": round((passed_count / max(1, total_count)) * 100.0, 2),
+        "composite_score": suite_jev.composite_score if suite_jev else 0.0,
+        "composite_normalized_score": suite_jev.composite_normalized_score if suite_jev else 0.0,
+        "composite_rubric_rating": suite_jev.composite_rubric_rating if suite_jev else "Unknown",
+        "jev_evaluation": suite_jev.to_dict() if suite_jev else {},
         "duration_ms": suite_timing["total_duration_ms"],
         "duration_seconds": suite_timing["total_duration_seconds"],
         "input_tokens": suite_token_usage["total_input_tokens"],
@@ -737,12 +803,15 @@ def execute_suite_run(
                 "scenario_id": r["scenario_id"],
                 "passed": r["passed"],
                 "exit_code": r["exit_code"],
+                "rubric_score": r.get("rubric_score", 3),
+                "rubric_rating": r.get("rubric_rating", "Acceptable / Functional"),
                 "duration_ms": r["duration_ms"],
                 "duration_seconds": r["duration_seconds"],
                 "input_tokens": r["input_tokens"],
                 "output_tokens": r["output_tokens"],
                 "total_tokens": r["total_tokens"],
                 "estimated_cost_usd": r["token_usage"]["total_estimated_cost_usd"],
+                "metrics_dict": r.get("metrics_dict", {}),
             }
             for r in test_results
         ],
@@ -819,6 +888,37 @@ def execute_framework_run(
         tokens_script_telemetry=fw_provider_delta,
     )
 
+    # Jev Framework-level Aggregation across all suites
+    all_framework_scenarios_eval: List[JevScenarioEvaluation] = []
+    for s_res in suite_results:
+        s_jev = s_res.get("jev_evaluation", {})
+        for sc_data in s_jev.get("scenarios", []):
+            all_framework_scenarios_eval.append(
+                JevScenarioEvaluation(
+                    scenario_id=sc_data["scenario_id"],
+                    difficulty=sc_data["difficulty"],
+                    difficulty_weight=sc_data["difficulty_weight"],
+                    eval_methods=sc_data["eval_methods"],
+                    target_metrics=sc_data["target_metrics"],
+                    rubric_score=sc_data["rubric_score"],
+                    rubric_rating=sc_data["rubric_rating"],
+                    normalized_score=sc_data["normalized_score"],
+                    passed=sc_data["passed"],
+                    details=sc_data.get("details", ""),
+                )
+            )
+
+    jev_orchestrator = JevOrchestrator(mode=mode)
+    fw_jev = (
+        jev_orchestrator.aggregate_evaluations(
+            evaluations=all_framework_scenarios_eval,
+            level="framework",
+            model_alias=model_alias,
+        )
+        if all_framework_scenarios_eval
+        else None
+    )
+
     total_suites = len(suite_results)
     total_tests = sum(int(s["test_count"]) for s in suite_results)
     passed_tests = sum(int(s["passed_count"]) for s in suite_results)
@@ -838,6 +938,12 @@ def execute_framework_run(
         "passed_count": passed_tests,
         "passed": all_passed,
         "pass_rate": round((passed_tests / max(1, total_tests)) * 100.0, 2),
+        "composite_score": fw_jev.composite_score if fw_jev else 0.0,
+        "composite_normalized_score": fw_jev.composite_normalized_score if fw_jev else 0.0,
+        "composite_rubric_rating": fw_jev.composite_rubric_rating if fw_jev else "Unknown",
+        "difficulty_scores": fw_jev.difficulty_scores if fw_jev else {},
+        "target_metrics_summary": fw_jev.target_metrics_summary if fw_jev else {},
+        "jev_evaluation": fw_jev.to_dict() if fw_jev else {},
         "duration_ms": framework_timing["total_duration_ms"],
         "duration_seconds": framework_timing["total_duration_seconds"],
         "input_tokens": framework_token_usage["total_input_tokens"],
@@ -851,3 +957,4 @@ def execute_framework_run(
     }
     logger.log_framework_run(framework_payload)
     return framework_payload
+

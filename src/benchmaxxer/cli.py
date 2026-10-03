@@ -47,6 +47,32 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Trigger interactive human calibration after inspection",
     )
+    inspect_parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Launch the interactive BenchMaxxer Web UI Studio",
+    )
+    inspect_parser.add_argument("--port", type=int, default=8080, help="Port for the web server (default: 8080)")
+    inspect_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server")
+
+    # `benchmaxxer ui` subcommand
+    ui_parser = subparsers.add_parser(
+        "ui",
+        help="Launch the BenchMaxxer Evaluation Studio Web UI or Rich terminal UI",
+    )
+    ui_parser.add_argument("--web", action="store_true", default=True, help="Launch the Web UI (default)")
+    ui_parser.add_argument("--port", type=int, default=8080, help="Port for the web server (default: 8080)")
+    ui_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server")
+    ui_parser.add_argument("--open-browser", action="store_true", help="Automatically open browser")
+
+    # `benchmaxxer web` subcommand
+    web_parser = subparsers.add_parser(
+        "web",
+        help="Launch the interactive BenchMaxxer Evaluation Studio in your browser",
+    )
+    web_parser.add_argument("--port", type=int, default=8080, help="Port for the web server (default: 8080)")
+    web_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for the web server")
+    web_parser.add_argument("--open-browser", action="store_true", help="Automatically open browser")
 
     # `benchmaxxer run` subcommand
     run_parser = subparsers.add_parser(
@@ -157,6 +183,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.subcommand == "inspect":
+        if getattr(args, "web", False):
+            from benchmaxxer.ui.web.server import run_web_ui
+
+            run_web_ui(host=args.host, port=args.port)
+            return 0
         forward_args: List[str] = []
         if args.run_id:
             forward_args.extend(["--run-id", args.run_id])
@@ -167,6 +198,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.manual_eval:
             forward_args.append("--manual-eval")
         return inspector_main(forward_args)
+
+    if args.subcommand in ("ui", "web"):
+        from benchmaxxer.ui.web.server import run_web_ui
+
+        run_web_ui(
+            host=getattr(args, "host", "127.0.0.1"),
+            port=getattr(args, "port", 8080),
+            open_browser=getattr(args, "open_browser", False),
+        )
+        return 0
+
 
     if args.subcommand == "tokens":
         summary = summarize_logged_token_costs(telemetry_dir=args.telemetry_dir)
@@ -244,8 +286,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "token_usage": result["token_usage"],
                 "metrics_dict": result["metrics_dict"],
                 "actor_critic_composite": result["actor_critic_scores"]["composite_normalized_score"],
+                "rubric_score": result.get("rubric_score"),
+                "rubric_rating": result.get("rubric_rating"),
+                "composite_score": result.get("composite_score"),
+                "jev_evaluation": result.get("jev_evaluation"),
                 "exit_code": result["exit_code"],
             }
+
         )
         return int(result["exit_code"])
 

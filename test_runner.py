@@ -184,6 +184,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         "token_usage": result["token_usage"],
         "metrics_dict": result["metrics_dict"],
         "actor_critic_scores": result["actor_critic_scores"],
+        "composite_score": result.get("composite_score", result.get("rubric_score", 3.0)),
+        "rubric_rating": result.get("rubric_rating", "Acceptable / Functional"),
+        "jev_evaluation": result.get("jev_evaluation"),
         "exit_code": result["exit_code"],
         "trace_path": result["trace_path"],
     }

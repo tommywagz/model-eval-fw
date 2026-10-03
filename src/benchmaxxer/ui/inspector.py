@@ -230,7 +230,48 @@ def render_run_inspection(
 
     out_console.print(ac_table)
 
+    # 6. Jev Evaluation Critic Suite Breakdown
+    jev_data = run_data.get("jev_evaluation")
+    if jev_data and isinstance(jev_data, dict):
+        jev_critics = jev_data.get("critics", {})
+        jev_table = Table(
+            title=(
+                f"Jev Evaluation Critic Suite | Rubric Score: {jev_data.get('rubric_score', 0)}/5.0 "
+                f"({jev_data.get('rubric_rating', '')}) | Difficulty Weight: {jev_data.get('difficulty_weight', 0.3):.0%}"
+            ),
+            expand=True,
+            show_lines=True,
+        )
+        jev_table.add_column("Jev Critic Module", style="bold cyan", width=24)
+        jev_table.add_column("Role / Functional Scope", style="white", width=30)
+        jev_table.add_column("Score (1-5)", justify="center", width=12)
+        jev_table.add_column("Target Metrics Scored", ratio=2)
+        jev_table.add_column("Details", style="dim", ratio=2)
+
+        crit_specs = [
+            ("jev_noul", "Jev-Noul", "State & Blackbox Verification"),
+            ("jev_classification", "Jev-Classification", "Structure & Dispatching"),
+            ("jev_confidence_vector", "Jev-Confidence Vector", "Compliance & Grounding"),
+        ]
+        for key, name, role in crit_specs:
+            c_info = jev_critics.get(key)
+            if not c_info:
+                continue
+            sc_val = int(c_info.get("rubric_score", 0))
+            sc_style = "bold green" if sc_val >= 4 else ("bold yellow" if sc_val == 3 else "bold red")
+            metrics_list = [f"{mk}: {mv:.1f}%" for mk, mv in c_info.get("metrics", {}).items()]
+            metrics_display = "\n".join(metrics_list) if metrics_list else "None"
+            jev_table.add_row(
+                name,
+                role,
+                Text(str(sc_val), style=sc_style),
+                metrics_display,
+                str(c_info.get("details", "")),
+            )
+        out_console.print(jev_table)
+
     if console is None:
+
         rendered = buffer.getvalue()
         print(rendered)
         return rendered
