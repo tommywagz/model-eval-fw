@@ -56,9 +56,34 @@ models:
       temperature: 0.0
       max_output_tokens: 4096
 
+  claude-3-5-haiku:
 
 
-  # ============================================================================
+    provider: "vertex_anthropic"
+    model_name: "claude-3-5-haiku@20241022"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00080
+    cost_per_1k_output_usd: 0.00400
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 4096
+
+  llama-3.1-70b:
+    provider: "vertex_endpoint"
+    model_name: "meta/llama-3.1-70b-instruct"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/llama-31-70b-instruct-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00080
+    cost_per_1k_output_usd: 0.00080
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 4096
+      seed: 42
+
   # Non-Assessed Actor-Critic Panel Models (RFC Section 6)
   # ============================================================================
   critic-qwen:

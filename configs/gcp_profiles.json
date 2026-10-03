@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "project_id": "benchmaxxer-eval-sandbox",
+  "service_accounts": {
+    "benchmaxxer_eval": "benchmaxxer-sa@benchmaxxer-eval-sandbox.iam.gserviceaccount.com"
+  },
+  "required_scopes": [
+    "https://www.googleapis.com/auth/cloud-platform"
+  ],
+  "required_apis": [
+    "aiplatform.googleapis.com",
+    "run.googleapis.com",
+    "bigquery.googleapis.com",
+    "storage.googleapis.com",
+    "firestore.googleapis.com",
+    "container.googleapis.com",
+    "file.googleapis.com"
+  ],
+  "iam_roles": {
+    "least_privilege": [
+      "roles/aiplatform.user",
+      "roles/run.admin",
+      "roles/bigquery.dataEditor",
+      "roles/storage.objectAdmin",
+      "roles/datastore.user",
+      "roles/container.admin",
+      "roles/file.editor"
+    ],
+    "forbidden_wildcard_roles": [
+      "roles/owner",
+      "roles/editor",
+      "roles/owner_all_wildcards"
+    ]
+  },
+  "target_quotas": {
+    "cloud_run_max_instances": 10,
+    "gke_nodes_max": 5,
+    "tpu_chips": 8
+  }
+}

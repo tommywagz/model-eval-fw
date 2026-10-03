@@ -44,6 +44,7 @@ class RunRecord:
     total_tokens: int = 0
     timing: Dict[str, Any] = field(default_factory=dict)
     token_usage: Dict[str, Any] = field(default_factory=dict)
+    jev_evaluation: Dict[str, Any] = field(default_factory=dict)
 
     def to_db_dict(self) -> Dict[str, Any]:
         """Return the core telemetry dictionary for JSONL and SQLite storage."""
@@ -69,6 +70,7 @@ class RunRecord:
             "token_usage": self.token_usage,
             "metrics_dict": self.metrics_dict,
             "actor_critic_scores": self.actor_critic_scores,
+            "jev_evaluation": self.jev_evaluation,
             "exit_code": int(self.exit_code),
             "trace_path": self.trace_path,
         }
