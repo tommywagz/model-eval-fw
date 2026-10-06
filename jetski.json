@@ -19,5 +19,12 @@
       "autoApprove": true,
       "worktree": true
     }
+  },
+  "mcpServers": {
+    "harbor": {
+      "url": "https://docs.harborframework.com/mcp",
+      "type": "streamable-http",
+      "description": "Harbor Framework MCP documentation and task/job packaging assistant"
+    }
   }
 }

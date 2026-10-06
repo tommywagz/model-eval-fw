@@ -27,6 +27,9 @@ You have access to specialized skills in your user configuration directory (`~/.
    - Scaffold structured Agent Skill packages with standard directory layouts, `Skill.md` YAML frontmatter, parameter schemas, and regression tests.
    - Ensure skill deliverables conform to the structure expected by the Web Studio [`RepoInserter`](file:///Users/wagnerthomas/Documents/model-eval-fw/src/benchmaxxer/ui/web/repo_inserter.py).
 
+4. **[`harborframework`](file:///Users/wagnerthomas/.gemini/config/skills/harborframework/SKILL.md)** & **Harbor MCP (`https://docs.harborframework.com/mcp`)**:
+   - Package each Test Scenario as a **Harbor Job** (`harbor/jobs/<scenario_slug>/job.yaml` with `environment.type = "podman"`) and each Individual Test case as a **Harbor Task** (`harbor/jobs/<scenario_slug>/tasks/<task_id>/` containing `instruction.md`, `task.toml`, `environment/Dockerfile`, `solution/solve.sh`, and `tests/test.sh`) via `benchmaxxer harbor package --scenario <scenario_slug>`.
+
 ---
 
 ## 3. The `jobs/` Protocol & Worktree Workflow
