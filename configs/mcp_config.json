@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "harbor": {
+      "url": "https://docs.harborframework.com/mcp"
+    }
+  }
+}

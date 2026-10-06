@@ -26,6 +26,7 @@ These agents implement the **Collaborative Generation Pipeline** defined in the 
     - [`black-box-evaluation-suite-builder`](file:///Users/wagnerthomas/.gemini/config/skills/black-box-evaluation-suite-builder/SKILL.md) (`blackbox-suite-creation`)
     - [`evaluate-skill`](file:///Users/wagnerthomas/.gemini/config/skills/evaluate-skill/SKILL.md) (`skill-evaluation`)
     - [`write-skill`](file:///Users/wagnerthomas/.gemini/config/skills/write-skill/SKILL.md)
+    - [`harborframework`](file:///Users/wagnerthomas/.gemini/config/skills/harborframework/SKILL.md) (via Harbor MCP at `https://docs.harborframework.com/mcp` for packaging scenarios as Harbor Jobs and individual tests as Harbor Tasks on Podman sandboxes)
   - Reads assigned scenarios from `jobs/active/creator/current_job.json` (or `jobs/active/test_creator/current_job.json`).
   - Authors the complete multi-layered blackbox test suite under `tests/suites/<pillar_slug>/<scenario_slug>/`:
     - `README.md`: Suite documentation, invariants, and contract specifications.
