@@ -369,6 +369,8 @@ def execute_scenario_run(
     dotenv_path: Optional[str | Path] = None,
     tokens_script_path: Optional[str | Path] = None,
     assess_provider_tokens: bool = True,
+    critic_model: Optional[str] = None,
+    no_critics: bool = False,
 ) -> Dict[str, Any]:
     """Execute a full end-to-end scenario evaluation (Test Level), with individual test timer and token cost assessment."""
     load_project_dotenv(dotenv_path=dotenv_path)
@@ -510,30 +512,37 @@ def execute_scenario_run(
     total_assertions = len(assertions)
     deterministic_pass_rate = round((passed_assertions / max(1, total_assertions)) * 100.0, 2)
 
-    # 3. Execute Multi-Perspective Actor-Critic Panel (Qwen, MiniMax, Kimi K)
-    with test_timer.phase("actor_critic_evaluation"):
-        panel = ActorCriticPanel(
-            mode=mode,
-            no_cache=no_cache,
-            replay=replay,
-            critic_cache=critic_cache,
-        )
-        test_context = {
-            "scenario_id": scenario_id,
-            "execution_mode": mode,
-            "passed_assertions": passed_assertions,
-            "total_assertions": total_assertions,
-            "deterministic_pass_rate": deterministic_pass_rate,
-            "status": "FAIL" if has_failure_markers else "PASS",
-            "teardown_verified": lifecycle.all_destroyed,
-        }
-        panel_summary = panel.evaluate_candidate(
-            scenario_id=scenario_id,
-            prompt=prompt,
-            candidate_output=candidate_output,
-            test_context=test_context,
-        )
-        ac_telemetry = panel_summary.to_telemetry_dict()
+    test_context = {
+        "scenario_id": scenario_id,
+        "execution_mode": mode,
+        "passed_assertions": passed_assertions,
+        "total_assertions": total_assertions,
+        "deterministic_pass_rate": deterministic_pass_rate,
+        "status": "FAIL" if has_failure_markers else "PASS",
+        "teardown_verified": lifecycle.all_destroyed,
+    }
+
+    # 3. Execute Multi-Perspective Actor-Critic Panel (or bypass when no_critics=True)
+    if no_critics:
+        panel_summary = None
+        ac_telemetry = None
+    else:
+        with test_timer.phase("actor_critic_evaluation"):
+            panel = ActorCriticPanel(
+                mode=mode,
+                no_cache=no_cache,
+                replay=replay,
+                critic_cache=critic_cache,
+                candidate_model=model_alias,
+                critic_model=critic_model,
+            )
+            panel_summary = panel.evaluate_candidate(
+                scenario_id=scenario_id,
+                prompt=prompt,
+                candidate_output=candidate_output,
+                test_context=test_context,
+            )
+            ac_telemetry = panel_summary.to_telemetry_dict()
 
     # Stop individual test timer
     test_timer.stop()
@@ -559,15 +568,28 @@ def execute_scenario_run(
     )
 
     # Compute Scenario Target Metrics
-    metrics_dict: Dict[str, Any] = {
-        "actor_critic_quality_score": panel_summary.composite_normalized_score,
-        "execution_completeness_rate": deterministic_pass_rate,
-        "average_pass_rate": deterministic_pass_rate,
-        "deployment_lifecycle_pass_rate": 100.0 if (lifecycle.all_destroyed and not has_failure_markers) else 25.0,
-        "refactoring_quality_score": panel_summary.evaluations["qwen"].normalized_score,
-        "test_suite_pass_rate": panel_summary.evaluations["minimax"].normalized_score,
-        "platform_compliance_score": panel_summary.evaluations["kimi_k"].normalized_score,
-    }
+    if panel_summary is not None:
+        metrics_dict: Dict[str, Any] = {
+            "actor_critic_quality_score": panel_summary.composite_normalized_score,
+            "execution_completeness_rate": deterministic_pass_rate,
+            "average_pass_rate": deterministic_pass_rate,
+            "deployment_lifecycle_pass_rate": 100.0 if (lifecycle.all_destroyed and not has_failure_markers) else 25.0,
+            "refactoring_quality_score": panel_summary.evaluations["qwen"].normalized_score,
+            "test_suite_pass_rate": panel_summary.evaluations["minimax"].normalized_score,
+            "platform_compliance_score": panel_summary.evaluations["kimi_k"].normalized_score,
+        }
+        actor_critic_comp = panel_summary.composite_score
+    else:
+        metrics_dict = {
+            "actor_critic_quality_score": deterministic_pass_rate,
+            "execution_completeness_rate": deterministic_pass_rate,
+            "average_pass_rate": deterministic_pass_rate,
+            "deployment_lifecycle_pass_rate": 100.0 if (lifecycle.all_destroyed and not has_failure_markers) else 25.0,
+            "refactoring_quality_score": deterministic_pass_rate,
+            "test_suite_pass_rate": deterministic_pass_rate,
+            "platform_compliance_score": deterministic_pass_rate,
+        }
+        actor_critic_comp = round(deterministic_pass_rate / 20.0, 2)
     # Enrich with ground-truth target metrics evaluated by the assigned Jev critic(s)
     metrics_dict.update(jev_scenario_eval.target_metrics)
     metrics_dict["rubric_score"] = jev_scenario_eval.rubric_score
@@ -578,7 +600,7 @@ def execute_scenario_run(
     overall_passed = (
         not has_failure_markers
         and deterministic_pass_rate >= 75.0
-        and panel_summary.passed_threshold
+        and (panel_summary.passed_threshold if panel_summary else True)
         and jev_scenario_eval.passed
     )
     exit_code = 0 if overall_passed else 1
@@ -591,7 +613,7 @@ def execute_scenario_run(
         suite_name=suite_name,
         timer=test_timer,
         model_latency_ms=latency_ms,
-        critic_latency_ms=float(ac_telemetry.get("total_latency_ms", 0.0)),
+        critic_latency_ms=float(ac_telemetry.get("total_latency_ms", 0.0)) if ac_telemetry else 0.0,
     )
     token_result = build_test_token_result(
         scenario_id=scenario_id,
@@ -674,6 +696,8 @@ def execute_suite_run(
     dotenv_path: Optional[str | Path] = None,
     tokens_script_path: Optional[str | Path] = None,
     assess_provider_tokens: bool = True,
+    critic_model: Optional[str] = None,
+    no_critics: bool = False,
 ) -> Dict[str, Any]:
     """Execute all tests in a benchmark suite and establish suite-level time and token cost results."""
     load_project_dotenv(dotenv_path=dotenv_path)
@@ -707,6 +731,8 @@ def execute_suite_run(
                 dotenv_path=dotenv_path,
                 tokens_script_path=tokens_script_path,
                 assess_provider_tokens=False,
+                critic_model=critic_model,
+                no_critics=no_critics,
             )
             test_results.append(res)
 
@@ -834,6 +860,8 @@ def execute_framework_run(
     dotenv_path: Optional[str | Path] = None,
     tokens_script_path: Optional[str | Path] = None,
     assess_provider_tokens: bool = True,
+    critic_model: Optional[str] = None,
+    no_critics: bool = False,
 ) -> Dict[str, Any]:
     """Execute all benchmark suites across the entire framework and establish test, suite, and framework level time and token cost results."""
     load_project_dotenv(dotenv_path=dotenv_path)
@@ -864,6 +892,8 @@ def execute_framework_run(
                 dotenv_path=dotenv_path,
                 tokens_script_path=tokens_script_path,
                 assess_provider_tokens=False,
+                critic_model=critic_model,
+                no_critics=no_critics,
             )
             suite_results.append(s_res)
 

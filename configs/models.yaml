@@ -84,8 +84,41 @@ models:
       max_output_tokens: 4096
       seed: 42
 
-  # Non-Assessed Actor-Critic Panel Models (RFC Section 6)
+  # Non-Assessed Actor-Critic Panel Models
+  # NOTE: Open-weight critic models requiring dedicated provisioned throughput GPU endpoints
+  # (Qwen 2.5 72B, MiniMax, Kimi K) have been superseded by:
+  # 1. Deterministic Jev Evaluation (Jev-Noul, Jev-Classification, Jev-Confidence Vector)
+  # 2. Dynamic Serverless Frontier Cross-Evaluation: evaluates candidate models against a frontier model
+  #    strictly DIFFERENT from the candidate under test (e.g. Claude 3.5 Sonnet reviews Gemini,
+  #    Gemini 1.5 Pro reviews Claude) using serverless pay-per-token APIs without provisioned throughput.
   # ============================================================================
+  critic-frontier-anthropic:
+    provider: "vertex_anthropic"
+    model_name: "claude-3-5-sonnet-v2@20241022"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-east5"
+    role: "critic"
+    cost_per_1k_input_usd: 0.00300
+    cost_per_1k_output_usd: 0.01500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 2048
+      seed: 42
+
+  critic-frontier-gemini:
+    provider: "vertex_genai"
+    model_name: "gemini-1.5-pro-002"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "critic"
+    cost_per_1k_input_usd: 0.00125
+    cost_per_1k_output_usd: 0.00500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 2048
+      seed: 42
+
+  # Legacy Mock/Test Compatibility Entries
   critic-qwen:
     provider: "vertex_endpoint"
     model_name: "Qwen/Qwen2.5-72B-Instruct"
@@ -134,3 +167,4 @@ models:
       temperature: 0.0
       max_output_tokens: 2048
       seed: 42
+

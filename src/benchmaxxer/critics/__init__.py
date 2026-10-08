@@ -40,11 +40,13 @@ from benchmaxxer.critics.orchestrator import (
     load_rubric_weights,
 )
 from benchmaxxer.critics.panel import (
+    FRONTIER_CRITIC_FALLBACKS,
     ActorCriticPanel,
     ArchitecturalCritic,
     BaseCritic,
     PlatformComplianceCritic,
     TestHarnessCritic,
+    resolve_frontier_critic_model,
 )
 from benchmaxxer.critics.rubrics import (
     DIFFICULTY_WEIGHTS,
@@ -79,6 +81,8 @@ __all__ = [
     "load_critic_prompt_template",
     "normalize_rubric_score",
     "parse_critic_evaluation_json",
+    "resolve_frontier_critic_model",
+    "FRONTIER_CRITIC_FALLBACKS",
     # Jev Evaluation Critic Suite
     "JevNoulCritic",
     "JevNoulResult",
