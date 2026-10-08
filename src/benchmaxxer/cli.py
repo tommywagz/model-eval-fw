@@ -138,6 +138,131 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="Optional path to project .env file",
     )
+    run_parser.add_argument(
+        "--harbor",
+        action="store_true",
+        help="Package and execute scenarios as Harbor Jobs and individual tests as Harbor Tasks on Podman sandboxes",
+    )
+    run_parser.add_argument(
+        "--sandbox-env",
+        type=str,
+        choices=["podman", "docker"],
+        default="podman",
+        help="Container sandbox environment for Harbor jobs (default: podman)",
+    )
+    run_parser.add_argument(
+        "--harbor-dir",
+        type=str,
+        default=None,
+        help="Optional output directory for packaged Harbor jobs (default: harbor/jobs)",
+    )
+    run_parser.add_argument(
+        "--harbor-runs-dir",
+        type=str,
+        default=None,
+        help="Optional output directory for Harbor job trial artifacts (default: harbor/runs)",
+    )
+    run_parser.add_argument(
+        "--require-podman",
+        action="store_true",
+        help="Require active Podman container engine without hermetic trial fallback",
+    )
+    run_parser.add_argument(
+        "--critic-model",
+        type=str,
+        default=None,
+        help="Optional frontier model alias to use for the critic panel (defaults to a frontier model different from the candidate model)",
+    )
+    run_parser.add_argument(
+        "--no-critics",
+        "--jev-only",
+        dest="no_critics",
+        action="store_true",
+        help="Bypass LLM critic models entirely and rely strictly on deterministic Jev evaluation",
+    )
+
+    # `benchmaxxer harbor` subcommand
+    harbor_parser = subparsers.add_parser(
+        "harbor",
+        help="Package and run evaluation suites in Harbor Podman sandboxes (Job = Test Scenario, Task = Individual Test)",
+    )
+    harbor_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["package", "run", "validate", "status"],
+        default="run",
+        help="Harbor action: 'package' (generate Job/Task dirs), 'run' (package & execute), 'validate' (verify Harbor configs), 'status' (check Harbor & Podman readiness)",
+    )
+    harbor_parser.add_argument(
+        "--scenario",
+        type=str,
+        default="oauth_api_enablement",
+        help="Scenario slug to package/run as a Harbor Job (default: oauth_api_enablement)",
+    )
+    harbor_parser.add_argument(
+        "--suite",
+        type=str,
+        default=None,
+        help="Suite slug to package/run all scenarios as Harbor Jobs (e.g., cloud_tool_writing)",
+    )
+    harbor_parser.add_argument(
+        "--all",
+        "--framework",
+        dest="run_framework",
+        action="store_true",
+        help="Package or run all 13 scenarios across all suites as Harbor Jobs",
+    )
+    harbor_parser.add_argument(
+        "--model",
+        type=str,
+        default="gemini-1.5-pro",
+        help="Candidate model alias from configs/models.yaml",
+    )
+    harbor_parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["mock", "live"],
+        default="mock",
+        help="Execution mode: mock or live",
+    )
+    harbor_parser.add_argument(
+        "--agent",
+        type=str,
+        choices=["oracle", "benchmaxxer"],
+        default="oracle",
+        help="Harbor agent configuration: 'oracle' (reference fixture solution) or 'benchmaxxer' (BenchMaxxerHarborAgent)",
+    )
+    harbor_parser.add_argument(
+        "--env",
+        dest="sandbox_env",
+        type=str,
+        choices=["podman", "docker"],
+        default="podman",
+        help="Harbor container environment type (default: podman)",
+    )
+    harbor_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory for generated Harbor Job & Task definitions (default: harbor/jobs)",
+    )
+    harbor_parser.add_argument(
+        "--runs-dir",
+        type=str,
+        default=None,
+        help="Directory for Harbor trial outputs and rewards (default: harbor/runs)",
+    )
+    harbor_parser.add_argument(
+        "--fixtures",
+        type=str,
+        default=None,
+        help="Optional fixture override path",
+    )
+    harbor_parser.add_argument(
+        "--require-podman",
+        action="store_true",
+        help="Require active Podman container engine without hermetic fallback",
+    )
 
     # `benchmaxxer tokens` subcommand
     tokens_parser = subparsers.add_parser(
@@ -209,7 +334,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 0
 
-
     if args.subcommand == "tokens":
         summary = summarize_logged_token_costs(telemetry_dir=args.telemetry_dir)
         Console().print_json(data=summary)
@@ -234,7 +358,174 @@ def main(argv: Optional[List[str]] = None) -> int:
                 Console().print("[yellow]No pending jobs in queue.[/yellow]")
         return 0
 
+    if args.subcommand == "harbor":
+        from benchmaxxer.harbor import (
+            HARBOR_MCP_URL,
+            check_harbor_available,
+            check_podman_available,
+            package_all_scenarios_as_harbor_jobs,
+            package_scenario_as_harbor_job,
+            package_suite_as_harbor_jobs,
+            run_harbor_framework_jobs,
+            run_harbor_scenario_job,
+            run_harbor_suite_jobs,
+            validate_harbor_job_and_tasks,
+        )
+
+        if args.action == "status":
+            status_payload = {
+                "mcp_server": HARBOR_MCP_URL,
+                "sandbox_environment": args.sandbox_env,
+                "harbor_cli": check_harbor_available(),
+                "podman_engine": check_podman_available(),
+            }
+            Console().print_json(data=status_payload)
+            return 0
+
+        if args.action in ("package", "validate"):
+            if args.run_framework:
+                pkgs = package_all_scenarios_as_harbor_jobs(
+                    output_dir=args.output_dir,
+                    runs_dir=args.runs_dir,
+                    model_alias=args.model,
+                    mode=args.mode,
+                    agent_type=args.agent,
+                    environment_type=args.sandbox_env,
+                )
+            elif args.suite:
+                pkgs = package_suite_as_harbor_jobs(
+                    suite_id=args.suite,
+                    output_dir=args.output_dir,
+                    runs_dir=args.runs_dir,
+                    model_alias=args.model,
+                    mode=args.mode,
+                    agent_type=args.agent,
+                    environment_type=args.sandbox_env,
+                )
+            else:
+                pkgs = [
+                    package_scenario_as_harbor_job(
+                        scenario_id=args.scenario,
+                        output_dir=args.output_dir,
+                        runs_dir=args.runs_dir,
+                        model_alias=args.model,
+                        mode=args.mode,
+                        agent_type=args.agent,
+                        environment_type=args.sandbox_env,
+                        fixtures_override=args.fixtures,
+                    )
+                ]
+
+            validations = [validate_harbor_job_and_tasks(p) for p in pkgs]
+            all_valid = all(v["valid"] for v in validations)
+            payload = {
+                "action": args.action,
+                "mcp_server": HARBOR_MCP_URL,
+                "environment_type": args.sandbox_env,
+                "job_count": len(pkgs),
+                "total_tasks": sum(len(p.tasks) for p in pkgs),
+                "all_valid": all_valid,
+                "jobs": [p.to_dict() for p in pkgs],
+                "validations": validations,
+            }
+            Console().print_json(data=payload)
+            return 0 if all_valid else 1
+
+        # Default action: "run"
+        if args.run_framework:
+            fw_harbor = run_harbor_framework_jobs(
+                model_alias=args.model,
+                mode=args.mode,
+                agent_type=args.agent,
+                environment_type=args.sandbox_env,
+                require_podman=args.require_podman,
+                output_dir=args.output_dir,
+                runs_dir=args.runs_dir,
+            )
+            Console().print_json(data=fw_harbor)
+            return int(fw_harbor["exit_code"])
+
+        if args.suite:
+            suite_harbor = run_harbor_suite_jobs(
+                suite_id=args.suite,
+                model_alias=args.model,
+                mode=args.mode,
+                agent_type=args.agent,
+                environment_type=args.sandbox_env,
+                require_podman=args.require_podman,
+                output_dir=args.output_dir,
+                runs_dir=args.runs_dir,
+            )
+            Console().print_json(data=suite_harbor)
+            return int(suite_harbor["exit_code"])
+
+        job_res = run_harbor_scenario_job(
+            scenario_id=args.scenario,
+            model_alias=args.model,
+            mode=args.mode,
+            agent_type=args.agent,
+            environment_type=args.sandbox_env,
+            require_podman=args.require_podman,
+            output_dir=args.output_dir,
+            runs_dir=args.runs_dir,
+            fixtures_path=args.fixtures,
+        )
+        Console().print_json(data=job_res)
+        return int(job_res["exit_code"])
+
     if args.subcommand == "run":
+        if getattr(args, "harbor", False):
+            from benchmaxxer.harbor import (
+                run_harbor_framework_jobs,
+                run_harbor_scenario_job,
+                run_harbor_suite_jobs,
+            )
+
+            if args.run_framework:
+                fw_harbor = run_harbor_framework_jobs(
+                    model_alias=args.model,
+                    mode=args.mode,
+                    environment_type=args.sandbox_env,
+                    require_podman=args.require_podman,
+                    output_dir=args.harbor_dir,
+                    runs_dir=args.harbor_runs_dir,
+                    no_cache=args.no_cache,
+                    replay=args.replay,
+                    dotenv_path=args.dotenv,
+                )
+                Console().print_json(data=fw_harbor)
+                return int(fw_harbor["exit_code"])
+            if args.suite:
+                suite_harbor = run_harbor_suite_jobs(
+                    suite_id=args.suite,
+                    model_alias=args.model,
+                    mode=args.mode,
+                    environment_type=args.sandbox_env,
+                    require_podman=args.require_podman,
+                    output_dir=args.harbor_dir,
+                    runs_dir=args.harbor_runs_dir,
+                    no_cache=args.no_cache,
+                    replay=args.replay,
+                    dotenv_path=args.dotenv,
+                )
+                Console().print_json(data=suite_harbor)
+                return int(suite_harbor["exit_code"])
+            sc_harbor = run_harbor_scenario_job(
+                scenario_id=args.scenario,
+                model_alias=args.model,
+                mode=args.mode,
+                environment_type=args.sandbox_env,
+                require_podman=args.require_podman,
+                output_dir=args.harbor_dir,
+                runs_dir=args.harbor_runs_dir,
+                no_cache=args.no_cache,
+                replay=args.replay,
+                fixtures_path=args.fixtures,
+                dotenv_path=args.dotenv,
+            )
+            Console().print_json(data=sc_harbor)
+            return int(sc_harbor["exit_code"])
+
         if args.run_framework:
             fw_res = execute_framework_run(
                 model_alias=args.model,
@@ -243,6 +534,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 replay=args.replay,
                 fixtures_path=args.fixtures,
                 dotenv_path=args.dotenv,
+                critic_model=getattr(args, "critic_model", None),
+                no_critics=getattr(args, "no_critics", False),
             )
             Console().print_json(data=fw_res)
             return int(fw_res["exit_code"])
@@ -256,6 +549,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 replay=args.replay,
                 fixtures_path=args.fixtures,
                 dotenv_path=args.dotenv,
+                critic_model=getattr(args, "critic_model", None),
+                no_critics=getattr(args, "no_critics", False),
             )
             Console().print_json(data=suite_res)
             return int(suite_res["exit_code"])
@@ -269,6 +564,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             manual_eval=args.manual_eval,
             fixtures_path=args.fixtures,
             dotenv_path=args.dotenv,
+            critic_model=getattr(args, "critic_model", None),
+            no_critics=getattr(args, "no_critics", False),
         )
         Console().print_json(
             data={
@@ -285,7 +582,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "timing": result["timing"],
                 "token_usage": result["token_usage"],
                 "metrics_dict": result["metrics_dict"],
-                "actor_critic_composite": result["actor_critic_scores"]["composite_normalized_score"],
+                "actor_critic_composite": (
+                    result["actor_critic_scores"]["composite_normalized_score"]
+                    if result.get("actor_critic_scores")
+                    else None
+                ),
                 "rubric_score": result.get("rubric_score"),
                 "rubric_rating": result.get("rubric_rating"),
                 "composite_score": result.get("composite_score"),

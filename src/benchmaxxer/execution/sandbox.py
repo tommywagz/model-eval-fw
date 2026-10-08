@@ -15,24 +15,46 @@ from benchmaxxer.execution.mocks import (
 
 
 class ExecutionSandbox:
-    """Routes GCP operations to hermetic local mocks (`mock`) or live ADC services (`live`)."""
+    """Routes GCP operations to hermetic local mocks (`mock`) or live ADC services (`live`), with Harbor Podman sandbox support."""
 
     VALID_MODES = ("mock", "live")
+    VALID_SANDBOX_ENVS = ("local", "podman", "docker")
 
-    def __init__(self, mode: str = "mock", project_id: str = "benchmaxxer-eval-sandbox") -> None:
+    def __init__(
+        self,
+        mode: str = "mock",
+        project_id: str = "benchmaxxer-eval-sandbox",
+        sandbox_env: str = "podman",
+    ) -> None:
         normalized_mode = mode.strip().lower()
         if normalized_mode not in self.VALID_MODES:
             raise ValueError(
                 f"Invalid execution mode '{mode}'. Expected one of {self.VALID_MODES}."
             )
+        normalized_env = sandbox_env.strip().lower()
+        if normalized_env not in self.VALID_SANDBOX_ENVS:
+            raise ValueError(
+                f"Invalid sandbox environment '{sandbox_env}'. Expected one of {self.VALID_SANDBOX_ENVS}."
+            )
         self.mode = normalized_mode
         self.project_id = project_id
+        self.sandbox_env = normalized_env
 
         # Initialize hermetic services
         self.iam_oauth = MockIAMOAuthService()
         self.cloud_run = MockCloudRunService()
         self.storage = MockStorageSuiteService()
         self.gke_vertex = MockGKEVertexService()
+
+    def verify_podman_sandbox(self) -> Dict[str, Any]:
+        """Inspect Harbor CLI and Podman container runtime readiness for sandbox execution."""
+        from benchmaxxer.harbor.runner import check_harbor_available, check_podman_available
+
+        return {
+            "sandbox_env": self.sandbox_env,
+            "harbor": check_harbor_available(),
+            "podman": check_podman_available(),
+        }
 
     def verify_credentials_if_live(self) -> Dict[str, Any]:
         """Verify Application Default Credentials (ADC) when running in live mode."""
