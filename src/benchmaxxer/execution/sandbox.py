@@ -46,15 +46,26 @@ class ExecutionSandbox:
         self.storage = MockStorageSuiteService()
         self.gke_vertex = MockGKEVertexService()
 
-    def verify_podman_sandbox(self) -> Dict[str, Any]:
-        """Inspect Harbor CLI and Podman container runtime readiness for sandbox execution."""
-        from benchmaxxer.harbor.runner import check_harbor_available, check_podman_available
+    def verify_container_sandbox(self) -> Dict[str, Any]:
+        """Inspect Harbor CLI and container runtime (Podman/Docker) readiness for sandbox execution."""
+        from benchmaxxer.harbor.runner import (
+            check_docker_available,
+            check_environment_available,
+            check_harbor_available,
+            check_podman_available,
+        )
 
         return {
             "sandbox_env": self.sandbox_env,
             "harbor": check_harbor_available(),
+            "environment": check_environment_available(self.sandbox_env),
             "podman": check_podman_available(),
+            "docker": check_docker_available(),
         }
+
+    def verify_podman_sandbox(self) -> Dict[str, Any]:
+        """Inspect Harbor CLI and Podman container runtime readiness (backward-compatible alias)."""
+        return self.verify_container_sandbox()
 
     def verify_credentials_if_live(self) -> Dict[str, Any]:
         """Verify Application Default Credentials (ADC) when running in live mode."""

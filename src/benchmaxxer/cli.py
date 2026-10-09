@@ -145,10 +145,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     run_parser.add_argument(
         "--sandbox-env",
+        "--env",
+        dest="sandbox_env",
         type=str,
-        choices=["podman", "docker"],
         default="podman",
-        help="Container sandbox environment for Harbor jobs (default: podman)",
+        help="Container sandbox environment for Harbor jobs (e.g., podman, docker, modal, daytona; default: podman)",
+    )
+    run_parser.add_argument(
+        "--harness",
+        "--agent",
+        dest="harness",
+        type=str,
+        default="oracle",
+        help="Agent harness for Harbor evaluation ('oracle', 'benchmaxxer', 'claude-code', 'codex', etc.; default: oracle)",
     )
     run_parser.add_argument(
         "--harbor-dir",
@@ -163,9 +172,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Optional output directory for Harbor job trial artifacts (default: harbor/runs)",
     )
     run_parser.add_argument(
+        "--require-container",
         "--require-podman",
+        dest="require_podman",
         action="store_true",
-        help="Require active Podman container engine without hermetic trial fallback",
+        help="Require active container engine (Podman/Docker) without hermetic trial fallback",
     )
     run_parser.add_argument(
         "--critic-model",
@@ -184,14 +195,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     # `benchmaxxer harbor` subcommand
     harbor_parser = subparsers.add_parser(
         "harbor",
-        help="Package and run evaluation suites in Harbor Podman sandboxes (Job = Test Scenario, Task = Individual Test)",
+        help="Package and run evaluation suites in Harbor container sandboxes (Job = Test Scenario, Task = Individual Test)",
     )
     harbor_parser.add_argument(
         "action",
         nargs="?",
         choices=["package", "run", "validate", "status"],
         default="run",
-        help="Harbor action: 'package' (generate Job/Task dirs), 'run' (package & execute), 'validate' (verify Harbor configs), 'status' (check Harbor & Podman readiness)",
+        help="Harbor action: 'package' (generate Job/Task dirs), 'run' (package & execute), 'validate' (verify Harbor configs), 'status' (check Harbor, Podman, and Docker readiness)",
+    )
+    harbor_parser.add_argument(
+        "--task",
+        type=str,
+        default=None,
+        help="Individual test task ID or path to package, run, or validate directly as a Harbor Task",
     )
     harbor_parser.add_argument(
         "--scenario",
@@ -216,7 +233,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--model",
         type=str,
         default="gemini-1.5-pro",
-        help="Candidate model alias from configs/models.yaml",
+        help="Candidate model alias from configs/models.yaml (e.g. gemini-1.5-pro, claude-3-5-sonnet)",
     )
     harbor_parser.add_argument(
         "--mode",
@@ -227,18 +244,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     harbor_parser.add_argument(
         "--agent",
+        "--harness",
+        dest="agent",
         type=str,
-        choices=["oracle", "benchmaxxer"],
         default="oracle",
-        help="Harbor agent configuration: 'oracle' (reference fixture solution) or 'benchmaxxer' (BenchMaxxerHarborAgent)",
+        help="Harbor agent/harness configuration: 'oracle' (reference solution), 'benchmaxxer' (BenchMaxxerHarborAgent), 'claude-code', 'codex', or custom agent harness",
     )
     harbor_parser.add_argument(
         "--env",
         dest="sandbox_env",
         type=str,
-        choices=["podman", "docker"],
         default="podman",
-        help="Harbor container environment type (default: podman)",
+        help="Harbor container environment type (e.g., podman, docker, modal, daytona; default: podman)",
+    )
+    harbor_parser.add_argument(
+        "--require-container",
+        "--require-podman",
+        dest="require_podman",
+        action="store_true",
+        help="Require active container engine (Podman/Docker) without hermetic trial fallback",
     )
     harbor_parser.add_argument(
         "--output-dir",
@@ -257,11 +281,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         type=str,
         default=None,
         help="Optional fixture override path",
-    )
-    harbor_parser.add_argument(
-        "--require-podman",
-        action="store_true",
-        help="Require active Podman container engine without hermetic fallback",
     )
 
     # `benchmaxxer tokens` subcommand
@@ -361,6 +380,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.subcommand == "harbor":
         from benchmaxxer.harbor import (
             HARBOR_MCP_URL,
+            check_docker_available,
+            check_environment_available,
             check_harbor_available,
             check_podman_available,
             package_all_scenarios_as_harbor_jobs,
@@ -369,6 +390,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             run_harbor_framework_jobs,
             run_harbor_scenario_job,
             run_harbor_suite_jobs,
+            run_harbor_task,
             validate_harbor_job_and_tasks,
         )
 
@@ -377,7 +399,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "mcp_server": HARBOR_MCP_URL,
                 "sandbox_environment": args.sandbox_env,
                 "harbor_cli": check_harbor_available(),
+                "environment_runtime": check_environment_available(args.sandbox_env),
                 "podman_engine": check_podman_available(),
+                "docker_engine": check_docker_available(),
             }
             Console().print_json(data=status_payload)
             return 0
@@ -431,14 +455,29 @@ def main(argv: Optional[List[str]] = None) -> int:
             Console().print_json(data=payload)
             return 0 if all_valid else 1
 
-        # Default action: "run"
+        # Action: "run"
+        if getattr(args, "task", None):
+            task_res = run_harbor_task(
+                task_dir=args.task,
+                scenario_id=args.scenario if args.scenario != "oauth_api_enablement" else None,
+                model_alias=args.model,
+                mode=args.mode,
+                agent_type=args.agent,
+                environment_type=args.sandbox_env,
+                require_container=args.require_podman,
+                output_dir=args.output_dir,
+                runs_dir=args.runs_dir,
+            )
+            Console().print_json(data=task_res)
+            return 0 if task_res.get("expectation_met") else 1
+
         if args.run_framework:
             fw_harbor = run_harbor_framework_jobs(
                 model_alias=args.model,
                 mode=args.mode,
                 agent_type=args.agent,
                 environment_type=args.sandbox_env,
-                require_podman=args.require_podman,
+                require_container=args.require_podman,
                 output_dir=args.output_dir,
                 runs_dir=args.runs_dir,
             )
@@ -452,7 +491,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 mode=args.mode,
                 agent_type=args.agent,
                 environment_type=args.sandbox_env,
-                require_podman=args.require_podman,
+                require_container=args.require_podman,
                 output_dir=args.output_dir,
                 runs_dir=args.runs_dir,
             )
@@ -465,7 +504,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             mode=args.mode,
             agent_type=args.agent,
             environment_type=args.sandbox_env,
-            require_podman=args.require_podman,
+            require_container=args.require_podman,
             output_dir=args.output_dir,
             runs_dir=args.runs_dir,
             fixtures_path=args.fixtures,
@@ -481,12 +520,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                 run_harbor_suite_jobs,
             )
 
+            harness = getattr(args, "harness", "oracle")
             if args.run_framework:
                 fw_harbor = run_harbor_framework_jobs(
                     model_alias=args.model,
                     mode=args.mode,
+                    agent_type=harness,
                     environment_type=args.sandbox_env,
-                    require_podman=args.require_podman,
+                    require_container=args.require_podman,
                     output_dir=args.harbor_dir,
                     runs_dir=args.harbor_runs_dir,
                     no_cache=args.no_cache,
@@ -500,8 +541,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     suite_id=args.suite,
                     model_alias=args.model,
                     mode=args.mode,
+                    agent_type=harness,
                     environment_type=args.sandbox_env,
-                    require_podman=args.require_podman,
+                    require_container=args.require_podman,
                     output_dir=args.harbor_dir,
                     runs_dir=args.harbor_runs_dir,
                     no_cache=args.no_cache,
@@ -514,8 +556,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 scenario_id=args.scenario,
                 model_alias=args.model,
                 mode=args.mode,
+                agent_type=harness,
                 environment_type=args.sandbox_env,
-                require_podman=args.require_podman,
+                require_container=args.require_podman,
                 output_dir=args.harbor_dir,
                 runs_dir=args.harbor_runs_dir,
                 no_cache=args.no_cache,
