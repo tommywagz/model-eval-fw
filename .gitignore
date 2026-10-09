@@ -1,5 +1,6 @@
 # Git isolation for multi-agent worktrees and jobs blackboard
 .agents/
+.env
 /jobs
 jobs
 jobs/
