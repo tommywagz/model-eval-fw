@@ -11,8 +11,79 @@ defaults:
 
 models:
   # ============================================================================
-  # First-Party Vertex AI Gemini Models
+  # Default Frontier Models (MIQs on Vertex AI Model Garden)
   # ============================================================================
+  gemini-4-argon:
+    provider: "vertex_genai"
+    model_name: "gemini-4-argon-001"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.00800
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 16384
+      top_p: 0.95
+      seed: 42
+
+  gemini-3.8-flash:
+    provider: "vertex_genai"
+    model_name: "gemini-3.8-flash-001"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00015
+    cost_per_1k_output_usd: 0.00060
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      top_p: 0.95
+      seed: 42
+
+  fable-5.1:
+    provider: "vertex_endpoint"
+    model_name: "fable-ai/fable-5.1-frontier"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/fable-5-1-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00250
+    cost_per_1k_output_usd: 0.01000
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  sonnet-5.5:
+    provider: "vertex_anthropic"
+    model_name: "claude-sonnet-5-5@20260514"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00300
+    cost_per_1k_output_usd: 0.01500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+
+  # ============================================================================
+  # Additional GCP Project Enabled Frontier Models (MIQs)
+  # ============================================================================
+  gemini-3.5-pro:
+    provider: "vertex_genai"
+    model_name: "gemini-3.5-pro-002"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00125
+    cost_per_1k_output_usd: 0.00500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      top_p: 0.95
+      seed: 42
+
   gemini-1.5-pro:
     provider: "vertex_genai"
     model_name: "gemini-1.5-pro-002"
@@ -42,7 +113,7 @@ models:
       seed: 42
 
   # ============================================================================
-  # Vertex AI Partner Models (Anthropic Claude)
+  # Vertex AI Partner Models (Anthropic Claude & Open-Weight MaaS)
   # ============================================================================
   claude-3-5-sonnet:
     provider: "vertex_anthropic"
@@ -57,8 +128,6 @@ models:
       max_output_tokens: 4096
 
   claude-3-5-haiku:
-
-
     provider: "vertex_anthropic"
     model_name: "claude-3-5-haiku@20241022"
     project_id: "benchmaxxer-eval-sandbox"
@@ -69,6 +138,20 @@ models:
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 4096
+
+  llama-4-405b:
+    provider: "vertex_endpoint"
+    model_name: "meta/llama-4-405b-instruct"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/llama-4-405b-instruct-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00150
+    cost_per_1k_output_usd: 0.00450
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
 
   llama-3.1-70b:
     provider: "vertex_endpoint"
@@ -82,6 +165,48 @@ models:
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 4096
+      seed: 42
+
+  deepseek-r2:
+    provider: "vertex_endpoint"
+    model_name: "deepseek-ai/deepseek-r2-reasoning"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/deepseek-r2-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00055
+    cost_per_1k_output_usd: 0.00220
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  mistral-large-3:
+    provider: "vertex_endpoint"
+    model_name: "mistralai/mistral-large-3"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "europe-west4"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.00600
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  qwen-3-72b:
+    provider: "vertex_endpoint"
+    model_name: "Qwen/Qwen3-72B-Instruct"
+    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/qwen3-72b-ep"
+    project_id: "benchmaxxer-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00080
+    cost_per_1k_output_usd: 0.00160
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
       seed: 42
 
   # Non-Assessed Actor-Critic Panel Models

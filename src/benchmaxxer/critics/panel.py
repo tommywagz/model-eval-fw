@@ -24,9 +24,13 @@ from benchmaxxer.telemetry.cache import CriticCache
 FRONTIER_CRITIC_FALLBACKS: Dict[str, str] = {
     "gemini": "claude-3-5-sonnet",
     "claude": "gemini-1.5-pro",
+    "sonnet": "gemini-1.5-pro",
     "anthropic": "gemini-1.5-pro",
+    "fable": "claude-3-5-sonnet",
     "llama": "claude-3-5-sonnet",
     "qwen": "claude-3-5-sonnet",
+    "deepseek": "claude-3-5-sonnet",
+    "mistral": "claude-3-5-sonnet",
     "gpt": "gemini-1.5-pro",
     "openai": "gemini-1.5-pro",
 }
@@ -53,8 +57,8 @@ def resolve_frontier_critic_model(
     if "gemini" in cand_lower:
         return "claude-3-5-sonnet"
 
-    # If the candidate being evaluated is a Claude model, cross-evaluate with Gemini 1.5 Pro on Vertex
-    if "claude" in cand_lower or "anthropic" in cand_lower:
+    # If the candidate being evaluated is a Claude/Sonnet model, cross-evaluate with Gemini 1.5 Pro on Vertex
+    if "claude" in cand_lower or "sonnet" in cand_lower or "anthropic" in cand_lower:
         return "gemini-1.5-pro"
 
     # For other models, check known fallbacks

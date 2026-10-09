@@ -1,5 +1,6 @@
 # Git isolation for multi-agent worktrees and jobs blackboard
 .agents/
+.env
 /jobs
 jobs
 jobs/
@@ -7,6 +8,7 @@ jobs/
 artifacts/
 reports/
 __pycache__/
+**/__pycache__/**
 *.pyc
 .pytest_cache/
 *.egg-info/
