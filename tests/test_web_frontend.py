@@ -1,4 +1,4 @@
-"""Automated Regression Suite for BenchMaxxer Web Frontend, Argon Suite Creator, Telemetry, and Repo Inserter."""
+"""Automated Regression Suite for BenchMaxxer Web Frontend, Argon Suite Creator, GCP MIQ Config, Custom Suites, Telemetry, and Repo Inserter."""
 
 from __future__ import annotations
 
@@ -54,40 +54,103 @@ def web_server():
 
 
 # ============================================================================
-# User Story 1: Frontier Model Garden Selection Toggle
+# User Story 1: Frontier Model Garden Selection (4 Defaults + Enabled Dropdown)
 # ============================================================================
 
 def test_frontend_config_and_model_garden_models(web_server: str) -> None:
-    """Verify that GCP Model Garden models are correctly configured and exposed via /api/models."""
+    """Verify that the 4 default Frontier Models (Gemini 4 Argon, Gemini 3.8 Flash, Fable 5.1, Sonnet 5.5) and GCP dropdown models are exposed."""
     cfg = load_frontend_config()
     assert "model_garden" in cfg
     models = cfg["model_garden"]
-    assert len(models) >= 3
+    assert len(models) >= 8
 
     model_ids = {m["id"] for m in models}
+    # Verify the 4 default frontier models
+    assert "gemini-4-argon" in model_ids
+    assert "gemini-3.8-flash" in model_ids
+    assert "fable-5.1" in model_ids
+    assert "sonnet-5.5" in model_ids
+    # Verify additional GCP models
     assert "gemini-1.5-pro" in model_ids
     assert "gemini-1.5-flash" in model_ids
     assert "claude-3-5-sonnet" in model_ids
 
-    # Test REST API endpoint
+    # Test REST API endpoint /api/models
     req = urllib.request.Request(f"{web_server}/api/models")
     with urllib.request.urlopen(req) as resp:
         assert resp.status == 200
         data = json.loads(resp.read().decode("utf-8"))
         assert "models" in data
-        retrieved_ids = {m["id"] for m in data["models"]}
-        assert "gemini-1.5-pro" in retrieved_ids
+        assert "default_models" in data
+        assert "dropdown_models" in data
 
-        # Validate pricing attributes exist for non-technical users
+        default_ids = [m["id"] for m in data["default_models"]]
+        assert default_ids == ["gemini-4-argon", "gemini-3.8-flash", "fable-5.1", "sonnet-5.5"]
+        assert len(data["dropdown_models"]) >= 3
+
+        # Validate pricing and brand attributes exist
         for m in data["models"]:
             assert "cost_per_1k_input_usd" in m
             assert "cost_per_1k_output_usd" in m
             assert "provider" in m
             assert "description" in m
+            assert "brand" in m
+
+
+def test_gcp_project_location_and_miq_enablement(web_server: str) -> None:
+    """Verify that a web user can configure the GCP project, location, and enable MIQ models that populate the dropdown."""
+    # 1. Update GCP project and location and enable deepseek-r2 + mistral-large-3
+    payload = json.dumps({
+        "project_id": "vertex-frontier-eval-prod",
+        "location": "europe-west4",
+        "enabled_model_ids": [
+            "gemini-4-argon",
+            "gemini-3.8-flash",
+            "fable-5.1",
+            "sonnet-5.5",
+            "gemini-3.5-pro",
+            "deepseek-r2",
+            "mistral-large-3",
+        ],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{web_server}/api/gcp/config",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read().decode("utf-8"))
+        assert data["success"] is True
+        assert data["project_id"] == "vertex-frontier-eval-prod"
+        assert data["location"] == "europe-west4"
+        dropdown_ids = {m["id"] for m in data["dropdown_models"]}
+        assert "deepseek-r2" in dropdown_ids
+        assert "mistral-large-3" in dropdown_ids
+        assert "gemini-3.5-pro" in dropdown_ids
+
+    # 2. Toggle an individual MIQ model via /api/gcp/models/toggle
+    toggle_payload = json.dumps({
+        "model_id": "qwen-3-72b",
+        "enabled": True,
+    }).encode("utf-8")
+    toggle_req = urllib.request.Request(
+        f"{web_server}/api/gcp/models/toggle",
+        data=toggle_payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(toggle_req) as resp:
+        assert resp.status == 200
+        toggle_data = json.loads(resp.read().decode("utf-8"))
+        dropdown_ids_after = {m["id"] for m in toggle_data["dropdown_models"]}
+        assert "qwen-3-72b" in dropdown_ids_after
 
 
 # ============================================================================
-# User Story 2: Argon-Backed Agent Dynamic Test Suite Creation
+# User Story 2: Argon-Backed Agent & Custom Multi-Test Suite Builder
 # ============================================================================
 
 def test_argon_agent_suite_synthesis_and_registration(web_server: str) -> None:
@@ -141,6 +204,62 @@ def test_argon_agent_suite_synthesis_and_registration(web_server: str) -> None:
         assert "baseline_code" in spec
 
 
+def test_custom_composite_test_suite_creation_and_execution(web_server: str) -> None:
+    """Verify creating a custom test suite with 1+ standard benchmark scenarios AND 1+ custom use cases, then executing it."""
+    suite_payload = json.dumps({
+        "suite_name": "Hybrid Enterprise Cloud & Custom Skill Suite",
+        "standard_scenarios": ["oauth_api_enablement", "easy_deployment"],
+        "custom_use_cases": [
+            {
+                "title": "Custom Firestore Schema Validator Skill",
+                "prompt": "Create an ADK agent skill that validates Firestore document schemas and logs errors to BigQuery.",
+            }
+        ],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{web_server}/api/suites/custom",
+        data=suite_payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        res_data = json.loads(resp.read().decode("utf-8"))
+        assert res_data["success"] is True
+        suite = res_data["suite"]
+        assert suite["is_custom"] is True
+        assert len(suite["standard_scenarios"]) == 2
+        assert len(suite["custom_scenarios"]) == 1
+        assert len(suite["scenarios"]) == 3
+
+        scenario_ids = suite["scenarios"]
+
+    # Execute the composite suite against Gemini 4 Argon
+    eval_payload = json.dumps({
+        "scenario_ids": scenario_ids,
+        "suite_name": "Hybrid Enterprise Cloud & Custom Skill Suite",
+        "model_alias": "gemini-4-argon",
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+
+    eval_req = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=eval_payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(eval_req) as eval_resp:
+        assert eval_resp.status == 200
+        run_data = json.loads(eval_resp.read().decode("utf-8"))
+        assert run_data["status"] == "COMPLETED"
+        assert run_data["model_alias"] == "gemini-4-argon"
+        assert len(run_data["test_results"]) == 3
+        assert any(tr["is_custom"] for tr in run_data["test_results"])
+        assert any(not tr["is_custom"] for tr in run_data["test_results"])
+
+
 # ============================================================================
 # User Story 3: Complete Time and Token Cost Telemetry
 # ============================================================================
@@ -150,7 +269,7 @@ def test_eval_run_time_and_token_cost_telemetry(web_server: str) -> None:
     # Execute synchronous evaluation for deterministic testing
     payload = json.dumps({
         "scenario_id": "oauth_api_enablement",
-        "model_alias": "gemini-1.5-pro",
+        "model_alias": "gemini-4-argon",
         "mode": "mock",
         "async": False,
     }).encode("utf-8")
@@ -166,7 +285,7 @@ def test_eval_run_time_and_token_cost_telemetry(web_server: str) -> None:
         run_data = json.loads(resp.read().decode("utf-8"))
         assert run_data["status"] == "COMPLETED"
         assert run_data["scenario_id"] == "oauth_api_enablement"
-        assert run_data["model_alias"] == "gemini-1.5-pro"
+        assert run_data["model_alias"] == "gemini-4-argon"
 
         # Validate Timers
         assert "duration_ms" in run_data or "duration_seconds" in run_data
@@ -184,7 +303,6 @@ def test_eval_run_time_and_token_cost_telemetry(web_server: str) -> None:
         assert "candidate_cost_usd" in token_usage
         assert "total_estimated_cost_usd" in token_usage
         assert token_usage["candidate_cost_usd"] >= 0.0
-
 
         # Validate Run Retrieval via GET /api/runs/<run_id>
         run_id = run_data["run_id"]
@@ -209,7 +327,7 @@ def test_repo_inserter_skill_workflow_and_translation(tmp_path: Path) -> None:
         "run_id": "run-skill-123",
         "scenario_id": "argon_ticket_summarizer",
         "suite_slug": "agent_skill_creation",
-        "model_alias": "gemini-1.5-pro",
+        "model_alias": "gemini-4-argon",
         "candidate_output": "def execute_skill(): return {'status': 'processed'}",
         "prompt": "Synthesize a ticket summarizer ADK skill.",
         "duration_seconds": 1.25,
@@ -226,7 +344,7 @@ def test_repo_inserter_skill_workflow_and_translation(tmp_path: Path) -> None:
         "run_id": "run-workflow-456",
         "scenario_id": "argon_cloudrun_deploy",
         "suite_slug": "cloud_tool_writing",
-        "model_alias": "claude-3-5-sonnet",
+        "model_alias": "sonnet-5.5",
         "candidate_output": "import google.cloud\ndef deploy(): pass",
         "duration_seconds": 2.10,
         "total_tokens": 680,
@@ -268,7 +386,7 @@ def test_repo_inserter_skill_workflow_and_translation(tmp_path: Path) -> None:
         check=True,
     ).stdout
     assert "benchmaxxer: insert argon_ticket_summarizer" in log
-    assert "gemini-1.5-pro" in log
+    assert "gemini-4-argon" in log
 
 
 def test_repo_export_via_web_api(web_server: str, tmp_path: Path) -> None:
@@ -276,7 +394,7 @@ def test_repo_export_via_web_api(web_server: str, tmp_path: Path) -> None:
     # First, run an evaluation to get a valid run_id
     run_payload = json.dumps({
         "scenario_id": "oauth_api_enablement",
-        "model_alias": "gemini-1.5-pro",
+        "model_alias": "gemini-4-argon",
         "mode": "mock",
         "async": False,
     }).encode("utf-8")
@@ -326,12 +444,18 @@ def test_repo_export_via_web_api(web_server: str, tmp_path: Path) -> None:
 # ============================================================================
 
 def test_static_files_and_spa(web_server: str) -> None:
-    """Verify that index.html, styles.css, and app.js are correctly served."""
+    """Verify that index.html, styles.css, and app.js are correctly served with all required components."""
     with urllib.request.urlopen(f"{web_server}/") as resp:
         assert resp.status == 200
         html = resp.read().decode("utf-8")
         assert "BenchMaxxer Evaluation Studio" in html
+        assert "Select Frontier Models" in html
         assert 'id="model-cards-container"' in html
+        assert 'id="enabled-models-dropdown"' in html
+        assert 'id="gcp-config-panel"' in html
+        assert 'id="custom-suite-builder"' in html
+        assert 'id="harbor-logo-badge"' in html
+        assert 'id="jev-logo-badge"' in html
         assert 'id="generate-suite-btn"' in html
         assert 'id="run-eval-btn"' in html
         assert 'id="insert-repo-btn"' in html
@@ -340,9 +464,13 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert resp.status == 200
         css = resp.read().decode("utf-8")
         assert ".studio-section" in css
+        assert "--google-blue" in css
 
     with urllib.request.urlopen(f"{web_server}/app.js") as resp:
         assert resp.status == 200
         js = resp.read().decode("utf-8")
         assert "generateArgonSuite" in js
         assert "exportToRepository" in js
+        assert "getBrandLogoSvg" in js
+        assert "saveGcpConfiguration" in js
+        assert "saveCustomTestSuite" in js
