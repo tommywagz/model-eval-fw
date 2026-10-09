@@ -23,13 +23,18 @@ from benchmaxxer.harbor.packager import (
 )
 from benchmaxxer.harbor.runner import (
     HarborPodmanRunner,
+    HarborRunner,
+    check_docker_available,
+    check_environment_available,
     check_harbor_available,
     check_podman_available,
+    find_docker_binary,
     find_harbor_binary,
     find_podman_binary,
     run_harbor_framework_jobs,
     run_harbor_scenario_job,
     run_harbor_suite_jobs,
+    run_harbor_task,
     validate_harbor_job_and_tasks,
 )
 
@@ -40,11 +45,15 @@ __all__ = [
     "HARBOR_TASK_SCHEMA_VERSION",
     "BenchMaxxerHarborAgent",
     "HarborPodmanRunner",
+    "HarborRunner",
     "HarborScenarioJobPackage",
     "HarborScenarioPackager",
     "HarborTaskPackage",
+    "check_docker_available",
+    "check_environment_available",
     "check_harbor_available",
     "check_podman_available",
+    "find_docker_binary",
     "find_harbor_binary",
     "find_podman_binary",
     "package_all_scenarios_as_harbor_jobs",
@@ -53,5 +62,6 @@ __all__ = [
     "run_harbor_framework_jobs",
     "run_harbor_scenario_job",
     "run_harbor_suite_jobs",
+    "run_harbor_task",
     "validate_harbor_job_and_tasks",
 ]

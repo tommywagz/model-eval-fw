@@ -69,6 +69,100 @@ def find_podman_binary() -> Optional[str]:
     return None
 
 
+def find_docker_binary() -> Optional[str]:
+    """Locate the `docker` CLI binary on PATH or standard locations."""
+    which_docker = shutil.which("docker")
+    if which_docker:
+        return which_docker
+    for candidate in (
+        Path("/opt/homebrew/bin/docker"),
+        Path("/usr/local/bin/docker"),
+        Path("/usr/bin/docker"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def check_docker_available() -> Dict[str, Any]:
+    """Check whether `docker` is installed, permitted to execute, and connected to a running daemon."""
+    docker_bin = find_docker_binary()
+    if not docker_bin:
+        return {
+            "available": False,
+            "binary": None,
+            "version": None,
+            "daemon_responsive": False,
+            "detail": "docker binary not found on PATH",
+        }
+    try:
+        ver_proc = subprocess.run(
+            [docker_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        ver_text = (ver_proc.stdout or ver_proc.stderr or "").strip()
+        if ver_proc.returncode != 0:
+            return {
+                "available": False,
+                "binary": docker_bin,
+                "version": None,
+                "daemon_responsive": False,
+                "detail": f"docker execution blocked or failed (rc={ver_proc.returncode}): {ver_text[:240]}",
+            }
+        info_proc = subprocess.run(
+            [docker_bin, "info", "--format", "{{json .}}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        daemon_ok = info_proc.returncode == 0
+        return {
+            "available": daemon_ok,
+            "binary": docker_bin,
+            "version": ver_text,
+            "daemon_responsive": daemon_ok,
+            "detail": (
+                f"Docker daemon ready ({ver_text})"
+                if daemon_ok
+                else f"Docker CLI present ({ver_text}) but daemon not active: {(info_proc.stderr or '').strip()[:200]}"
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "available": False,
+            "binary": docker_bin,
+            "version": None,
+            "daemon_responsive": False,
+            "detail": str(exc),
+        }
+
+
+def check_environment_available(environment_type: str = "podman") -> Dict[str, Any]:
+    """Check whether the requested container runtime (podman, docker, or other) is available."""
+    env_clean = str(environment_type).strip().lower()
+    if env_clean == "docker":
+        return check_docker_available()
+    elif env_clean == "podman":
+        return check_podman_available()
+    else:
+        which_bin = shutil.which(env_clean)
+        return {
+            "available": bool(which_bin),
+            "binary": which_bin,
+            "version": None,
+            "daemon_responsive": bool(which_bin),
+            "detail": (
+                f"Container environment '{env_clean}' ready"
+                if which_bin
+                else f"Container environment binary '{env_clean}' not found on PATH"
+            ),
+        }
+
+
 def check_harbor_available() -> Dict[str, Any]:
     """Check whether the `harbor` CLI is installed and runnable."""
     harbor_bin = find_harbor_binary()
@@ -293,6 +387,7 @@ class HarborPodmanRunner:
         runs_dir: Optional[str | Path] = None,
         environment_type: str = "podman",
         require_podman: bool = False,
+        require_container: bool = False,
     ) -> None:
         self.repo_root = (
             Path(repo_root).resolve()
@@ -308,7 +403,8 @@ class HarborPodmanRunner:
         self.output_dir = self.packager.output_dir
         self.runs_dir = self.packager.runs_dir
         self.environment_type = self.packager.environment_type
-        self.require_podman = require_podman
+        self.require_container = bool(require_container or require_podman)
+        self.require_podman = self.require_container
 
     def run_scenario_job(
         self,
@@ -339,35 +435,42 @@ class HarborPodmanRunner:
         with job_timer.phase("validate_harbor_config"):
             validation = validate_harbor_job_and_tasks(job_pkg)
             harbor_status = check_harbor_available()
+            env_status = check_environment_available(self.environment_type)
             podman_status = check_podman_available()
+            docker_status = check_docker_available()
 
-        if self.require_podman and not podman_status["available"]:
+        if self.require_container and not env_status["available"]:
             raise RuntimeError(
-                f"Podman sandbox execution is required (--require-podman), but Podman is unavailable: "
-                f"{podman_status['detail']}"
+                f"{self.environment_type.capitalize()} container sandbox execution is required "
+                f"(--require-container / --require-podman), but {self.environment_type} is unavailable: "
+                f"{env_status['detail']}"
             )
 
-        # Determine whether to execute via native `harbor run -e podman` or hermetic trial runner
-        use_native_podman = (
-            podman_status["available"]
+        # Determine whether to execute via native `harbor run -e <env>` or hermetic trial runner
+        use_native_container = (
+            env_status["available"]
             and harbor_status["available"]
-            and (mode == "live" or self.require_podman)
+            and (mode == "live" or self.require_container)
         )
 
         task_results: List[Dict[str, Any]] = []
-        execution_backend = "harbor_podman_container" if use_native_podman else "harbor_podman_hermetic_sandbox"
+        execution_backend = (
+            f"harbor_{self.environment_type}_container"
+            if use_native_container
+            else f"harbor_{self.environment_type}_hermetic_sandbox"
+        )
 
         with job_timer.phase("execute_harbor_tasks"):
-            if use_native_podman:
-                native_ok, native_results = self._run_via_harbor_podman_cli(job_pkg, harbor_status["binary"])
+            if use_native_container:
+                native_ok, native_results = self._run_via_harbor_cli(job_pkg, harbor_status["binary"])
                 if native_ok and native_results:
                     task_results = native_results
-                elif self.require_podman:
+                elif self.require_container:
                     raise RuntimeError(
-                        f"Harbor Podman execution failed for job '{job_pkg.job_name}'."
+                        f"Harbor {self.environment_type.capitalize()} execution failed for job '{job_pkg.job_name}'."
                     )
                 else:
-                    execution_backend = "harbor_podman_hermetic_sandbox"
+                    execution_backend = f"harbor_{self.environment_type}_hermetic_sandbox"
                     task_results = [
                         self._execute_task_trial_hermetic(job_pkg, task)
                         for task in job_pkg.tasks
@@ -400,7 +503,9 @@ class HarborPodmanRunner:
             "pass_rate": round((tasks_passed / max(1, tasks_total)) * 100.0, 2),
             "validation": validation,
             "harbor_cli": harbor_status,
+            "environment_runtime": env_status,
             "podman_engine": podman_status,
+            "docker_engine": docker_status,
             "trials": task_results,
         }
         job_result_path = job_run_dir / "result.json"
@@ -587,12 +692,12 @@ class HarborPodmanRunner:
             "exit_code": 0 if all_passed else 1,
         }
 
-    def _run_via_harbor_podman_cli(
+    def _run_via_harbor_cli(
         self,
         job_pkg: HarborScenarioJobPackage,
         harbor_bin: str,
     ) -> tuple[bool, List[Dict[str, Any]]]:
-        """Invoke `harbor run --config <job.yaml> -e podman` and collect trial results."""
+        """Invoke `harbor run --config <job.yaml> -e <environment>` and collect trial results."""
         try:
             proc = subprocess.run(
                 [
@@ -642,6 +747,194 @@ class HarborPodmanRunner:
         except Exception:  # noqa: BLE001
             return False, []
 
+    _run_via_harbor_podman_cli = _run_via_harbor_cli
+
+    def _run_single_task_via_cli(
+        self,
+        task: HarborTaskPackage,
+        harbor_bin: str,
+        model_alias: str,
+        agent_type: str,
+    ) -> tuple[bool, Optional[Dict[str, Any]]]:
+        """Invoke `harbor run -p <task_dir> -a <agent_type> -m <model_alias> -e <environment>`."""
+        try:
+            cmd = [
+                harbor_bin,
+                "run",
+                "-p",
+                str(task.task_dir),
+                "-e",
+                self.environment_type,
+            ]
+            agent_clean = str(agent_type).strip()
+            if agent_clean.lower() == "benchmaxxer":
+                cmd.extend(["--agent-import-path", "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent"])
+            else:
+                cmd.extend(["-a", agent_clean])
+            cmd.extend(["-m", model_alias])
+
+            proc = subprocess.run(
+                cmd,
+                cwd=str(self.repo_root),
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            if proc.returncode != 0:
+                return False, None
+
+            # Check trial outputs in runs_dir or job runs
+            matching_trials = sorted(self.runs_dir.glob(f"**/*{task.task_id}*"))
+            reward_val = 0.0
+            reward_payload: Dict[str, Any] = {}
+            trial_path = None
+            if matching_trials:
+                trial_path = matching_trials[-1]
+                reward_json = trial_path / "verifier" / "reward.json"
+                reward_txt = trial_path / "verifier" / "reward.txt"
+                if reward_json.exists():
+                    reward_payload = json.loads(reward_json.read_text(encoding="utf-8"))
+                    reward_val = float(reward_payload.get("reward", 0.0))
+                elif reward_txt.exists():
+                    reward_val = float(reward_txt.read_text(encoding="utf-8").strip() or 0.0)
+
+            res = {
+                "task_id": task.task_id,
+                "task_name": task.task_name,
+                "scenario_id": task.scenario_id,
+                "case_type": task.case_type,
+                "description": task.description,
+                "expected_passed": task.expected_passed,
+                "expected_rubric_score": task.expected_rubric_score,
+                "observed_rubric_score": reward_payload.get(
+                    "observed_rubric_score", task.expected_rubric_score
+                ),
+                "reward": reward_val,
+                "expectation_met": reward_val >= 1.0,
+                "duration_ms": 0.0,
+                "trial_dir": str(trial_path) if trial_path else "",
+                "reward_json_path": str(trial_path / "verifier" / "reward.json") if trial_path else "",
+                "reward_txt_path": str(trial_path / "verifier" / "reward.txt") if trial_path else "",
+                "artifact_report_path": str(trial_path / "artifacts" / "benchmaxxer_report.json") if trial_path else "",
+            }
+            return True, res
+        except Exception:  # noqa: BLE001
+            return False, None
+
+    def run_task(
+        self,
+        task_dir_or_id: str | Path,
+        scenario_id: Optional[str] = None,
+        model_alias: str = "gemini-1.5-pro",
+        mode: str = "mock",
+        agent_type: str = "oracle",
+    ) -> Dict[str, Any]:
+        """Execute a single individual Harbor Task in the configured container environment."""
+        task_path = Path(task_dir_or_id)
+        if not (task_path.exists() and task_path.is_dir()):
+            if (self.repo_root / task_dir_or_id).is_dir():
+                task_path = self.repo_root / task_dir_or_id
+            elif (self.output_dir / task_dir_or_id).is_dir():
+                task_path = self.output_dir / task_dir_or_id
+            else:
+                candidates = list(self.output_dir.glob(f"**/tasks/*{task_dir_or_id}*")) or list(
+                    self.output_dir.glob(f"**/*{task_dir_or_id}*")
+                )
+                if not candidates and scenario_id:
+                    self.packager.package_scenario_job(
+                        scenario_id=scenario_id,
+                        model_alias=model_alias,
+                        mode=mode,
+                        agent_type=agent_type,
+                    )
+                    candidates = list(self.output_dir.glob(f"**/tasks/*{task_dir_or_id}*")) or list(
+                        self.output_dir.glob(f"**/*{task_dir_or_id}*")
+                    )
+                if candidates:
+                    task_path = candidates[0]
+                else:
+                    raise FileNotFoundError(
+                        f"Harbor Task '{task_dir_or_id}' could not be located under {self.output_dir}"
+                    )
+        task_path = task_path.resolve()
+
+        task_id = task_path.name
+        inferred_scenario = scenario_id
+        if not inferred_scenario:
+            for part in task_path.parts:
+                if part in SCENARIO_CATALOG:
+                    inferred_scenario = part
+                    break
+        if not inferred_scenario:
+            inferred_scenario = "generic_task"
+
+        task_name = f"benchmaxxer/{inferred_scenario}--{task_id}"
+        task_toml_path = task_path / "task.toml"
+        expected_passed = True
+        expected_rubric = 5
+        if task_toml_path.exists():
+            try:
+                import tomllib
+                tdata = tomllib.loads(task_toml_path.read_text(encoding="utf-8"))
+                task_name = tdata.get("task", {}).get("name", task_name)
+                meta = tdata.get("metadata", {})
+                expected_passed = bool(meta.get("expected_passed", True))
+                expected_rubric = int(meta.get("expected_rubric_score", 5))
+            except Exception:  # noqa: BLE001
+                pass
+
+        task_pkg = HarborTaskPackage(
+            task_id=task_id,
+            task_name=task_name,
+            scenario_id=inferred_scenario,
+            suite_slug=SCENARIO_CATALOG.get(inferred_scenario, {}).get("suite_slug", "generic"),
+            case_type="negative" if "negative" in task_id else "positive",
+            expected_passed=expected_passed,
+            expected_rubric_score=expected_rubric,
+            description=f"Individual test task {task_id}",
+            task_dir=task_path,
+        )
+
+        job_dir = task_path.parent.parent if task_path.parent.name == "tasks" else task_path.parent
+        job_pkg = HarborScenarioJobPackage(
+            job_name=inferred_scenario,
+            scenario_id=inferred_scenario,
+            suite_slug=task_pkg.suite_slug,
+            suite_name=inferred_scenario,
+            pillar="Evaluation Framework",
+            difficulty="Medium",
+            difficulty_weight=2,
+            environment_type=self.environment_type,
+            job_dir=job_dir,
+            job_yaml_path=(job_dir / "job.yaml"),
+            job_json_path=(job_dir / "job.json"),
+            dataset_toml_path=(job_dir / "tasks" / "dataset.toml") if (job_dir / "tasks").exists() else (job_dir / "dataset.toml"),
+            manifest_json_path=(job_dir / "scenario_job_manifest.json"),
+            tasks=[task_pkg],
+        )
+
+        harbor_status = check_harbor_available()
+        env_status = check_environment_available(self.environment_type)
+
+        use_native_container = (
+            env_status["available"]
+            and harbor_status["available"]
+            and (mode == "live" or self.require_container)
+        )
+
+        if use_native_container and harbor_status["binary"]:
+            native_ok, native_res = self._run_single_task_via_cli(
+                task=task_pkg,
+                harbor_bin=harbor_status["binary"],
+                model_alias=model_alias,
+                agent_type=agent_type,
+            )
+            if native_ok and native_res:
+                return native_res
+
+        return self._execute_task_trial_hermetic(job_pkg, task_pkg)
+
     def _execute_task_trial_hermetic(
         self,
         job_pkg: HarborScenarioJobPackage,
@@ -682,8 +975,8 @@ class HarborPodmanRunner:
             }
         )
 
-        solve_sh = task.task_dir / "solution" / "solve.sh"
-        test_sh = task.task_dir / "tests" / "test.sh"
+        solve_sh = (task.task_dir / "solution" / "solve.sh").resolve()
+        test_sh = (task.task_dir / "tests" / "test.sh").resolve()
 
         solve_proc = subprocess.run(
             ["bash", str(solve_sh)],
@@ -762,6 +1055,38 @@ class HarborPodmanRunner:
         return trial_result
 
 
+# Backward-compatible and canonical class alias
+HarborRunner = HarborPodmanRunner
+
+
+def run_harbor_task(
+    task_dir: str | Path,
+    scenario_id: Optional[str] = None,
+    model_alias: str = "gemini-1.5-pro",
+    mode: str = "mock",
+    agent_type: str = "oracle",
+    environment_type: str = "podman",
+    require_container: bool = False,
+    require_podman: bool = False,
+    output_dir: Optional[str | Path] = None,
+    runs_dir: Optional[str | Path] = None,
+) -> Dict[str, Any]:
+    """Convenience function to run a single individual test as a Harbor Task."""
+    runner = HarborRunner(
+        output_dir=output_dir,
+        runs_dir=runs_dir,
+        environment_type=environment_type,
+        require_container=require_container or require_podman,
+    )
+    return runner.run_task(
+        task_dir_or_id=task_dir,
+        scenario_id=scenario_id,
+        model_alias=model_alias,
+        mode=mode,
+        agent_type=agent_type,
+    )
+
+
 def run_harbor_scenario_job(
     scenario_id: str = "oauth_api_enablement",
     model_alias: str = "gemini-1.5-pro",
@@ -769,6 +1094,7 @@ def run_harbor_scenario_job(
     agent_type: str = "oracle",
     environment_type: str = "podman",
     require_podman: bool = False,
+    require_container: bool = False,
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
     no_cache: bool = False,
@@ -780,11 +1106,11 @@ def run_harbor_scenario_job(
     tokens_script_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     """Convenience function to package and run a single scenario as a Harbor Job."""
-    runner = HarborPodmanRunner(
+    runner = HarborRunner(
         output_dir=output_dir,
         runs_dir=runs_dir,
         environment_type=environment_type,
-        require_podman=require_podman,
+        require_container=require_container or require_podman,
     )
     return runner.run_scenario_job(
         scenario_id=scenario_id,
@@ -808,6 +1134,7 @@ def run_harbor_suite_jobs(
     agent_type: str = "oracle",
     environment_type: str = "podman",
     require_podman: bool = False,
+    require_container: bool = False,
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
     no_cache: bool = False,
@@ -818,11 +1145,11 @@ def run_harbor_suite_jobs(
     tokens_script_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     """Convenience function to package and run all scenarios in a suite as Harbor Jobs."""
-    runner = HarborPodmanRunner(
+    runner = HarborRunner(
         output_dir=output_dir,
         runs_dir=runs_dir,
         environment_type=environment_type,
-        require_podman=require_podman,
+        require_container=require_container or require_podman,
     )
     return runner.run_suite_jobs(
         suite_id=suite_id,
@@ -844,6 +1171,7 @@ def run_harbor_framework_jobs(
     agent_type: str = "oracle",
     environment_type: str = "podman",
     require_podman: bool = False,
+    require_container: bool = False,
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
     no_cache: bool = False,
@@ -854,11 +1182,11 @@ def run_harbor_framework_jobs(
     tokens_script_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     """Convenience function to package and run all scenarios across the framework as Harbor Jobs."""
-    runner = HarborPodmanRunner(
+    runner = HarborRunner(
         output_dir=output_dir,
         runs_dir=runs_dir,
         environment_type=environment_type,
-        require_podman=require_podman,
+        require_container=require_container or require_podman,
     )
     return runner.run_framework_jobs(
         model_alias=model_alias,
