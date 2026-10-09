@@ -167,6 +167,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Require active Podman container engine without hermetic trial fallback",
     )
+    run_parser.add_argument(
+        "--critic-model",
+        type=str,
+        default=None,
+        help="Optional frontier model alias to use for the critic panel (defaults to a frontier model different from the candidate model)",
+    )
+    run_parser.add_argument(
+        "--no-critics",
+        "--jev-only",
+        dest="no_critics",
+        action="store_true",
+        help="Bypass LLM critic models entirely and rely strictly on deterministic Jev evaluation",
+    )
 
     # `benchmaxxer harbor` subcommand
     harbor_parser = subparsers.add_parser(
@@ -521,6 +534,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 replay=args.replay,
                 fixtures_path=args.fixtures,
                 dotenv_path=args.dotenv,
+                critic_model=getattr(args, "critic_model", None),
+                no_critics=getattr(args, "no_critics", False),
             )
             Console().print_json(data=fw_res)
             return int(fw_res["exit_code"])
@@ -534,6 +549,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 replay=args.replay,
                 fixtures_path=args.fixtures,
                 dotenv_path=args.dotenv,
+                critic_model=getattr(args, "critic_model", None),
+                no_critics=getattr(args, "no_critics", False),
             )
             Console().print_json(data=suite_res)
             return int(suite_res["exit_code"])
@@ -547,6 +564,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             manual_eval=args.manual_eval,
             fixtures_path=args.fixtures,
             dotenv_path=args.dotenv,
+            critic_model=getattr(args, "critic_model", None),
+            no_critics=getattr(args, "no_critics", False),
         )
         Console().print_json(
             data={
@@ -563,7 +582,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "timing": result["timing"],
                 "token_usage": result["token_usage"],
                 "metrics_dict": result["metrics_dict"],
-                "actor_critic_composite": result["actor_critic_scores"]["composite_normalized_score"],
+                "actor_critic_composite": (
+                    result["actor_critic_scores"]["composite_normalized_score"]
+                    if result.get("actor_critic_scores")
+                    else None
+                ),
                 "rubric_score": result.get("rubric_score"),
                 "rubric_rating": result.get("rubric_rating"),
                 "composite_score": result.get("composite_score"),
