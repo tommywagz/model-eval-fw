@@ -46,15 +46,15 @@ def _default_model_garden() -> List[Dict[str, Any]]:
     """Return the canonical catalog of assessable Frontier Models (MIQs) on GCP Model Garden."""
     return [
         {
-            "id": "gemini-4-argon",
-            "name": "Gemini 4 Argon",
+            "id": "gemini-3.1-pro",
+            "name": "Gemini 3.1 Pro",
             "brand": "gemini",
             "provider": "Google DeepMind (Vertex AI Model Garden)",
             "badge": "Flagship Frontier",
-            "tags": ["Multimodal", "10M Context", "Deep Reasoning", "ADK Native"],
-            "description": "Google's next-generation flagship frontier model engineered for autonomous agent orchestration, deep architectural synthesis, and complex GCP operations.",
-            "cost_per_1k_input_usd": 0.00200,
-            "cost_per_1k_output_usd": 0.00800,
+            "tags": ["Multimodal", "2M+ Context", "Deep Reasoning", "ADK Native"],
+            "description": "Google's flagship Pro frontier model engineered for autonomous agent orchestration, deep architectural synthesis, and complex GCP operations.",
+            "cost_per_1k_input_usd": 0.00150,
+            "cost_per_1k_output_usd": 0.00600,
             "location": "us-central1",
             "is_default": True,
             "enabled": True,
@@ -76,32 +76,62 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "selected": False,
         },
         {
-            "id": "fable-5.1",
-            "name": "Fable 5.1",
-            "brand": "fable",
-            "provider": "Fable AI (Vertex AI Model Garden Partner)",
-            "badge": "Reasoning Specialist",
-            "tags": ["Multi-Step Planning", "System Synthesis", "Zero-Shot Refactor"],
-            "description": "Frontier partner model on Vertex AI specializing in compositional reasoning, multi-agent workflow generation, and full-stack refactoring.",
-            "cost_per_1k_input_usd": 0.00250,
-            "cost_per_1k_output_usd": 0.01000,
-            "location": "us-central1",
+            "id": "claude-opus-5.1",
+            "name": "Claude Opus 5.1",
+            "brand": "anthropic",
+            "provider": "Anthropic (Vertex AI Partner Model)",
+            "badge": "Frontier Reasoning",
+            "tags": ["Multi-Step Planning", "System Architecture", "Zero-Shot Refactor"],
+            "description": "Anthropic's most capable Opus 5.1 frontier partner model on Vertex AI specializing in deep architectural reasoning and complex multi-agent synthesis.",
+            "cost_per_1k_input_usd": 0.00500,
+            "cost_per_1k_output_usd": 0.02500,
+            "location": "us-east5",
             "is_default": True,
             "enabled": True,
             "selected": False,
         },
         {
-            "id": "sonnet-5.5",
-            "name": "Sonnet 5.5",
+            "id": "claude-sonnet-5.5",
+            "name": "Claude Sonnet 5.5",
             "brand": "anthropic",
             "provider": "Anthropic (Vertex AI Partner Model)",
             "badge": "Coding Specialist",
             "tags": ["Advanced Coding", "Architectural Conversion", "Low Error Rate"],
-            "description": "Next-gen Anthropic frontier partner model on Google Cloud delivering state-of-the-art polyglot code translation and deterministic test adherence.",
+            "description": "Next-gen Anthropic Sonnet 5.5 frontier partner model on Google Cloud delivering state-of-the-art polyglot code translation and deterministic test adherence.",
             "cost_per_1k_input_usd": 0.00300,
             "cost_per_1k_output_usd": 0.01500,
             "location": "us-east5",
             "is_default": True,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "mistral-large-3",
+            "name": "Mistral Large 3",
+            "brand": "mistral",
+            "provider": "Mistral AI (Vertex AI Partner Model)",
+            "badge": "Latest Mistral Release",
+            "tags": ["Latest Release", "Function Calling", "Concise Code", "Polyglot"],
+            "description": "Latest Mistral AI flagship release on Google Cloud Vertex AI with high-precision structured output, agentic tool calling, and multilingual code synthesis.",
+            "cost_per_1k_input_usd": 0.00200,
+            "cost_per_1k_output_usd": 0.00600,
+            "location": "europe-west4",
+            "is_default": True,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "gemini-4-argon",
+            "name": "Gemini 4 Argon",
+            "brand": "gemini",
+            "provider": "Google DeepMind (Vertex AI Model Garden)",
+            "badge": "Experimental Argon",
+            "tags": ["10M Context", "Agentic Synthesis", "ADK Native"],
+            "description": "Experimental Argon-series Gemini frontier endpoint on Vertex AI for autonomous test suite synthesis.",
+            "cost_per_1k_input_usd": 0.00200,
+            "cost_per_1k_output_usd": 0.00800,
+            "location": "us-central1",
+            "is_default": False,
             "enabled": True,
             "selected": False,
         },
@@ -226,21 +256,6 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "selected": False,
         },
         {
-            "id": "mistral-large-3",
-            "name": "Mistral Large 3",
-            "brand": "mistral",
-            "provider": "Mistral AI (Vertex AI Partner Model)",
-            "badge": "Multilingual & Code",
-            "tags": ["Function Calling", "Concise Code", "European Sovereign"],
-            "description": "Mistral AI's flagship model on Google Cloud Vertex AI with strong structured output and function calling.",
-            "cost_per_1k_input_usd": 0.00200,
-            "cost_per_1k_output_usd": 0.00600,
-            "location": "europe-west4",
-            "is_default": False,
-            "enabled": False,
-            "selected": False,
-        },
-        {
             "id": "qwen-3-72b",
             "name": "Qwen 3 72B Instruct",
             "brand": "qwen",
@@ -272,7 +287,7 @@ def load_frontend_config() -> Dict[str, Any]:
         "app": {
             "title": "BenchMaxxer Evaluation Studio",
             "description": "Frontier Model Capability Assessment on GCP Model Garden",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "powered_by": [
                 {"name": "Harbor", "role": "Hermetic Container & Agent Execution Harness"},
                 {"name": "Jev", "role": "Deterministic Verification & Rubric Orchestration"},
@@ -312,7 +327,13 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
             gcp_cfg = cfg.get("gcp_project", {})
             models = copy.deepcopy(cfg.get("model_garden", _default_model_garden()))
             # Ensure defaults have required flags
-            default_ids = {"gemini-4-argon", "gemini-3.8-flash", "fable-5.1", "sonnet-5.5"}
+            default_ids = {
+                "gemini-3.1-pro",
+                "gemini-3.8-flash",
+                "claude-opus-5.1",
+                "claude-sonnet-5.5",
+                "mistral-large-3",
+            }
             for m in models:
                 if "is_default" not in m:
                     m["is_default"] = m.get("id") in default_ids
@@ -322,9 +343,9 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     mid = m.get("id", "").lower()
                     if "gemini" in mid:
                         m["brand"] = "gemini"
-                    elif "fable" in mid:
-                        m["brand"] = "fable"
-                    elif "sonnet" in mid or "claude" in mid:
+                    elif "mistral" in mid:
+                        m["brand"] = "mistral"
+                    elif "opus" in mid or "sonnet" in mid or "claude" in mid:
                         m["brand"] = "anthropic"
                     elif "llama" in mid:
                         m["brand"] = "meta"
@@ -482,8 +503,12 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                 check_environment_available,
                 check_harbor_available,
                 check_podman_available,
+                get_internal_google_default_permissions,
+                list_agent_harnesses,
             )
 
+            gcp_snapshot = get_gcp_config_Snapshot()
+            harnesses = list_agent_harnesses()
             self._send_json(
                 {
                     "mcp_server": HARBOR_MCP_URL,
@@ -491,7 +516,33 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                     "podman": check_podman_available(),
                     "docker": check_docker_available(),
                     "supported_environments": ["podman", "docker", "modal", "daytona"],
-                    "supported_harnesses": ["oracle", "benchmaxxer", "claude-code", "codex"],
+                    "supported_harnesses": [h["id"] for h in harnesses],
+                    "harnesses": harnesses,
+                    "internal_google_default_permissions": get_internal_google_default_permissions(
+                        project_id=gcp_snapshot["project_id"],
+                        location=gcp_snapshot["location"],
+                    ),
+                }
+            )
+            return
+
+        if path == "/api/harnesses":
+            from benchmaxxer.harbor import (
+                get_internal_google_default_permissions,
+                list_agent_harnesses,
+            )
+
+            gcp_snapshot = get_gcp_config_Snapshot()
+            harnesses = list_agent_harnesses()
+            self._send_json(
+                {
+                    "harnesses": harnesses,
+                    "default_harness": "agy",
+                    "supported_harnesses": [h["id"] for h in harnesses],
+                    "internal_google_default_permissions": get_internal_google_default_permissions(
+                        project_id=gcp_snapshot["project_id"],
+                        location=gcp_snapshot["location"],
+                    ),
                 }
             )
             return
@@ -687,13 +738,25 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
             else:
                 scenario_list = [scenario_id]
 
-            model_alias = payload.get("model_alias", "gemini-4-argon")
+            from benchmaxxer.harbor import (
+                get_agent_harness_spec,
+                get_internal_google_default_permissions,
+                normalize_agent_harness,
+            )
+
+            model_alias = payload.get("model_alias", "gemini-3.1-pro")
             mode = payload.get("mode", "mock")
             candidate_override = payload.get("candidate_override")
             is_async = payload.get("async", True)
             use_harbor = bool(payload.get("harbor", False))
             environment_type = payload.get("environment_type", payload.get("env", "podman"))
-            agent_type = payload.get("agent_type", payload.get("harness", "oracle"))
+            raw_agent_type = payload.get("agent_type", payload.get("harness", "agy"))
+            agent_type = normalize_agent_harness(raw_agent_type)
+            harness_spec = get_agent_harness_spec(agent_type)
+            internal_google_permissions = get_internal_google_default_permissions(
+                project_id=gcp_snapshot["project_id"],
+                location=gcp_snapshot["location"],
+            )
             suite_name = payload.get("suite_name")
 
             run_id_seed = scenario_id if len(scenario_list) == 1 else f"suite_{len(scenario_list)}_tests"
@@ -712,8 +775,11 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                         "gcp_location": gcp_snapshot["location"],
                         "execution_mode": mode,
                         "harbor": use_harbor,
-                        "environment_type": environment_type if use_harbor else None,
-                        "harness": agent_type if use_harbor else None,
+                        "environment_type": environment_type if use_harbor else "podman",
+                        "harness": agent_type,
+                        "agent_harness": agent_type,
+                        "harness_spec": harness_spec,
+                        "internal_google_permissions": internal_google_permissions,
                         "status": "RUNNING",
                         "start_time": start_time,
                         "elapsed_seconds": 0.0,
@@ -744,6 +810,10 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                 candidate_override=candidate_override,
                             )
                         result["scenario_ids"] = scenario_list
+                        result["harness"] = agent_type
+                        result["agent_harness"] = agent_type
+                        result["harness_spec"] = harness_spec
+                        result["internal_google_permissions"] = internal_google_permissions
                         result["test_results"] = [
                             {
                                 "scenario_id": single_sc,
@@ -753,6 +823,7 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                 "total_tokens": result.get("total_tokens", 0),
                                 "estimated_cost_usd": result.get("estimated_cost_usd", 0.0),
                                 "is_custom": single_sc.startswith("argon_"),
+                                "agent_harness": agent_type,
                             }
                         ]
                         result["gcp_project_id"] = gcp_snapshot["project_id"]
@@ -782,12 +853,23 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                 ACTIVE_RUNS[run_id]["current_phase"] = f"running ({idx + 1}/{len(scenario_list)}): {sc_item}"
                                 ACTIVE_RUNS[run_id]["completed_tests"] = idx
 
-                            res_item = execute_scenario_run(
-                                scenario_id=sc_item,
-                                model_alias=model_alias,
-                                mode=mode,
-                                candidate_override=candidate_override,
-                            )
+                            if use_harbor:
+                                from benchmaxxer.harbor import run_harbor_scenario_job
+
+                                res_item = run_harbor_scenario_job(
+                                    scenario_id=sc_item,
+                                    model_alias=model_alias,
+                                    mode=mode,
+                                    agent_type=agent_type,
+                                    environment_type=environment_type,
+                                )
+                            else:
+                                res_item = execute_scenario_run(
+                                    scenario_id=sc_item,
+                                    model_alias=model_alias,
+                                    mode=mode,
+                                    candidate_override=candidate_override,
+                                )
                             per_test_results.append(res_item)
 
                             t_phases = res_item.get("timing", {}).get("phase_timings_ms", {})
@@ -821,6 +903,7 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                 f"// =========================================================================\n"
                                 f"// Test [{idx + 1}/{len(scenario_list)}]: {sc_item} "
                                 f"({'Custom Use Case' if sc_item.startswith('argon_') else 'Standard RFC Scenario'})\n"
+                                f"// Harness: {agent_type} | GCP Project: {gcp_snapshot['project_id']}\n"
                                 f"// =========================================================================\n"
                                 f"{res_item.get('candidate_output', '')}"
                             )
@@ -841,6 +924,10 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                 "scenario_ids": scenario_list,
                                 "suite_name": suite_name or f"Custom Suite ({len(scenario_list)} Tests)",
                                 "model_alias": model_alias,
+                                "harness": agent_type,
+                                "agent_harness": agent_type,
+                                "harness_spec": harness_spec,
+                                "internal_google_permissions": internal_google_permissions,
                                 "gcp_project_id": gcp_snapshot["project_id"],
                                 "gcp_location": gcp_snapshot["location"],
                                 "passed": all_passed,
@@ -889,6 +976,7 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                                         "total_tokens": r.get("total_tokens", 0),
                                         "estimated_cost_usd": r.get("estimated_cost_usd", 0.0),
                                         "is_custom": r["scenario_id"].startswith("argon_"),
+                                        "agent_harness": agent_type,
                                     }
                                     for r in per_test_results
                                 ],
@@ -915,6 +1003,11 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                         "scenario_id": scenario_id,
                         "scenario_ids": scenario_list,
                         "model_alias": model_alias,
+                        "harness": agent_type,
+                        "agent_harness": agent_type,
+                        "harbor": use_harbor,
+                        "environment_type": environment_type if use_harbor else "podman",
+                        "internal_google_permissions": internal_google_permissions,
                         "gcp_project_id": gcp_snapshot["project_id"],
                         "gcp_location": gcp_snapshot["location"],
                         "status": "RUNNING",

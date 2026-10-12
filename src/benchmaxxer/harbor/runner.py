@@ -22,11 +22,16 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from benchmaxxer.harbor.packager import (
+    AGENT_HARNESS_CATALOG,
     HARBOR_CANARY_GUID,
     HARBOR_MCP_URL,
     HarborScenarioJobPackage,
     HarborScenarioPackager,
     HarborTaskPackage,
+    get_agent_harness_spec,
+    get_internal_google_default_permissions,
+    list_agent_harnesses,
+    normalize_agent_harness,
 )
 from benchmaxxer.scenarios.runner import (
     SCENARIO_CATALOG,
@@ -277,6 +282,9 @@ def validate_harbor_job_and_tasks(job_pkg: HarborScenarioJobPackage) -> Dict[str
                 errors.append(
                     f"environment.type mismatch: {env_cfg.get('type')} != {job_pkg.environment_type}"
                 )
+            env_vars = env_cfg.get("env", {})
+            if env_vars.get("BENCHMAXXER_INTERNAL_GOOGLE_PERMISSIONS") != "enabled":
+                errors.append("job.yaml environment.env missing BENCHMAXXER_INTERNAL_GOOGLE_PERMISSIONS='enabled'")
             if not job_cfg.get("tasks"):
                 errors.append("job.yaml has empty tasks list")
         except Exception as exc:  # noqa: BLE001
@@ -358,9 +366,30 @@ def validate_harbor_job_and_tasks(job_pkg: HarborScenarioJobPackage) -> Dict[str
             harbor_cli_validated = proc.returncode == 0
             harbor_cli_output = (proc.stdout or proc.stderr or "").strip()
             if not harbor_cli_validated:
-                errors.append(
-                    f"harbor run --print-config failed (rc={proc.returncode}): {harbor_cli_output[:300]}"
+                # For internal Google harnesses (agy, jetski, etc.) bridged via BenchMaxxerHarborAgent,
+                # validate the Harbor config using the BenchMaxxerHarborAgent import_path adapter.
+                proc_adapter = subprocess.run(
+                    [
+                        harbor_cli_status["binary"],
+                        "run",
+                        "--print-config",
+                        "-c",
+                        str(job_pkg.job_yaml_path),
+                        "--agent-import-path",
+                        "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
                 )
+                if proc_adapter.returncode == 0:
+                    harbor_cli_validated = True
+                    harbor_cli_output = (proc_adapter.stdout or proc_adapter.stderr or "").strip()
+                else:
+                    errors.append(
+                        f"harbor run --print-config failed (rc={proc.returncode}): {harbor_cli_output[:300]}"
+                    )
         except Exception as exc:  # noqa: BLE001
             errors.append(f"harbor CLI validation error: {exc}")
 
@@ -369,6 +398,10 @@ def validate_harbor_job_and_tasks(job_pkg: HarborScenarioJobPackage) -> Dict[str
         "job_name": job_pkg.job_name,
         "scenario_id": job_pkg.scenario_id,
         "environment_type": job_pkg.environment_type,
+        "agent_harness": job_pkg.agent_harness,
+        "internal_google_default_permissions": bool(
+            job_pkg.internal_google_permissions.get("enabled", True)
+        ),
         "task_count": len(job_pkg.tasks),
         "harbor_cli_available": harbor_cli_status["available"],
         "harbor_cli_validated": harbor_cli_validated,
@@ -422,13 +455,14 @@ class HarborPodmanRunner:
     ) -> Dict[str, Any]:
         """Package a Test Scenario as a Harbor Job and run all Individual Tests as Harbor Tasks."""
         job_timer = ExecutionTimer(name=f"harbor_job:{scenario_id}", level="test").start()
+        agent_clean = normalize_agent_harness(agent_type)
 
         with job_timer.phase("package_harbor_job"):
             job_pkg = self.packager.package_scenario_job(
                 scenario_id=scenario_id,
                 model_alias=model_alias,
                 mode=mode,
-                agent_type=agent_type,
+                agent_type=agent_clean,
                 fixtures_override=fixtures_path,
             )
 
@@ -494,6 +528,8 @@ class HarborPodmanRunner:
             "scenario_id": scenario_id,
             "suite_slug": job_pkg.suite_slug,
             "environment_type": self.environment_type,
+            "agent_harness": job_pkg.agent_harness,
+            "internal_google_permissions": job_pkg.internal_google_permissions,
             "execution_backend": execution_backend,
             "mcp_server_url": HARBOR_MCP_URL,
             "n_total_trials": tasks_total,
@@ -538,6 +574,8 @@ class HarborPodmanRunner:
 
         scenario_eval["passed"] = overall_passed
         scenario_eval["exit_code"] = exit_code
+        scenario_eval["agent_harness"] = job_pkg.agent_harness
+        scenario_eval["internal_google_permissions"] = job_pkg.internal_google_permissions
         scenario_eval["harbor"] = {
             "enabled": True,
             "mcp_server": HARBOR_MCP_URL,
@@ -548,6 +586,8 @@ class HarborPodmanRunner:
             "dataset_toml_path": str(job_pkg.dataset_toml_path),
             "job_result_path": str(job_result_path),
             "environment_type": self.environment_type,
+            "agent_harness": job_pkg.agent_harness,
+            "internal_google_permissions": job_pkg.internal_google_permissions,
             "execution_backend": execution_backend,
             "config_validated": validation["valid"],
             "harbor_cli_validated": validation["harbor_cli_validated"],
@@ -831,6 +871,11 @@ class HarborPodmanRunner:
         agent_type: str = "oracle",
     ) -> Dict[str, Any]:
         """Execute a single individual Harbor Task in the configured container environment."""
+        agent_clean = normalize_agent_harness(agent_type)
+        google_perms = get_internal_google_default_permissions(
+            agent_type=agent_clean,
+            repo_root=self.repo_root,
+        )
         task_path = Path(task_dir_or_id)
         if not (task_path.exists() and task_path.is_dir()):
             if (self.repo_root / task_dir_or_id).is_dir():
@@ -846,7 +891,7 @@ class HarborPodmanRunner:
                         scenario_id=scenario_id,
                         model_alias=model_alias,
                         mode=mode,
-                        agent_type=agent_type,
+                        agent_type=agent_clean,
                     )
                     candidates = list(self.output_dir.glob(f"**/tasks/*{task_dir_or_id}*")) or list(
                         self.output_dir.glob(f"**/*{task_dir_or_id}*")
@@ -912,6 +957,8 @@ class HarborPodmanRunner:
             dataset_toml_path=(job_dir / "tasks" / "dataset.toml") if (job_dir / "tasks").exists() else (job_dir / "dataset.toml"),
             manifest_json_path=(job_dir / "scenario_job_manifest.json"),
             tasks=[task_pkg],
+            agent_harness=agent_clean,
+            internal_google_permissions=google_perms,
         )
 
         harbor_status = check_harbor_available()
@@ -928,7 +975,7 @@ class HarborPodmanRunner:
                 task=task_pkg,
                 harbor_bin=harbor_status["binary"],
                 model_alias=model_alias,
-                agent_type=agent_type,
+                agent_type=agent_clean,
             )
             if native_ok and native_res:
                 return native_res
@@ -940,7 +987,7 @@ class HarborPodmanRunner:
         job_pkg: HarborScenarioJobPackage,
         task: HarborTaskPackage,
     ) -> Dict[str, Any]:
-        """Execute a Harbor Task's `solution/solve.sh` and `tests/test.sh` in an isolated trial directory."""
+        """Execute a Harbor Task's `solution/solve.sh` and `tests/test.sh` in an isolated trial directory with internal Google default permissions."""
         t0 = time.perf_counter()
         trial_dir = self.runs_dir / job_pkg.job_name / f"{task.task_id}__trial"
         if trial_dir.exists():
@@ -951,9 +998,32 @@ class HarborPodmanRunner:
         logs_verifier_dir = trial_dir / "logs" / "verifier"
         logs_artifacts_dir = trial_dir / "logs" / "artifacts"
         logs_agent_dir = trial_dir / "logs" / "agent"
+        secrets_dir = trial_dir / "secrets" / "google"
 
-        for d in (workspace_dir, logs_verifier_dir, logs_artifacts_dir, logs_agent_dir):
+        for d in (workspace_dir, logs_verifier_dir, logs_artifacts_dir, logs_agent_dir, secrets_dir):
             d.mkdir(parents=True, exist_ok=True)
+
+        google_perms = job_pkg.internal_google_permissions or get_internal_google_default_permissions(
+            agent_type=job_pkg.agent_harness,
+            repo_root=self.repo_root,
+        )
+        adc_file = secrets_dir / "adc.json"
+        adc_file.write_text(
+            json.dumps(
+                {
+                    "type": "authorized_user",
+                    "project_id": google_perms.get("project_id", "benchmaxxer-eval-sandbox"),
+                    "service_account": google_perms.get("service_account"),
+                    "scopes": google_perms.get("oauth_scopes", ["https://www.googleapis.com/auth/cloud-platform"]),
+                    "least_privilege_iam_roles": google_perms.get("least_privilege_iam_roles", []),
+                    "internal_google_default_permissions": True,
+                    "harness": job_pkg.agent_harness,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
         # Stage task's environment/app into trial app_dir
         src_app = task.task_dir / "environment" / "app"
@@ -961,16 +1031,21 @@ class HarborPodmanRunner:
             shutil.copytree(src_app, app_dir, dirs_exist_ok=True)
 
         env = os.environ.copy()
+        env.update(google_perms.get("sandbox_env_vars", {}))
         env.update(
             {
                 "BENCHMAXXER_APP_ROOT": str(app_dir),
                 "BENCHMAXXER_WORKSPACE_DIR": str(workspace_dir),
                 "BENCHMAXXER_VERIFIER_DIR": str(logs_verifier_dir),
                 "BENCHMAXXER_ARTIFACTS_DIR": str(logs_artifacts_dir),
+                "BENCHMAXXER_AGENT_DIR": str(logs_agent_dir),
                 "BENCHMAXXER_PYTHON_BIN": sys.executable,
                 "BENCHMAXXER_SCENARIO_ID": job_pkg.scenario_id,
                 "BENCHMAXXER_TASK_ID": task.task_id,
                 "BENCHMAXXER_CASE_TYPE": task.case_type,
+                "BENCHMAXXER_HARNESS": job_pkg.agent_harness,
+                "BENCHMAXXER_INTERNAL_GOOGLE_PERMISSIONS": "enabled",
+                "GOOGLE_APPLICATION_CREDENTIALS": str(adc_file),
                 "PYTHONPATH": f"{self.repo_root / 'src'}:{env.get('PYTHONPATH', '')}",
             }
         )
@@ -1035,6 +1110,8 @@ class HarborPodmanRunner:
             "scenario_id": job_pkg.scenario_id,
             "case_type": task.case_type,
             "description": task.description,
+            "agent_harness": job_pkg.agent_harness,
+            "internal_google_default_permissions": True,
             "expected_passed": task.expected_passed,
             "expected_rubric_score": task.expected_rubric_score,
             "observed_rubric_score": reward_details.get(

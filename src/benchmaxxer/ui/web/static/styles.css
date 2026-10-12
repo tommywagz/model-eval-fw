@@ -444,22 +444,18 @@ body {
   margin-top: 0.2rem;
 }
 
-/* Frontier Model Cards Grid (4 Default Frontier Models) */
-.model-cards-grid {
+/* Frontier Model & Agent Harness Cards Grid */
+.model-cards-grid,
+.harness-cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
   gap: 1rem;
   margin-bottom: 1.25rem;
 }
 
-@media (max-width: 1080px) {
-  .model-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 640px) {
-  .model-cards-grid {
+  .model-cards-grid,
+  .harness-cards-grid {
     grid-template-columns: 1fr;
   }
   .gcp-config-grid {

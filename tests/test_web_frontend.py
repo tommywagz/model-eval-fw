@@ -58,18 +58,19 @@ def web_server():
 # ============================================================================
 
 def test_frontend_config_and_model_garden_models(web_server: str) -> None:
-    """Verify that the 4 default Frontier Models (Gemini 4 Argon, Gemini 3.8 Flash, Fable 5.1, Sonnet 5.5) and GCP dropdown models are exposed."""
+    """Verify that the 5 default Frontier Models (Gemini 3.1 Pro, Gemini 3.8 Flash, Claude Opus 5.1, Claude Sonnet 5.5, Mistral Large 3) and GCP dropdown models are exposed."""
     cfg = load_frontend_config()
     assert "model_garden" in cfg
     models = cfg["model_garden"]
     assert len(models) >= 8
 
     model_ids = {m["id"] for m in models}
-    # Verify the 4 default frontier models
-    assert "gemini-4-argon" in model_ids
+    # Verify the 5 default frontier models
+    assert "gemini-3.1-pro" in model_ids
     assert "gemini-3.8-flash" in model_ids
-    assert "fable-5.1" in model_ids
-    assert "sonnet-5.5" in model_ids
+    assert "claude-opus-5.1" in model_ids
+    assert "claude-sonnet-5.5" in model_ids
+    assert "mistral-large-3" in model_ids
     # Verify additional GCP models
     assert "gemini-1.5-pro" in model_ids
     assert "gemini-1.5-flash" in model_ids
@@ -85,7 +86,13 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
         assert "dropdown_models" in data
 
         default_ids = [m["id"] for m in data["default_models"]]
-        assert default_ids == ["gemini-4-argon", "gemini-3.8-flash", "fable-5.1", "sonnet-5.5"]
+        assert default_ids == [
+            "gemini-3.1-pro",
+            "gemini-3.8-flash",
+            "claude-opus-5.1",
+            "claude-sonnet-5.5",
+            "mistral-large-3",
+        ]
         assert len(data["dropdown_models"]) >= 3
 
         # Validate pricing and brand attributes exist
@@ -99,18 +106,18 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
 
 def test_gcp_project_location_and_miq_enablement(web_server: str) -> None:
     """Verify that a web user can configure the GCP project, location, and enable MIQ models that populate the dropdown."""
-    # 1. Update GCP project and location and enable deepseek-r2 + mistral-large-3
+    # 1. Update GCP project and location and enable deepseek-r2 + gemini-3.5-pro
     payload = json.dumps({
         "project_id": "vertex-frontier-eval-prod",
         "location": "europe-west4",
         "enabled_model_ids": [
-            "gemini-4-argon",
+            "gemini-3.1-pro",
             "gemini-3.8-flash",
-            "fable-5.1",
-            "sonnet-5.5",
+            "claude-opus-5.1",
+            "claude-sonnet-5.5",
+            "mistral-large-3",
             "gemini-3.5-pro",
             "deepseek-r2",
-            "mistral-large-3",
         ],
     }).encode("utf-8")
 
@@ -128,7 +135,6 @@ def test_gcp_project_location_and_miq_enablement(web_server: str) -> None:
         assert data["location"] == "europe-west4"
         dropdown_ids = {m["id"] for m in data["dropdown_models"]}
         assert "deepseek-r2" in dropdown_ids
-        assert "mistral-large-3" in dropdown_ids
         assert "gemini-3.5-pro" in dropdown_ids
 
     # 2. Toggle an individual MIQ model via /api/gcp/models/toggle
@@ -452,6 +458,11 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "Select Frontier Models" in html
         assert 'id="model-cards-container"' in html
         assert 'id="enabled-models-dropdown"' in html
+        assert 'id="section-select-harness"' in html
+        assert 'id="harness-cards-container"' in html
+        assert 'id="additional-harnesses-dropdown"' in html
+        assert 'id="harbor-sandbox-toggle"' in html
+        assert 'id="internal-google-permissions-bar"' in html
         assert 'id="gcp-config-panel"' in html
         assert 'id="custom-suite-builder"' in html
         assert 'id="harbor-logo-badge"' in html
@@ -464,6 +475,7 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert resp.status == 200
         css = resp.read().decode("utf-8")
         assert ".studio-section" in css
+        assert ".harness-cards-grid" in css
         assert "--google-blue" in css
 
     with urllib.request.urlopen(f"{web_server}/app.js") as resp:
@@ -472,5 +484,53 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "generateArgonSuite" in js
         assert "exportToRepository" in js
         assert "getBrandLogoSvg" in js
+        assert "fetchHarnesses" in js
+        assert "selectHarness" in js
         assert "saveGcpConfiguration" in js
         assert "saveCustomTestSuite" in js
+
+
+def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:
+    """Verify /api/harnesses, /api/harbor/status, and /api/eval/run with agent harnesses (agy, jetski, claude-code, opencode, codex)."""
+    with urllib.request.urlopen(f"{web_server}/api/harnesses") as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read().decode("utf-8"))
+        assert data["default_harness"] == "agy"
+        supported = data["supported_harnesses"]
+        for h in ["agy", "jetski", "claude-code", "opencode", "codex"]:
+            assert h in supported
+        perms = data["internal_google_default_permissions"]
+        assert perms["enabled"] is True
+        assert perms["adc_credentials_path"] == "/var/run/secrets/google/adc.json"
+
+    with urllib.request.urlopen(f"{web_server}/api/harbor/status") as resp:
+        assert resp.status == 200
+        st = json.loads(resp.read().decode("utf-8"))
+        for h in ["agy", "jetski", "claude-code", "opencode", "codex"]:
+            assert h in st["supported_harnesses"]
+        assert st["internal_google_default_permissions"]["enabled"] is True
+
+    # Run evaluation via POST /api/eval/run with Jetski harness inside Harbor sandbox
+    payload = json.dumps({
+        "scenario_id": "oauth_api_enablement",
+        "model_alias": "gemini-3.1-pro",
+        "agent_type": "jetski",
+        "harbor": True,
+        "environment_type": "podman",
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        run_data = json.loads(resp.read().decode("utf-8"))
+        assert run_data["status"] == "COMPLETED"
+        assert run_data["agent_harness"] == "jetski"
+        assert run_data["internal_google_permissions"]["enabled"] is True
+        assert run_data["harbor"]["agent_harness"] == "jetski"
+

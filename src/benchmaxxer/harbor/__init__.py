@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from benchmaxxer.harbor.agent import BenchMaxxerHarborAgent
 from benchmaxxer.harbor.packager import (
+    AGENT_HARNESS_ALIASES,
+    AGENT_HARNESS_CATALOG,
     HARBOR_CANARY_GUID,
     HARBOR_DATASET_SCHEMA_VERSION,
     HARBOR_MCP_URL,
@@ -17,6 +19,10 @@ from benchmaxxer.harbor.packager import (
     HarborScenarioJobPackage,
     HarborScenarioPackager,
     HarborTaskPackage,
+    get_agent_harness_spec,
+    get_internal_google_default_permissions,
+    list_agent_harnesses,
+    normalize_agent_harness,
     package_all_scenarios_as_harbor_jobs,
     package_scenario_as_harbor_job,
     package_suite_as_harbor_jobs,
@@ -39,6 +45,8 @@ from benchmaxxer.harbor.runner import (
 )
 
 __all__ = [
+    "AGENT_HARNESS_ALIASES",
+    "AGENT_HARNESS_CATALOG",
     "HARBOR_CANARY_GUID",
     "HARBOR_DATASET_SCHEMA_VERSION",
     "HARBOR_MCP_URL",
@@ -56,6 +64,10 @@ __all__ = [
     "find_docker_binary",
     "find_harbor_binary",
     "find_podman_binary",
+    "get_agent_harness_spec",
+    "get_internal_google_default_permissions",
+    "list_agent_harnesses",
+    "normalize_agent_harness",
     "package_all_scenarios_as_harbor_jobs",
     "package_scenario_as_harbor_job",
     "package_suite_as_harbor_jobs",

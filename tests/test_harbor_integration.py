@@ -362,3 +362,89 @@ def test_harbor_docker_status_and_cli_task_runner(tmp_path: Path) -> None:
         ]
     )
     assert rc_tr_task == 0
+
+
+def test_agent_harnesses_in_harbor_sandboxes_with_internal_google_permissions(tmp_path: Path) -> None:
+    """Verify agy, jetski, claude-code, opencode, and codex harnesses package and run in Harbor sandboxes with internal Google default permissions."""
+    from benchmaxxer.harbor import (
+        get_internal_google_default_permissions,
+        list_agent_harnesses,
+        normalize_agent_harness,
+    )
+
+    harnesses = list_agent_harnesses()
+    harness_ids = [h["id"] for h in harnesses]
+    for expected in ["agy", "jetski", "claude-code", "opencode", "codex", "benchmaxxer", "oracle"]:
+        assert expected in harness_ids
+
+    # Alias normalization checks
+    assert normalize_agent_harness("claude code") == "claude-code"
+    assert normalize_agent_harness("antigravity") == "agy"
+    assert normalize_agent_harness("open-code") == "opencode"
+    assert normalize_agent_harness("codex-cli") == "codex"
+
+    perms = get_internal_google_default_permissions(
+        project_id="google-internal-eval-proj",
+        location="us-central1",
+    )
+    assert perms["enabled"] is True
+    assert perms["adc_credentials_path"] == "/var/run/secrets/google/adc.json"
+    assert "roles/aiplatform.user" in perms["iam_roles"]
+
+    # Package, validate, and run each of the 5 requested agent harnesses inside Harbor sandboxes
+    for harness_input, canonical_id in [
+        ("agy", "agy"),
+        ("jetski", "jetski"),
+        ("claude code", "claude-code"),
+        ("opencode", "opencode"),
+        ("codex", "codex"),
+    ]:
+        h_jobs_dir = tmp_path / f"jobs_{canonical_id}"
+        h_runs_dir = tmp_path / f"runs_{canonical_id}"
+
+        job_pkg = package_scenario_as_harbor_job(
+            scenario_id="oauth_api_enablement",
+            output_dir=h_jobs_dir,
+            runs_dir=h_runs_dir,
+            model_alias="gemini-3.1-pro",
+            mode="mock",
+            agent_type=harness_input,
+            environment_type="podman",
+        )
+        assert job_pkg.agent_harness == canonical_id
+        assert job_pkg.internal_google_permissions["enabled"] is True
+
+        # Verify job.yaml has internal Google default permissions & harness env
+        cfg = yaml.safe_load(job_pkg.job_yaml_path.read_text(encoding="utf-8"))
+        env_map = cfg["environment"]["env"]
+        assert env_map["BENCHMAXXER_HARNESS"] == canonical_id
+        assert env_map["BENCHMAXXER_INTERNAL_GOOGLE_PERMISSIONS"] == "enabled"
+        assert env_map["GOOGLE_APPLICATION_CREDENTIALS"] == "/var/run/secrets/google/adc.json"
+
+        # Verify Dockerfile provisions internal Google ADC & harness CLI shims
+        first_task = job_pkg.tasks[0]
+        dockerfile_text = (first_task.task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+        assert "/var/run/secrets/google/adc.json" in dockerfile_text
+        assert "for h in agy jetski claude claude-code opencode codex" in dockerfile_text
+
+        # Validate Harbor job and tasks
+        val = validate_harbor_job_and_tasks(job_pkg)
+        assert val["valid"] is True, f"Validation failed for {canonical_id}: {val['errors']}"
+
+        # Execute the scenario job in the Harbor sandbox with this harness
+        run_res = run_harbor_scenario_job(
+            scenario_id="oauth_api_enablement",
+            model_alias="gemini-3.1-pro",
+            mode="mock",
+            agent_type=harness_input,
+            environment_type="podman",
+            output_dir=h_jobs_dir,
+            runs_dir=h_runs_dir,
+            telemetry_dir=tmp_path / f"telemetry_{canonical_id}",
+            cache_dir=tmp_path / f"cache_{canonical_id}",
+        )
+        assert run_res["passed"] is True
+        assert run_res["harbor"]["agent_harness"] == canonical_id
+        assert run_res["harbor"]["internal_google_permissions"]["enabled"] is True
+        assert run_res["harbor"]["tasks_passed"] >= 1
+

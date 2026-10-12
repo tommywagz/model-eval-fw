@@ -157,7 +157,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="harness",
         type=str,
         default="oracle",
-        help="Agent harness for Harbor evaluation ('oracle', 'benchmaxxer', 'claude-code', 'codex', etc.; default: oracle)",
+        help="Agent harness for evaluation ('agy', 'jetski', 'claude-code', 'opencode', 'codex', 'benchmaxxer', 'oracle', or custom; default: oracle)",
     )
     run_parser.add_argument(
         "--harbor-dir",
@@ -233,7 +233,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--model",
         type=str,
         default="gemini-1.5-pro",
-        help="Candidate model alias from configs/models.yaml (e.g. gemini-1.5-pro, claude-3-5-sonnet)",
+        help="Candidate model alias from configs/models.yaml (e.g. gemini-3.1-pro, claude-sonnet-5.5, mistral-large-3)",
     )
     harbor_parser.add_argument(
         "--mode",
@@ -248,7 +248,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="agent",
         type=str,
         default="oracle",
-        help="Harbor agent/harness configuration: 'oracle' (reference solution), 'benchmaxxer' (BenchMaxxerHarborAgent), 'claude-code', 'codex', or custom agent harness",
+        help="Harbor agent harness: 'agy', 'jetski', 'claude-code', 'opencode', 'codex', 'benchmaxxer', 'oracle', or custom agent harness",
     )
     harbor_parser.add_argument(
         "--env",
@@ -384,6 +384,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             check_environment_available,
             check_harbor_available,
             check_podman_available,
+            get_internal_google_default_permissions,
+            list_agent_harnesses,
             package_all_scenarios_as_harbor_jobs,
             package_scenario_as_harbor_job,
             package_suite_as_harbor_jobs,
@@ -402,6 +404,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "environment_runtime": check_environment_available(args.sandbox_env),
                 "podman_engine": check_podman_available(),
                 "docker_engine": check_docker_available(),
+                "supported_harnesses": [h["id"] for h in list_agent_harnesses()],
+                "harnesses": list_agent_harnesses(),
+                "internal_google_default_permissions": get_internal_google_default_permissions(
+                    agent_type=args.agent
+                ),
             }
             Console().print_json(data=status_payload)
             return 0

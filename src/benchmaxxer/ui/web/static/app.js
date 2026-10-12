@@ -12,7 +12,12 @@ const state = {
   defaultModels: [],
   dropdownModels: [],
   models: [],
-  selectedModelId: "gemini-4-argon",
+  selectedModelId: "gemini-3.1-pro",
+  allHarnesses: [],
+  defaultHarnesses: [],
+  dropdownHarnesses: [],
+  selectedHarnessId: "agy",
+  internalGooglePermissions: null,
   allScenarios: [],
   customSuiteItems: [],
   activeScenarioId: "complex_skill_synthesis",
@@ -34,8 +39,43 @@ const TEMPLATES = {
 };
 
 // ============================================================================
-// Frontier Model Brand Logos (Inline SVG Emblems)
+// Frontier Model & Agent Harness Brand Logos (Inline SVG Emblems)
 // ============================================================================
+
+function getHarnessLogoSvg(harnessId, brand) {
+  const id = (harnessId || "").toLowerCase();
+  const b = (brand || "").toLowerCase();
+
+  if (id === "agy" || id === "jetski" || b === "google") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Google Agent Harness Logo">
+        <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+        <path d="M12 6L17 12L12 18L7 12L12 6Z" fill="#1a73e8"/>
+        <circle cx="12" cy="12" r="2.2" fill="#ffffff"/>
+      </svg>
+    `;
+  }
+  if (id === "claude-code" || b === "anthropic") {
+    return getBrandLogoSvg("anthropic", id);
+  }
+  if (id === "opencode" || b === "opencode") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="OpenCode Harness Logo">
+        <rect x="2.5" y="4" width="19" height="16" rx="3.5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+        <path d="M7 9.5L10.5 12L7 14.5M12 14.5H16.5" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+  if (id === "codex" || b === "openai") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Codex CLI Harness Logo">
+        <circle cx="12" cy="12" r="9.5" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+        <path d="M9.5 9L6.5 12L9.5 15M14.5 9L17.5 12L14.5 15" stroke="#8430ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+  return getBrandLogoSvg(brand, harnessId);
+}
 
 function getBrandLogoSvg(brand, modelId) {
   const b = (brand || "").toLowerCase();
@@ -57,6 +97,32 @@ function getBrandLogoSvg(brand, modelId) {
     `;
   }
 
+  if (b === "mistral" || id.includes("mistral")) {
+    // Mistral AI Stepped Block 'M' Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Mistral AI Logo">
+        <rect x="3" y="4" width="4" height="4" fill="#FFD800"/>
+        <rect x="17" y="4" width="4" height="4" fill="#FFD800"/>
+        <rect x="3" y="8" width="8" height="4" fill="#FFAF00"/>
+        <rect x="13" y="8" width="8" height="4" fill="#FFAF00"/>
+        <rect x="3" y="12" width="18" height="4" fill="#FF8205"/>
+        <rect x="3" y="16" width="4" height="4" fill="#FA500F"/>
+        <rect x="10" y="16" width="4" height="4" fill="#FA500F"/>
+        <rect x="17" y="16" width="4" height="4" fill="#FA500F"/>
+      </svg>
+    `;
+  }
+
+  if (b === "anthropic" || id.includes("opus") || id.includes("sonnet") || id.includes("claude")) {
+    // Anthropic Claude Starburst Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Anthropic Claude Logo">
+        <circle cx="12" cy="12" r="10" fill="#fef3ec" stroke="#d97757" stroke-width="1.6"/>
+        <path d="M12 5V19M5 12H19M7.2 7.2L16.8 16.8M16.8 7.2L7.2 16.8" stroke="#d97757" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
   if (b === "fable" || id.includes("fable")) {
     // Fable AI Geometric Prism Emblem
     return `
@@ -64,16 +130,6 @@ function getBrandLogoSvg(brand, modelId) {
         <rect x="3" y="3" width="18" height="18" rx="5" fill="#e4f7fb" stroke="#007b83" stroke-width="1.8"/>
         <path d="M8 7H16M8 12H14M8 7V17" stroke="#007b83" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
         <circle cx="15.5" cy="15.5" r="2" fill="#007b83"/>
-      </svg>
-    `;
-  }
-
-  if (b === "anthropic" || id.includes("sonnet") || id.includes("claude")) {
-    // Anthropic / Sonnet Starburst Emblem
-    return `
-      <svg viewBox="0 0 24 24" fill="none" aria-label="Anthropic Sonnet Logo">
-        <circle cx="12" cy="12" r="10" fill="#fef3ec" stroke="#d97757" stroke-width="1.6"/>
-        <path d="M12 5V19M5 12H19M7.2 7.2L16.8 16.8M16.8 7.2L7.2 16.8" stroke="#d97757" stroke-width="2" stroke-linecap="round"/>
       </svg>
     `;
   }
@@ -107,9 +163,130 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initStudio() {
   await Promise.all([
     fetchModels(),
+    fetchHarnesses(),
     fetchScenarios(),
     fetchTokenTelemetry(),
   ]);
+}
+
+async function fetchHarnesses() {
+  const container = document.getElementById("harness-cards-container");
+  try {
+    const res = await fetch("/api/harnesses");
+    const data = await res.json();
+    state.allHarnesses = data.harnesses || [];
+    state.selectedHarnessId = data.default_harness || "agy";
+    state.internalGooglePermissions = data.internal_google_default_permissions || null;
+
+    state.defaultHarnesses = state.allHarnesses.filter((h) => h.is_default !== false);
+    state.dropdownHarnesses = state.allHarnesses.filter((h) => h.is_default === false);
+
+    renderHarnessCards(state.defaultHarnesses);
+    renderAdditionalHarnessesDropdown(state.dropdownHarnesses);
+    updateActiveHarnessIndicator();
+    updateInternalPermissionsBar();
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="error-msg">Error loading agent harnesses: ${err.message}</div>`;
+    }
+  }
+}
+
+function renderHarnessCards(harnesses) {
+  const container = document.getElementById("harness-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+
+  harnesses.forEach((h) => {
+    const isSelected = h.id === state.selectedHarnessId;
+    const card = document.createElement("div");
+    card.className = `model-card harness-card ${isSelected ? "selected" : ""}`;
+    card.setAttribute("data-harness-id", h.id);
+    card.onclick = () => selectHarness(h.id);
+
+    card.innerHTML = `
+      <div>
+        <div class="model-card-top">
+          <div class="model-brand-logo" title="${h.provider}">
+            ${getHarnessLogoSvg(h.id, h.brand)}
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge badge-recommended">${h.badge || "Harbor Harness"}</span>
+            <div class="model-select-check" aria-hidden="true">✓</div>
+          </div>
+        </div>
+        <div class="model-card-header">
+          <span class="model-card-title">${h.name}</span>
+        </div>
+        <div class="model-provider">${h.provider} • <code>${h.cli_binary || h.id}</code></div>
+        <p class="model-desc">${h.description}</p>
+        <div class="model-tags">
+          <span class="tag-chip">Harbor Sandbox Ready</span>
+          <span class="tag-chip">Internal Google ADC</span>
+        </div>
+      </div>
+      <div class="model-pricing">
+        <span>Sandbox: <span class="pricing-val">Harbor Podman/Docker</span></span>
+        <span>Perms: <span class="pricing-val">Default GCP IAM</span></span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderAdditionalHarnessesDropdown(dropdownHarnesses) {
+  const select = document.getElementById("additional-harnesses-dropdown");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">-- Additional Harnesses (${dropdownHarnesses.length} Native / Reference) --</option>`;
+  dropdownHarnesses.forEach((h) => {
+    const opt = document.createElement("option");
+    opt.value = h.id;
+    opt.selected = h.id === state.selectedHarnessId;
+    opt.textContent = `${h.name} (${h.id}) — ${h.provider}`;
+    select.appendChild(opt);
+  });
+}
+
+function selectHarness(harnessId) {
+  state.selectedHarnessId = harnessId;
+
+  const cards = document.querySelectorAll(".harness-card");
+  state.defaultHarnesses.forEach((h, idx) => {
+    if (cards[idx]) {
+      cards[idx].classList.toggle("selected", h.id === harnessId);
+    }
+  });
+
+  const dropdown = document.getElementById("additional-harnesses-dropdown");
+  if (dropdown) {
+    const isDropdown = state.dropdownHarnesses.some((h) => h.id === harnessId);
+    dropdown.value = isDropdown ? harnessId : "";
+  }
+
+  updateActiveHarnessIndicator();
+}
+
+function onSelectDropdownHarness(harnessId) {
+  if (!harnessId) {
+    selectHarness("agy");
+    return;
+  }
+  selectHarness(harnessId);
+}
+
+function updateActiveHarnessIndicator() {
+  const indicator = document.getElementById("active-harness-indicator");
+  if (!indicator) return;
+  const found = state.allHarnesses.find((h) => h.id === state.selectedHarnessId);
+  indicator.textContent = `Active Harness: ${found ? found.name : state.selectedHarnessId}`;
+}
+
+function updateInternalPermissionsBar() {
+  const saLabel = document.getElementById("sandbox-sa-label");
+  if (saLabel) {
+    saLabel.textContent = `benchmaxxer-sa@${state.gcpProject}.iam.gserviceaccount.com`;
+  }
 }
 
 async function fetchModels() {
@@ -123,7 +300,7 @@ async function fetchModels() {
     state.allModels = data.models || [];
     state.models = state.allModels;
 
-    // Separate the 4 default frontier models and the additional enabled GCP project models
+    // Separate the 5 default frontier models and the additional enabled GCP project models
     state.defaultModels =
       data.default_models && data.default_models.length > 0
         ? data.default_models
@@ -139,6 +316,7 @@ async function fetchModels() {
     }
 
     updateGcpHeaderUI();
+    updateInternalPermissionsBar();
     renderGcpMiqToggles(state.allModels);
     renderModelCards(state.defaultModels);
     renderEnabledModelsDropdown(state.dropdownModels);
@@ -258,6 +436,7 @@ async function saveGcpConfiguration() {
       state.dropdownModels = data.dropdown_models || [];
 
       updateGcpHeaderUI();
+      updateInternalPermissionsBar();
       renderGcpMiqToggles(state.allModels);
       renderModelCards(state.defaultModels);
       renderEnabledModelsDropdown(state.dropdownModels);
@@ -368,8 +547,8 @@ function selectModel(modelId) {
 
 function onSelectDropdownModel(modelId) {
   if (!modelId) {
-    // Revert to Gemini 4 Argon default
-    selectModel("gemini-4-argon");
+    // Revert to Gemini 3.1 Pro default
+    selectModel("gemini-3.1-pro");
     return;
   }
   selectModel(modelId);
@@ -763,7 +942,12 @@ async function startEvaluation() {
       : [state.activeScenarioId];
 
   const scenarioId = scenarioIds[0];
-  const modelAlias = state.selectedModelId || "gemini-4-argon";
+  const modelAlias = state.selectedModelId || "gemini-3.1-pro";
+  const agentHarness = state.selectedHarnessId || "agy";
+  const harborToggle = document.getElementById("harbor-sandbox-toggle");
+  const useHarbor = harborToggle ? Boolean(harborToggle.checked) : true;
+  const harborEnvSelect = document.getElementById("harbor-env-select");
+  const environmentType = harborEnvSelect ? harborEnvSelect.value : "podman";
   const mode = document.querySelector('input[name="exec-mode"]:checked').value;
   const nameInput = document.getElementById("custom-suite-name-input");
   const suiteName = nameInput ? nameInput.value.trim() : "Custom Frontier Evaluation Suite";
@@ -776,8 +960,8 @@ async function startEvaluation() {
   // Reset UI
   state.isEvaluating = true;
   document.getElementById("run-eval-btn").disabled = true;
-  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
-  document.getElementById("timer-status-badge").textContent = "Running";
+  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing via ${agentHarness.toUpperCase()} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
+  document.getElementById("timer-status-badge").textContent = `Running (${agentHarness})`;
   document.getElementById("timer-status-badge").className = "badge badge-recommended";
 
   // Hide export and previous results
@@ -800,6 +984,10 @@ async function startEvaluation() {
         scenario_ids: scenarioIds,
         suite_name: suiteName,
         model_alias: modelAlias,
+        agent_type: agentHarness,
+        harness: agentHarness,
+        harbor: useHarbor,
+        environment_type: environmentType,
         mode: mode,
         async: true,
       }),
@@ -901,10 +1089,11 @@ function displayEvaluationResults(data) {
   const titleEl = document.getElementById("eval-result-title");
   if (titleEl) {
     const testCount = (data.test_results && data.test_results.length) || 1;
+    const harnessLabel = data.agent_harness || data.harness || state.selectedHarnessId || "agy";
     titleEl.textContent =
       testCount > 1
-        ? `Assessment Results — ${data.model_alias} (${testCount} Suite Tests)`
-        : `Assessment Results — ${data.model_alias}`;
+        ? `Assessment Results — ${data.model_alias} • Harness: ${harnessLabel} (${testCount} Suite Tests)`
+        : `Assessment Results — ${data.model_alias} • Harness: ${harnessLabel}`;
   }
 
   // Render Multi-Test Suite Breakdown if available

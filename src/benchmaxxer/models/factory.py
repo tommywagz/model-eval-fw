@@ -24,13 +24,13 @@ PROVIDER_MAP: Dict[str, Type[BaseModelClient]] = {
 }
 
 DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
-    "gemini-4-argon": {
+    "gemini-3.1-pro": {
         "provider": "vertex_genai",
-        "model_name": "gemini-4-argon-001",
+        "model_name": "gemini-3.1-pro-001",
         "project_id": "benchmaxxer-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00200,
-        "cost_per_1k_output_usd": 0.00800,
+        "cost_per_1k_input_usd": 0.00150,
+        "cost_per_1k_output_usd": 0.00600,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 16384, "seed": 42},
     },
     "gemini-3.8-flash": {
@@ -41,6 +41,43 @@ DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "cost_per_1k_input_usd": 0.00015,
         "cost_per_1k_output_usd": 0.00060,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
+    "claude-opus-5.1": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-opus-5-1@20260601",
+        "project_id": "benchmaxxer-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00500,
+        "cost_per_1k_output_usd": 0.02500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
+    },
+    "claude-sonnet-5.5": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-sonnet-5-5@20260514",
+        "project_id": "benchmaxxer-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00300,
+        "cost_per_1k_output_usd": 0.01500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
+    },
+    "mistral-large-latest": {
+        "provider": "vertex_endpoint",
+        "model_name": "mistralai/mistral-large-3-latest",
+        "endpoint_resource_name": "projects/benchmaxxer-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep",
+        "project_id": "benchmaxxer-eval-sandbox",
+        "location": "europe-west4",
+        "cost_per_1k_input_usd": 0.00200,
+        "cost_per_1k_output_usd": 0.00600,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
+    "gemini-4-argon": {
+        "provider": "vertex_genai",
+        "model_name": "gemini-4-argon-001",
+        "project_id": "benchmaxxer-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00200,
+        "cost_per_1k_output_usd": 0.00800,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 16384, "seed": 42},
     },
     "fable-5.1": {
         "provider": "vertex_endpoint",
