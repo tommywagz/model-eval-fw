@@ -6,16 +6,22 @@ project_root="$(cd -- "$script_dir/../.." && pwd)"
 if [[ -z "${TOKEN_OVERLAY_ENV:-}" && -f "$project_root/.env" ]]; then
   export TOKEN_OVERLAY_ENV="$project_root/.env"
 fi
+PYTHON_BIN="python3"
+if [[ -x "$project_root/.venv/bin/python3" ]]; then
+  PYTHON_BIN="$project_root/.venv/bin/python3"
+elif [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python3" ]]; then
+  PYTHON_BIN="$VIRTUAL_ENV/bin/python3"
+fi
 case "${1:-}" in
   --foreground)
     shift
-    exec python3 "$script_dir/token_overlay.py" "$@"
+    exec "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@"
     ;;
   --check|--benchmaxxer|--refresh|--quit|--help|-h)
-    exec python3 "$script_dir/token_overlay.py" "$@"
+    exec "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@"
     ;;
   ""|--show) ;;
-  *) exec python3 "$script_dir/token_overlay.py" "$@" ;;
+  *) exec "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@" ;;
 esac
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/token-overlay-$(id -u)"
 if [[ -L "$runtime_dir" ]]; then
@@ -34,5 +40,5 @@ if [[ -L "$log_file" ]]; then
   exit 1
 fi
 umask 077
-nohup python3 "$script_dir/token_overlay.py" "$@" >>"$log_file" 2>&1 </dev/null &
+nohup "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@" >>"$log_file" 2>&1 </dev/null &
 echo "Overlay launch requested. Log: $log_file"

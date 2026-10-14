@@ -141,9 +141,9 @@ def get_access_token(force_refresh: bool = False) -> Tuple[str, str]:
         token: Optional[str] = None
         source = ""
 
-        env_token = os.environ.get("BENCHMAXXER_GCP_ACCESS_TOKEN")
-        if env_token:
-            token, source = env_token.strip(), "env:BENCHMAXXER_GCP_ACCESS_TOKEN"
+        env_token = os.environ.get("BENCHMAXXER_GCP_ACCESS_TOKEN") or os.environ.get("GOOGLE_ACCESS_TOKEN")
+        if env_token and env_token.strip():
+            token, source = env_token.strip(), "env:GCP_ACCESS_TOKEN"
 
         if not token:
             try:

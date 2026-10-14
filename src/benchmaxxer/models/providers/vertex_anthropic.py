@@ -39,6 +39,8 @@ class VertexAnthropicClient(BaseModelClient):
         params: Dict[str, Any],
     ) -> ModelResponse:
         start = time.perf_counter()
+        use_vertex = self.resolve_use_vertex()
+
         if self.sdk_client is not None:
             raw = self.sdk_client.messages_create(
                 model=self.model_name,
@@ -51,16 +53,31 @@ class VertexAnthropicClient(BaseModelClient):
             latency = (time.perf_counter() - start) * 1000.0
             return ModelResponse(
                 text=text,
-                raw_response={"sdk": "injected_anthropic_vertex", "model": self.model_name},
+                raw_response={
+                    "sdk": "injected_anthropic_vertex" if use_vertex else "injected_anthropic_api",
+                    "mode": "vertex" if use_vertex else "api_key",
+                    "model": self.model_name,
+                },
                 input_tokens=len(prompt.split()),
                 output_tokens=len(text.split()),
                 latency_ms=round(latency, 3),
                 finish_reason="STOP",
             )
 
-        from anthropic import AnthropicVertex  # type: ignore
+        import os
 
-        client = AnthropicVertex(project_id=self.project_id, region=self.location)
+        if use_vertex:
+            from anthropic import AnthropicVertex  # type: ignore
+
+            # Claude on Vertex AI uses regional endpoints (e.g. us-east5, europe-west1). If location is global, default to us-east5.
+            region = self.location if (self.location and self.location != "global") else "us-east5"
+            client = AnthropicVertex(project_id=self.project_id, region=region)
+        else:
+            from anthropic import Anthropic  # type: ignore
+
+            api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
+            client = Anthropic(api_key=api_key)
+
         create_kwargs: Dict[str, Any] = {
             "model": self.model_name,
             "max_tokens": int(params.get("max_output_tokens", 4096)),
@@ -78,7 +95,13 @@ class VertexAnthropicClient(BaseModelClient):
         out_tok = int(getattr(usage, "output_tokens", len(text.split())))
         return ModelResponse(
             text=text,
-            raw_response={"sdk": "anthropic-vertex", "model": self.model_name},
+            raw_response={
+                "sdk": "anthropic-vertex" if use_vertex else "anthropic-api",
+                "mode": "vertex" if use_vertex else "api_key",
+                "model": self.model_name,
+                "project_id": self.project_id if use_vertex else None,
+                "location": region if use_vertex else None,
+            },
             input_tokens=in_tok,
             output_tokens=out_tok,
             latency_ms=round(latency, 3),

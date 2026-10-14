@@ -39,6 +39,8 @@ class VertexGenAIClient(BaseModelClient):
         params: Dict[str, Any],
     ) -> ModelResponse:
         start = time.perf_counter()
+        use_vertex = self.resolve_use_vertex()
+
         if self.sdk_client is not None:
             raw = self.sdk_client.generate_content(
                 model=self.model_name,
@@ -53,18 +55,29 @@ class VertexGenAIClient(BaseModelClient):
             latency = (time.perf_counter() - start) * 1000.0
             return ModelResponse(
                 text=text,
-                raw_response={"sdk": "injected_vertex_genai", "model": self.model_name},
+                raw_response={
+                    "sdk": "injected_vertex_genai",
+                    "mode": "vertex" if use_vertex else "api_key",
+                    "model": self.model_name,
+                },
                 input_tokens=in_tok,
                 output_tokens=out_tok,
                 latency_ms=round(latency, 3),
                 finish_reason="STOP",
             )
 
+        import os
+
         try:
             from google import genai  # type: ignore
             from google.genai import types  # type: ignore
 
-            client = genai.Client(vertexai=True, project=self.project_id, location=self.location)
+            if use_vertex:
+                client = genai.Client(vertexai=True, project=self.project_id, location=self.location)
+            else:
+                api_key = self.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+                client = genai.Client(api_key=api_key)
+
             cfg = types.GenerateContentConfig(
                 temperature=float(params.get("temperature", 0.0)),
                 max_output_tokens=int(params.get("max_output_tokens", 4096)),
@@ -82,28 +95,49 @@ class VertexGenAIClient(BaseModelClient):
             out_tok = int(getattr(usage, "candidates_token_count", len((resp.text or "").split())))
             return ModelResponse(
                 text=resp.text or "",
-                raw_response={"sdk": "google-genai", "model": self.model_name},
+                raw_response={
+                    "sdk": "google-genai",
+                    "mode": "vertex" if use_vertex else "api_key",
+                    "model": self.model_name,
+                    "project_id": self.project_id if use_vertex else None,
+                    "location": self.location if use_vertex else None,
+                },
                 input_tokens=in_tok,
                 output_tokens=out_tok,
                 latency_ms=round(latency, 3),
                 finish_reason="STOP",
             )
         except ImportError:
-            import vertexai  # type: ignore
-            from vertexai.generative_models import GenerationConfig, GenerativeModel  # type: ignore
+            if use_vertex:
+                import vertexai  # type: ignore
+                from vertexai.generative_models import GenerationConfig, GenerativeModel  # type: ignore
 
-            vertexai.init(project=self.project_id, location=self.location)
-            model = GenerativeModel(self.model_name, system_instruction=system_instruction)
+                vertexai.init(project=self.project_id, location=self.location)
+                model = GenerativeModel(self.model_name, system_instruction=system_instruction)
+            else:
+                import google.generativeai as gai  # type: ignore
+
+                api_key = self.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+                gai.configure(api_key=api_key)
+                model = gai.GenerativeModel(self.model_name, system_instruction=system_instruction)
+
             gen_cfg = GenerationConfig(
                 temperature=float(params.get("temperature", 0.0)),
                 max_output_tokens=int(params.get("max_output_tokens", 4096)),
-            )
+            ) if use_vertex else {
+                "temperature": float(params.get("temperature", 0.0)),
+                "max_output_tokens": int(params.get("max_output_tokens", 4096)),
+            }
             resp = model.generate_content(prompt, generation_config=gen_cfg)
             latency = (time.perf_counter() - start) * 1000.0
             text = resp.text or ""
             return ModelResponse(
                 text=text,
-                raw_response={"sdk": "vertexai", "model": self.model_name},
+                raw_response={
+                    "sdk": "vertexai" if use_vertex else "google-generativeai",
+                    "mode": "vertex" if use_vertex else "api_key",
+                    "model": self.model_name,
+                },
                 input_tokens=len(prompt.split()),
                 output_tokens=len(text.split()),
                 latency_ms=round(latency, 3),

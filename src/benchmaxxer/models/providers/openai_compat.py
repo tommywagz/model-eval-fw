@@ -60,6 +60,17 @@ class OpenAICompatibleClient(BaseModelClient):
         params: Dict[str, Any],
     ) -> ModelResponse:
         start = time.perf_counter()
+        use_vertex = self.resolve_use_vertex()
+
+        if use_vertex:
+            from benchmaxxer.gcp.model_garden import get_access_token, vertex_host
+
+            token, _ = get_access_token()
+            self.api_key = token
+            loc = self.location if self.location else "us-central1"
+            proj = self.project_id if self.project_id else "benchmaxxer-eval-sandbox"
+            self.base_url = f"{vertex_host(loc)}/v1/projects/{proj}/locations/{loc}/endpoints/openapi"
+
         messages: List[Dict[str, str]] = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
@@ -77,7 +88,11 @@ class OpenAICompatibleClient(BaseModelClient):
             latency = (time.perf_counter() - start) * 1000.0
             return ModelResponse(
                 text=text,
-                raw_response={"sdk": "injected_openai_compat", "base_url": self.base_url},
+                raw_response={
+                    "sdk": "injected_openai_compat",
+                    "mode": "vertex_maas" if use_vertex else "api_key",
+                    "base_url": self.base_url,
+                },
                 input_tokens=len(prompt.split()),
                 output_tokens=len(text.split()),
                 latency_ms=round(latency, 3),

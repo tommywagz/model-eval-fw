@@ -139,6 +139,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Optional path to project .env file",
     )
     run_parser.add_argument(
+        "--cache-dir",
+        type=str,
+        default=None,
+        help="Optional custom cache directory",
+    )
+    run_parser.add_argument(
+        "--telemetry-dir",
+        type=str,
+        default=None,
+        help="Optional custom telemetry directory",
+    )
+    run_parser.add_argument(
         "--harbor",
         action="store_true",
         help="Package and execute scenarios as Harbor Jobs and individual tests as Harbor Tasks on Podman sandboxes",
@@ -190,6 +202,43 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="no_critics",
         action="store_true",
         help="Bypass LLM critic models entirely and rely strictly on deterministic Jev evaluation",
+    )
+    run_parser.add_argument(
+        "--project",
+        "--project-id",
+        dest="project_id",
+        type=str,
+        default=None,
+        help="Google Cloud project ID for Vertex AI evaluation",
+    )
+    run_parser.add_argument(
+        "--location",
+        "--endpoint-location",
+        dest="location",
+        type=str,
+        default=None,
+        help="Vertex AI endpoint location/region (e.g. us-central1, global, us-east5)",
+    )
+    run_parser.add_argument(
+        "--use-vertex",
+        dest="use_vertex",
+        action="store_true",
+        default=None,
+        help="Force model routing via Google Cloud Vertex AI",
+    )
+    run_parser.add_argument(
+        "--use-api-key",
+        dest="use_api_key",
+        action="store_true",
+        default=None,
+        help="Force model routing via direct provider API key",
+    )
+    run_parser.add_argument(
+        "--auth-mode",
+        type=str,
+        choices=["auto", "vertex", "api_key"],
+        default=None,
+        help="Authentication routing mode: 'vertex' (GCP), 'api_key', or 'auto'",
     )
 
     # `benchmaxxer harbor` subcommand
@@ -520,6 +569,42 @@ def main(argv: Optional[List[str]] = None) -> int:
         return int(job_res["exit_code"])
 
     if args.subcommand == "run":
+        import os
+        project_id = getattr(args, "project_id", None)
+        location = getattr(args, "location", None)
+        if project_id:
+            os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
+            os.environ["VERTEX_PROJECT_ID"] = project_id
+        if location:
+            os.environ["VERTEX_LOCATION"] = location
+            os.environ["GOOGLE_CLOUD_LOCATION"] = location
+
+        use_vertex: Optional[bool] = None
+        if getattr(args, "use_vertex", False):
+            use_vertex = True
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+        elif getattr(args, "use_api_key", False):
+            use_vertex = False
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
+        elif getattr(args, "auth_mode", None):
+            auth_mode = args.auth_mode
+            if auth_mode == "vertex":
+                use_vertex = True
+                os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+                os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+                os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+            elif auth_mode == "api_key":
+                use_vertex = False
+                os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
+                os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+                os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
+
+        auth_mode_val = getattr(args, "auth_mode", None)
+
         if getattr(args, "harbor", False):
             from benchmaxxer.harbor import (
                 run_harbor_framework_jobs,
@@ -576,6 +661,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             Console().print_json(data=sc_harbor)
             return int(sc_harbor["exit_code"])
 
+        cache_dir = getattr(args, "cache_dir", None)
+        telemetry_dir = getattr(args, "telemetry_dir", None)
+
         if args.run_framework:
             fw_res = execute_framework_run(
                 model_alias=args.model,
@@ -583,9 +671,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_cache=args.no_cache,
                 replay=args.replay,
                 fixtures_path=args.fixtures,
+                cache_dir=cache_dir,
+                telemetry_dir=telemetry_dir,
                 dotenv_path=args.dotenv,
                 critic_model=getattr(args, "critic_model", None),
                 no_critics=getattr(args, "no_critics", False),
+                project_id=project_id,
+                location=location,
+                use_vertex=use_vertex,
+                auth_mode=auth_mode_val,
             )
             Console().print_json(data=fw_res)
             return int(fw_res["exit_code"])
@@ -598,9 +692,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_cache=args.no_cache,
                 replay=args.replay,
                 fixtures_path=args.fixtures,
+                cache_dir=cache_dir,
+                telemetry_dir=telemetry_dir,
                 dotenv_path=args.dotenv,
                 critic_model=getattr(args, "critic_model", None),
                 no_critics=getattr(args, "no_critics", False),
+                project_id=project_id,
+                location=location,
+                use_vertex=use_vertex,
+                auth_mode=auth_mode_val,
             )
             Console().print_json(data=suite_res)
             return int(suite_res["exit_code"])
@@ -613,9 +713,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             replay=args.replay,
             manual_eval=args.manual_eval,
             fixtures_path=args.fixtures,
+            cache_dir=cache_dir,
+            telemetry_dir=telemetry_dir,
             dotenv_path=args.dotenv,
             critic_model=getattr(args, "critic_model", None),
             no_critics=getattr(args, "no_critics", False),
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode_val,
         )
         Console().print_json(
             data={

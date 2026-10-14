@@ -409,9 +409,12 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     else:
                         m["brand"] = "vertex"
 
+            env_proj = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("VERTEX_PROJECT_ID")
+            env_loc = os.environ.get("VERTEX_LOCATION") or os.environ.get("GOOGLE_CLOUD_LOCATION")
+
             GCP_RUNTIME_STATE = {
-                "project_id": gcp_cfg.get("project_id", "benchmaxxer-eval-sandbox"),
-                "location": gcp_cfg.get("location", "us-central1"),
+                "project_id": env_proj or gcp_cfg.get("project_id", "benchmaxxer-eval-sandbox"),
+                "location": env_loc or gcp_cfg.get("location", "us-central1"),
                 "linked": bool(gcp_cfg.get("linked", True)),
                 "available_locations": gcp_cfg.get(
                     "available_locations",
@@ -425,6 +428,8 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     "errors": [],
                 },
             }
+            if env_loc and env_loc not in GCP_RUNTIME_STATE["available_locations"]:
+                GCP_RUNTIME_STATE["available_locations"].append(env_loc)
 
             persisted = _load_persisted_link()
             if persisted:
@@ -439,6 +444,8 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                 )
                 os.environ["GOOGLE_CLOUD_PROJECT"] = persisted["project_id"]
                 os.environ["VERTEX_PROJECT_ID"] = persisted["project_id"]
+                os.environ["GOOGLE_CLOUD_LOCATION"] = GCP_RUNTIME_STATE["location"]
+                os.environ["VERTEX_LOCATION"] = GCP_RUNTIME_STATE["location"]
                 _register_models_with_factory(persisted["models"])
         return GCP_RUNTIME_STATE
 
@@ -563,6 +570,7 @@ def link_gcp_project(
         os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
         os.environ["VERTEX_PROJECT_ID"] = project_id
         os.environ["VERTEX_LOCATION"] = location
+        os.environ["GOOGLE_CLOUD_LOCATION"] = location
         snapshot_state = copy.deepcopy(state)
     _register_models_with_factory(discovery["models"])
     _persist_link(snapshot_state)
@@ -627,6 +635,7 @@ def update_gcp_config(
             clean_loc = str(location).strip()
             state["location"] = clean_loc
             os.environ["VERTEX_LOCATION"] = clean_loc
+            os.environ["GOOGLE_CLOUD_LOCATION"] = clean_loc
             if clean_loc not in state["available_locations"]:
                 state["available_locations"].append(clean_loc)
 

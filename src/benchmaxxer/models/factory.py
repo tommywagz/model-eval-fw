@@ -296,10 +296,15 @@ def get_model_client(
     replay: bool = False,
     cache_dir: Optional[str | Path] = None,
     dotenv_path: Optional[str | Path] = None,
+    project_id: Optional[str] = None,
+    location: Optional[str] = None,
+    use_vertex: Optional[bool] = None,
+    auth_mode: Optional[str] = None,
     **overrides: Any,
 ) -> BaseModelClient:
     """Factory method returning a configured BaseModelClient instance for the given alias."""
     import os
+    import re
     from benchmaxxer.telemetry.tokens import load_project_dotenv
 
     load_project_dotenv(dotenv_path=dotenv_path)
@@ -311,14 +316,51 @@ def get_model_client(
 
     cfg = dict(registry[alias])
     is_runtime = bool(cfg.pop("_runtime", False))
-    env_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("VERTEX_PROJECT_ID")
-    if env_project and "project_id" not in overrides and not (is_runtime and cfg.get("project_id")):
+
+    env_project = (
+        project_id
+        or overrides.get("project_id")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("VERTEX_PROJECT_ID")
+        or os.environ.get("GCP_PROJECT")
+        or os.environ.get("GCP_PROJECT_ID")
+        or os.environ.get("CLOUDSDK_CORE_PROJECT")
+    )
+    if env_project and "project_id" not in overrides and not (is_runtime and cfg.get("project_id") and not project_id):
         cfg["project_id"] = env_project
-    env_location = os.environ.get("VERTEX_LOCATION")
-    if env_location and "location" not in overrides and "location" not in registry[alias]:
+
+    env_location = (
+        location
+        or overrides.get("location")
+        or os.environ.get("VERTEX_LOCATION")
+        or os.environ.get("GOOGLE_CLOUD_LOCATION")
+        or os.environ.get("GCP_LOCATION")
+        or os.environ.get("CLOUD_ML_REGION")
+    )
+    if env_location and "location" not in overrides and not (is_runtime and cfg.get("location") and not location):
         cfg["location"] = env_location
+
+    if use_vertex is not None:
+        cfg["use_vertex"] = use_vertex
+    elif "use_vertex" in overrides:
+        cfg["use_vertex"] = overrides["use_vertex"]
+
+    if auth_mode is not None:
+        cfg["auth_mode"] = auth_mode
+    elif "auth_mode" in overrides:
+        cfg["auth_mode"] = overrides["auth_mode"]
+
     cfg.update(overrides)
     cfg = {k: v for k, v in cfg.items() if v is not None}
+
+    # Dynamically rewrite endpoint resource name if custom project or location was provided
+    if "endpoint_resource_name" in cfg and cfg.get("project_id"):
+        ep = str(cfg["endpoint_resource_name"])
+        if "benchmaxxer-eval-sandbox" in ep and cfg["project_id"] != "benchmaxxer-eval-sandbox":
+            ep = re.sub(r"projects/[^/]+/", f"projects/{cfg['project_id']}/", ep)
+        if cfg.get("location") and cfg["location"] != "us-central1":
+            ep = re.sub(r"locations/[^/]+/", f"locations/{cfg['location']}/", ep)
+        cfg["endpoint_resource_name"] = ep
 
     provider_key = str(cfg.pop("provider", "vertex_genai"))
     if provider_key not in PROVIDER_MAP:

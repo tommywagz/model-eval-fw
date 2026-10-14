@@ -174,12 +174,80 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Require active container engine (Podman/Docker) without hermetic fallback",
     )
+    parser.add_argument(
+        "--project",
+        "--project-id",
+        dest="project_id",
+        type=str,
+        default=None,
+        help="Google Cloud project ID for Vertex AI evaluation",
+    )
+    parser.add_argument(
+        "--location",
+        "--endpoint-location",
+        dest="location",
+        type=str,
+        default=None,
+        help="Vertex AI endpoint location/region (e.g. us-central1, global, us-east5)",
+    )
+    parser.add_argument(
+        "--use-vertex",
+        dest="use_vertex",
+        action="store_true",
+        default=None,
+        help="Force model routing via Google Cloud Vertex AI",
+    )
+    parser.add_argument(
+        "--use-api-key",
+        dest="use_api_key",
+        action="store_true",
+        default=None,
+        help="Force model routing via direct provider API key",
+    )
+    parser.add_argument(
+        "--auth-mode",
+        type=str,
+        choices=["auto", "vertex", "api_key"],
+        default=None,
+        help="Authentication routing mode: 'vertex' (GCP), 'api_key', or 'auto'",
+    )
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+
+    import os
+    if args.project_id:
+        os.environ["GOOGLE_CLOUD_PROJECT"] = args.project_id
+        os.environ["VERTEX_PROJECT_ID"] = args.project_id
+    if args.location:
+        os.environ["VERTEX_LOCATION"] = args.location
+        os.environ["GOOGLE_CLOUD_LOCATION"] = args.location
+
+    use_vertex: Optional[bool] = None
+    if args.use_vertex:
+        use_vertex = True
+        os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+        os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+    elif args.use_api_key:
+        use_vertex = False
+        os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+        os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
+    elif args.auth_mode:
+        if args.auth_mode == "vertex":
+            use_vertex = True
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+        elif args.auth_mode == "api_key":
+            use_vertex = False
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
 
     if args.harbor_package_only:
         from benchmaxxer.harbor import (
@@ -336,6 +404,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             tokens_script_path=args.tokens_script,
             critic_model=args.critic_model,
             no_critics=args.no_critics,
+            project_id=args.project_id,
+            location=args.location,
+            use_vertex=use_vertex,
+            auth_mode=args.auth_mode,
         )
         print(json.dumps(fw_result, indent=2))
         return int(fw_result["exit_code"])
@@ -354,6 +426,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             tokens_script_path=args.tokens_script,
             critic_model=args.critic_model,
             no_critics=args.no_critics,
+            project_id=args.project_id,
+            location=args.location,
+            use_vertex=use_vertex,
+            auth_mode=args.auth_mode,
         )
         print(json.dumps(suite_result, indent=2))
         return int(suite_result["exit_code"])
@@ -372,6 +448,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         tokens_script_path=args.tokens_script,
         critic_model=args.critic_model,
         no_critics=args.no_critics,
+        project_id=args.project_id,
+        location=args.location,
+        use_vertex=use_vertex,
+        auth_mode=args.auth_mode,
     )
 
     summary = {

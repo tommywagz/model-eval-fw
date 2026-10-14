@@ -31,10 +31,16 @@ class VertexEndpointClient(BaseModelClient):
             location=location,
             **kwargs,
         )
-        self.endpoint_resource_name = (
-            endpoint_resource_name
-            or f"projects/{project_id}/locations/{location}/endpoints/{alias}-ep"
-        )
+        if endpoint_resource_name:
+            import re
+            ep = str(endpoint_resource_name)
+            if project_id and "benchmaxxer-eval-sandbox" in ep and project_id != "benchmaxxer-eval-sandbox":
+                ep = re.sub(r"projects/[^/]+/", f"projects/{project_id}/", ep)
+            if location and location != "us-central1":
+                ep = re.sub(r"locations/[^/]+/", f"locations/{location}/", ep)
+            self.endpoint_resource_name = ep
+        else:
+            self.endpoint_resource_name = f"projects/{project_id}/locations/{location}/endpoints/{alias}-ep"
         self.sdk_client = sdk_client
 
     def _invoke_live(

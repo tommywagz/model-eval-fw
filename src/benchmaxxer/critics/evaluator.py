@@ -177,6 +177,10 @@ class CriticEvaluator:
         critic_cache: Optional[CriticCache] = None,
         model_client: Optional[BaseModelClient] = None,
         configs_dir: Optional[str | Path] = None,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        use_vertex: Optional[bool] = None,
+        auth_mode: Optional[str] = None,
     ) -> None:
         self.critic_name = critic_name
         self.critic_alias = critic_alias
@@ -196,6 +200,10 @@ class CriticEvaluator:
             mode=mode,
             no_cache=no_cache,
             replay=replay,
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode,
         )
         self.last_call_params: Dict[str, Any] = {}
 

@@ -49,14 +49,44 @@ Configure active GCP credentials, local dependencies, and optional Harbor/Podman
 git clone https://github.com/tommywagz/model-eval-fw.git
 cd model-eval-fw
 pip install -e ".[dev]"
+source .venv/bin/activate
 
 # Configure environment secrets
 cp .env.example .env
-# Edit .env with your GCP Project ID, credentials, and API keys
+# Edit .env: populate ONLY GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION to run everything via Vertex (GCP),
+# or optionally configure direct provider API keys (GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.).
 
 # Verify Harbor CLI, Harbor MCP (https://docs.harborframework.com/mcp), and Podman engine readiness
 benchmaxxer harbor status
 ```
+
+### 1.1 Running with ONLY a GCP Project & Endpoint Location vs. Direct API Keys
+
+BenchMaxxer gives you full flexibility over authentication and model routing:
+
+1. **Vertex AI (GCP) Only Mode (Zero Third-Party API Keys)**:
+   You can run the **entire evaluation pipeline** with **ONLY** a Google Cloud Project ID and Vertex endpoint location (using Application Default Credentials or GCP access token). No third-party API keys are required:
+   - **Candidate Models**: First-party Gemini models route through `vertex_genai`. Anthropic Claude models route through `vertex_anthropic`. Partner models (Mistral, Llama, DeepSeek, Qwen) route through `vertex_maas` or Vertex Endpoints.
+   - **Critic Panel**: Evaluates candidate models against frontier models on Vertex (`claude-3-5-sonnet` or `gemini-1.5-pro`) without dedicated provisioned throughput GPU endpoints.
+   - **Harbor Sandboxes**: Container environments receive Google ADC and Vertex environment variables (`GOOGLE_GENAI_USE_VERTEXAI=true`, `CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_VERTEX_PROJECT_ID`).
+
+   Configure via `.env`:
+   ```bash
+   GOOGLE_CLOUD_PROJECT=my-gcp-project-id
+   GOOGLE_CLOUD_LOCATION=us-central1   # or global, us-east5, europe-west4, etc.
+   ```
+   Or pass CLI flags:
+   ```bash
+   benchmaxxer run --project my-gcp-project-id --location us-central1 --use-vertex
+   python3 test_runner.py --project my-gcp-project-id --location us-central1 --use-vertex
+   ```
+
+2. **Configurable Routing: Vertex (GCP) vs. Direct API Key**:
+   You can choose on a global, CLI, or per-model level whether to route queries through Vertex AI (GCP) or through direct provider API keys:
+   - **CLI Flags**: `--use-vertex` (force Vertex GCP) or `--use-api-key` (force direct API key), or `--auth-mode vertex|api_key`.
+   - **Environment Flags**: `BENCHMAXXER_USE_VERTEX=1|0`, `GOOGLE_GENAI_USE_VERTEXAI=true|false`, `CLAUDE_CODE_USE_VERTEX=1|0`.
+   - **Programmatic / Overrides**: `get_model_client(alias, use_vertex=True|False, auth_mode="vertex"|"api_key")`.
+
 
 ### 2. Generate Evaluation Datasets & Orchestrator Backlog
 Run the collaborative generation pipeline and initialize the 13 scenario manifests from [`SCENARIOS.MD`](file:///Users/wagnerthomas/Documents/model-eval-fw/SCENARIOS.MD):

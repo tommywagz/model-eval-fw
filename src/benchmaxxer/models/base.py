@@ -89,6 +89,96 @@ class BaseModelClient(ABC):
         self.call_count = 0
         self.last_generation_params: Dict[str, Any] = {}
 
+        # Configurable routing: Vertex (GCP) vs. direct API Key
+        raw_use_vertex = extra_config.get("use_vertex")
+        if raw_use_vertex is not None:
+            if isinstance(raw_use_vertex, str):
+                self.use_vertex: Optional[bool] = raw_use_vertex.lower() in ("true", "1", "yes")
+            else:
+                self.use_vertex = bool(raw_use_vertex)
+        else:
+            self.use_vertex = None
+
+        self.auth_mode: Optional[str] = extra_config.get("auth_mode")
+        self.api_key: Optional[str] = extra_config.get("api_key")
+
+    def resolve_use_vertex(self) -> bool:
+        """Resolve whether to route generation requests through Google Cloud Vertex AI or direct API key.
+
+        Hierarchy:
+        1. Explicit `use_vertex` parameter / override (True or False)
+        2. Explicit `auth_mode` ("vertex" -> True, "api_key" -> False)
+        3. Environment variable flags (`BENCHMAXXER_USE_VERTEX`, `GOOGLE_GENAI_USE_VERTEXAI`, `CLAUDE_CODE_USE_VERTEX`)
+        4. Auto-detection: If only GCP project is configured (no provider API key), default to True (Vertex).
+           If provider API key is configured and no GCP project, default to False (API key).
+        """
+        import os
+
+        if self.use_vertex is not None:
+            return bool(self.use_vertex)
+
+        if self.auth_mode:
+            mode_lower = self.auth_mode.lower().strip()
+            if mode_lower in ("vertex", "gcp", "vertexai"):
+                return True
+            if mode_lower in ("api_key", "apikey", "direct"):
+                return False
+
+        # Check global Vertex preference environment variables
+        bm_vertex_env = os.environ.get("BENCHMAXXER_USE_VERTEX")
+        if bm_vertex_env is not None:
+            return bm_vertex_env.strip().lower() in ("1", "true", "yes")
+
+        bm_auth_mode = os.environ.get("BENCHMAXXER_AUTH_MODE")
+        if bm_auth_mode:
+            if bm_auth_mode.strip().lower() in ("vertex", "gcp", "vertexai"):
+                return True
+            if bm_auth_mode.strip().lower() in ("api_key", "apikey", "direct"):
+                return False
+
+        # Provider-specific Vertex environment flags
+        if "genai" in self.provider or "gemini" in self.alias:
+            genai_flag = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI") or os.environ.get("GEMINI_USE_VERTEX")
+            if genai_flag is not None:
+                return genai_flag.strip().lower() in ("1", "true", "yes")
+
+        if "anthropic" in self.provider or "claude" in self.alias:
+            claude_flag = os.environ.get("CLAUDE_CODE_USE_VERTEX") or os.environ.get("ANTHROPIC_USE_VERTEX")
+            if claude_flag is not None:
+                return claude_flag.strip().lower() in ("1", "true", "yes")
+
+        # Auto-detection based on available credentials
+        has_gcp_project = bool(
+            (self.project_id and self.project_id != "benchmaxxer-eval-sandbox")
+            or os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("VERTEX_PROJECT_ID")
+        )
+        has_api_key = bool(
+            self.api_key
+            and self.api_key not in ("mock-api-key", "adc-token-resolved-at-call-time")
+        )
+        if not has_api_key:
+            if "genai" in self.provider or "gemini" in self.alias:
+                has_api_key = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+            elif "anthropic" in self.provider or "claude" in self.alias:
+                has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+            elif "openai" in self.provider:
+                has_api_key = bool(
+                    os.environ.get("OPENAI_API_KEY")
+                    or os.environ.get("MINIMAX_API_KEY")
+                    or os.environ.get("KIMI_API_KEY")
+                    or os.environ.get("QWEN_API_KEY")
+                    or os.environ.get("DASHSCOPE_API_KEY")
+                )
+
+        if has_gcp_project and not has_api_key:
+            return True
+        if has_api_key and not has_gcp_project:
+            return False
+
+        # Default to True (Vertex) for Vertex providers when GCP project is set, otherwise False
+        return self.provider.startswith("vertex")
+
     def _merge_params(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         merged = dict(self.generation_defaults)
         for k, v in kwargs.items():

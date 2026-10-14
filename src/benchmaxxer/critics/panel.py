@@ -89,6 +89,10 @@ class BaseCritic:
         model_client: Optional[BaseModelClient] = None,
         configs_dir: Optional[str | Path] = None,
         critic_alias: Optional[str] = None,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        use_vertex: Optional[bool] = None,
+        auth_mode: Optional[str] = None,
     ) -> None:
         active_alias = critic_alias or getattr(self, "critic_alias", "claude-3-5-sonnet")
         self.critic_alias = active_alias
@@ -102,6 +106,10 @@ class BaseCritic:
             critic_cache=critic_cache,
             model_client=model_client,
             configs_dir=configs_dir,
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode,
         )
 
     @property
@@ -175,6 +183,10 @@ class ActorCriticPanel:
         qwen_critic: Optional[ArchitecturalCritic] = None,
         minimax_critic: Optional[TestHarnessCritic] = None,
         kimi_k_critic: Optional[PlatformComplianceCritic] = None,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        use_vertex: Optional[bool] = None,
+        auth_mode: Optional[str] = None,
     ) -> None:
         self.mode = mode
         self.template_version = template_version
@@ -182,6 +194,10 @@ class ActorCriticPanel:
         self.replay = replay
         self.critic_cache = critic_cache or CriticCache(no_cache=no_cache, replay=replay)
         self.candidate_model = candidate_model
+        self.project_id = project_id
+        self.location = location
+        self.use_vertex = use_vertex
+        self.auth_mode = auth_mode
 
         # Dynamically resolve a frontier model different from the candidate model under test
         self.critic_alias = resolve_frontier_critic_model(
@@ -200,6 +216,10 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode,
         )
         self.minimax = minimax_critic or TestHarnessCritic(
             mode=mode,
@@ -209,6 +229,10 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode,
         )
         self.kimi_k = kimi_k_critic or PlatformComplianceCritic(
             mode=mode,
@@ -218,6 +242,10 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
+            project_id=project_id,
+            location=location,
+            use_vertex=use_vertex,
+            auth_mode=auth_mode,
         )
 
     @property
