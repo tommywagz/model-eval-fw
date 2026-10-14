@@ -318,6 +318,61 @@ def load_frontend_config() -> Dict[str, Any]:
     }
 
 
+def _state_dir() -> Path:
+    """Directory where the linked-project state is persisted (override with BENCHMAXXER_STATE_DIR)."""
+    override = os.environ.get("BENCHMAXXER_STATE_DIR")
+    return Path(override) if override else Path(__file__).resolve().parents[4] / ".benchmaxxer"
+
+
+def _link_state_path() -> Path:
+    return _state_dir() / "gcp_link.json"
+
+
+def _load_persisted_link() -> Optional[Dict[str, Any]]:
+    path = _link_state_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("project_id") and isinstance(data.get("models"), list):
+            return data
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _persist_link(state: Dict[str, Any]) -> None:
+    try:
+        path = _link_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "project_id": state["project_id"],
+                    "location": state["location"],
+                    "models": state["models"],
+                    "link_status": state.get("link_status", {}),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _register_models_with_factory(models: List[Dict[str, Any]]) -> None:
+    """Make discovered MIQs resolvable by `get_model_client` (scenario runner, Harbor agent, critics)."""
+    from benchmaxxer.gcp.model_garden import registry_entry_for
+    from benchmaxxer.models.factory import register_runtime_models
+
+    register_runtime_models(
+        {m["id"]: registry_entry_for(m) for m in models if m.get("discovered")},
+        replace=True,
+    )
+
+
 def _ensure_gcp_runtime_state() -> Dict[str, Any]:
     """Initialize or return the active in-memory GCP Project & MIQ Model Garden state."""
     global GCP_RUNTIME_STATE
@@ -339,6 +394,8 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     m["is_default"] = m.get("id") in default_ids
                 if "enabled" not in m:
                     m["enabled"] = True
+                m.setdefault("source", "offline_catalog")
+                m.setdefault("enablement", "catalog")
                 if "brand" not in m:
                     mid = m.get("id", "").lower()
                     if "gemini" in mid:
@@ -361,7 +418,28 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     ["us-central1", "us-east5", "us-west1", "europe-west4", "asia-northeast1", "global"],
                 ),
                 "models": models,
+                "link_status": {
+                    "verified": False,
+                    "source": "offline_catalog",
+                    "message": "Offline demo catalog — link a GCP project to discover the models enabled in it.",
+                    "errors": [],
+                },
             }
+
+            persisted = _load_persisted_link()
+            if persisted:
+                GCP_RUNTIME_STATE.update(
+                    {
+                        "project_id": persisted["project_id"],
+                        "location": persisted.get("location", GCP_RUNTIME_STATE["location"]),
+                        "models": persisted["models"],
+                        "link_status": persisted.get("link_status", {}),
+                        "linked": True,
+                    }
+                )
+                os.environ["GOOGLE_CLOUD_PROJECT"] = persisted["project_id"]
+                os.environ["VERTEX_PROJECT_ID"] = persisted["project_id"]
+                _register_models_with_factory(persisted["models"])
         return GCP_RUNTIME_STATE
 
 
@@ -374,13 +452,14 @@ def get_gcp_config_Snapshot() -> Dict[str, Any]:
         linked = state["linked"]
         available_locations = list(state["available_locations"])
         all_models = copy.deepcopy(state["models"])
+        link_status = copy.deepcopy(state.get("link_status", {}))
 
     for m in all_models:
         m["project_id"] = project_id
         if not m.get("location"):
             m["location"] = location
 
-    default_models = [m for m in all_models if m.get("is_default")]
+    default_models = [m for m in all_models if m.get("is_default") and m.get("enabled")]
     enabled_models = [m for m in all_models if m.get("enabled")]
     dropdown_models = [m for m in all_models if m.get("enabled") and not m.get("is_default")]
 
@@ -388,12 +467,136 @@ def get_gcp_config_Snapshot() -> Dict[str, Any]:
         "project_id": project_id,
         "location": location,
         "linked": linked,
+        "link_status": link_status,
         "available_locations": available_locations,
         "models": all_models,
         "default_models": default_models,
         "enabled_models": enabled_models,
         "dropdown_models": dropdown_models,
     }
+
+
+def link_gcp_project(
+    project_id: str,
+    location: str,
+    verify_partner_access: bool = False,
+) -> Dict[str, Any]:
+    """Link a user-chosen GCP project: verify access + Vertex AI, then discover its usable MIQs."""
+    from benchmaxxer.gcp.model_garden import (
+        GcpAuthError,
+        discover_model_garden,
+        get_access_token,
+        verify_gcp_project,
+    )
+
+    state = _ensure_gcp_runtime_state()
+    catalog_prices = {
+        str(m["id"]).lower(): (float(m.get("cost_per_1k_input_usd", 0.001)), float(m.get("cost_per_1k_output_usd", 0.002)))
+        for m in _default_model_garden()
+    }
+    link_status: Dict[str, Any] = {
+        "verified": False,
+        "source": state.get("link_status", {}).get("source", "offline_catalog"),
+        "errors": [],
+        "attempted_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    try:
+        token, cred_source = get_access_token()
+    except GcpAuthError as exc:
+        link_status["errors"].append(str(exc))
+        link_status["message"] = "Could not authenticate to Google Cloud."
+        with GCP_STATE_LOCK:
+            state["link_status"] = {**state.get("link_status", {}), **link_status, "verified": False}
+        return {"ok": False, **link_status}
+
+    verification = verify_gcp_project(project_id, token=token)
+    verification["credential_source"] = cred_source
+    link_status["project"] = verification
+    link_status["credential_source"] = cred_source
+    if not verification["accessible"] or not verification["vertex_api_enabled"]:
+        link_status["errors"].extend(verification["errors"])
+        link_status["message"] = (
+            f"Project '{project_id}' is not usable for Vertex AI evaluations with the current credentials."
+        )
+        with GCP_STATE_LOCK:
+            state["link_status"] = {**state.get("link_status", {}), **link_status, "verified": False}
+        return {"ok": False, **link_status}
+
+    discovery = discover_model_garden(
+        project_id=project_id,
+        location=location,
+        token=token,
+        verify_access=True,
+        verify_partner_access=verify_partner_access,
+        catalog_prices=catalog_prices,
+    )
+    link_status["errors"].extend(discovery["errors"])
+    if not discovery["models"]:
+        link_status["message"] = (
+            f"Linked '{project_id}', but no Model Garden models were discovered in {location}."
+        )
+        with GCP_STATE_LOCK:
+            state["link_status"] = {**link_status, "verified": True}
+        return {"ok": False, **link_status}
+
+    link_status.update(
+        {
+            "verified": True,
+            "source": "discovered",
+            "discovered_at": discovery["discovered_at"],
+            "counts": discovery["counts"],
+            "message": (
+                f"Linked {project_id} ({location}) — {discovery['counts']['enabled']} enabled of "
+                f"{discovery['counts']['total']} discovered Model Garden models."
+            ),
+        }
+    )
+    with GCP_STATE_LOCK:
+        state["project_id"] = project_id
+        state["location"] = location
+        state["linked"] = True
+        state["models"] = discovery["models"]
+        state["link_status"] = link_status
+        if location not in state["available_locations"]:
+            state["available_locations"].append(location)
+        os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
+        os.environ["VERTEX_PROJECT_ID"] = project_id
+        os.environ["VERTEX_LOCATION"] = location
+        snapshot_state = copy.deepcopy(state)
+    _register_models_with_factory(discovery["models"])
+    _persist_link(snapshot_state)
+    return {"ok": True, **link_status}
+
+
+def verify_model_access(model_id: str) -> Dict[str, Any]:
+    """Probe whether a discovered partner model is enabled in the linked project."""
+    from benchmaxxer.gcp.model_garden import get_access_token, probe_model_access
+
+    state = _ensure_gcp_runtime_state()
+    with GCP_STATE_LOCK:
+        target = next((m for m in state["models"] if m.get("id") == model_id), None)
+        project_id = state["project_id"]
+        location = state["location"]
+    if target is None:
+        raise KeyError(f"Model '{model_id}' is not in the linked project's catalog.")
+    if not target.get("discovered") or target.get("publisher") in (None, "endpoint"):
+        return {"model_id": model_id, "enabled": bool(target.get("enabled")), "enablement": target.get("enablement"), "detail": target.get("status_detail", "")}
+
+    token, _ = get_access_token()
+    publisher = str(target["publisher"])
+    probe_id = str(target["model_name"]).split("/", 1)[-1] if publisher not in ("google", "anthropic") else str(target["model_name"])
+    res = probe_model_access(project_id, str(target.get("location") or location), publisher, probe_id, token)
+    with GCP_STATE_LOCK:
+        for m in state["models"]:
+            if m.get("id") == model_id:
+                m["enabled"] = bool(res["enabled"])
+                m["enablement"] = res["enablement"]
+                m["status_detail"] = res["detail"]
+        snapshot_state = copy.deepcopy(state)
+    if snapshot_state.get("link_status", {}).get("source") == "discovered":
+        _persist_link(snapshot_state)
+    return {"model_id": model_id, **res}
 
 
 def update_gcp_config(
@@ -407,6 +610,14 @@ def update_gcp_config(
     with GCP_STATE_LOCK:
         if project_id is not None and str(project_id).strip():
             clean_proj = str(project_id).strip()
+            if clean_proj != state["project_id"] and state.get("link_status", {}).get("source") == "discovered":
+                # Switching projects invalidates models discovered for the previous project.
+                state["link_status"] = {
+                    "verified": False,
+                    "source": "unverified",
+                    "message": f"Project changed to {clean_proj} — click 'Link & Discover Models' to load its models.",
+                    "errors": [],
+                }
             state["project_id"] = clean_proj
             state["linked"] = True
             os.environ["GOOGLE_CLOUD_PROJECT"] = clean_proj
@@ -484,6 +695,7 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                     "project_id": snapshot["project_id"],
                     "location": snapshot["location"],
                     "linked": snapshot["linked"],
+                    "link_status": snapshot["link_status"],
                     "models": snapshot["models"],
                     "default_models": snapshot["default_models"],
                     "enabled_models": snapshot["enabled_models"],
@@ -500,15 +712,14 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
             from benchmaxxer.harbor import (
                 HARBOR_MCP_URL,
                 check_docker_available,
-                check_environment_available,
                 check_harbor_available,
                 check_podman_available,
                 get_internal_google_default_permissions,
-                list_agent_harnesses,
+                list_detected_harnesses,
             )
 
             gcp_snapshot = get_gcp_config_Snapshot()
-            harnesses = list_agent_harnesses()
+            harnesses = list_detected_harnesses()
             self._send_json(
                 {
                     "mcp_server": HARBOR_MCP_URL,
@@ -517,6 +728,7 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
                     "docker": check_docker_available(),
                     "supported_environments": ["podman", "docker", "modal", "daytona"],
                     "supported_harnesses": [h["id"] for h in harnesses],
+                    "installed_harnesses": [h["id"] for h in harnesses if h.get("installed")],
                     "harnesses": harnesses,
                     "internal_google_default_permissions": get_internal_google_default_permissions(
                         project_id=gcp_snapshot["project_id"],
@@ -529,16 +741,17 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/harnesses":
             from benchmaxxer.harbor import (
                 get_internal_google_default_permissions,
-                list_agent_harnesses,
+                list_detected_harnesses,
             )
 
             gcp_snapshot = get_gcp_config_Snapshot()
-            harnesses = list_agent_harnesses()
+            harnesses = list_detected_harnesses()
             self._send_json(
                 {
                     "harnesses": harnesses,
                     "default_harness": "agy",
                     "supported_harnesses": [h["id"] for h in harnesses],
+                    "installed_harnesses": [h["id"] for h in harnesses if h.get("installed")],
                     "internal_google_default_permissions": get_internal_google_default_permissions(
                         project_id=gcp_snapshot["project_id"],
                         location=gcp_snapshot["location"],
@@ -616,6 +829,67 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
             payload = json.loads(body) if body else {}
         except json.JSONDecodeError:
             self._send_error("Invalid JSON payload", status=400)
+            return
+
+        if path == "/api/gcp/link":
+            project_id = str(payload.get("project_id") or "").strip()
+            location = str(payload.get("location") or "").strip() or "us-central1"
+            if not project_id:
+                self._send_error("Field 'project_id' is required to link a GCP project.", status=400)
+                return
+            if not re.fullmatch(r"[a-z][a-z0-9:.\-]{4,61}[a-z0-9]", project_id):
+                self._send_error(f"'{project_id}' is not a valid GCP project ID.", status=400)
+                return
+            try:
+                link_result = link_gcp_project(
+                    project_id=project_id,
+                    location=location,
+                    verify_partner_access=bool(payload.get("verify_partner_access", False)),
+                )
+            except Exception as e:  # noqa: BLE001
+                self._send_error(f"GCP project linking failed: {e}", status=500)
+                return
+            snapshot = get_gcp_config_Snapshot()
+            self._send_json({"success": bool(link_result.get("ok")), "link_result": link_result, **snapshot})
+            return
+
+        if path == "/api/gcp/models/verify":
+            model_id = str(payload.get("model_id") or "").strip()
+            if not model_id:
+                self._send_error("Field 'model_id' is required.", status=400)
+                return
+            try:
+                res = verify_model_access(model_id)
+            except KeyError as e:
+                self._send_error(str(e), status=404)
+                return
+            except Exception as e:  # noqa: BLE001
+                self._send_error(f"Model access verification failed: {e}", status=500)
+                return
+            self._send_json({"success": True, "verification": res, **get_gcp_config_Snapshot()})
+            return
+
+        if path == "/api/harnesses/custom":
+            from benchmaxxer.harbor import detect_harness, register_custom_agent_harness
+
+            raw_cmd = payload.get("headless_command")
+            if isinstance(raw_cmd, str):
+                import shlex as _shlex
+
+                raw_cmd = _shlex.split(raw_cmd) if raw_cmd.strip() else None
+            try:
+                spec = register_custom_agent_harness(
+                    name=str(payload.get("name", "")),
+                    cli_binary=str(payload.get("cli_binary", "")),
+                    headless_command=raw_cmd,
+                    harbor_agent_name=payload.get("harbor_agent_name"),
+                    description=payload.get("description"),
+                )
+            except ValueError as e:
+                self._send_error(str(e), status=400)
+                return
+            detected = detect_harness(spec)
+            self._send_json({"success": True, "harness": detected})
             return
 
         if path in ("/api/gcp/config", "/api/gcp/models/toggle"):
@@ -729,293 +1003,50 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/eval/run":
+            from benchmaxxer.ui.web.eval_runner import (
+                EvalRequestError,
+                resolve_eval_request,
+                run_evaluation,
+            )
+
             gcp_snapshot = get_gcp_config_Snapshot()
-            scenario_ids_raw = payload.get("scenario_ids")
-            scenario_id = payload.get("scenario_id", "complex_skill_synthesis")
-            if isinstance(scenario_ids_raw, list) and len(scenario_ids_raw) > 0:
-                scenario_list = [str(s) for s in scenario_ids_raw if s]
-                scenario_id = scenario_list[0]
-            else:
-                scenario_list = [scenario_id]
+            try:
+                req = resolve_eval_request(payload, gcp_snapshot)
+            except EvalRequestError as e:
+                self._send_error(str(e), status=400)
+                return
 
-            from benchmaxxer.harbor import (
-                get_agent_harness_spec,
-                get_internal_google_default_permissions,
-                normalize_agent_harness,
-            )
-
-            model_alias = payload.get("model_alias", "gemini-3.1-pro")
-            mode = payload.get("mode", "mock")
-            candidate_override = payload.get("candidate_override")
-            is_async = payload.get("async", True)
-            use_harbor = bool(payload.get("harbor", False))
-            environment_type = payload.get("environment_type", payload.get("env", "podman"))
-            raw_agent_type = payload.get("agent_type", payload.get("harness", "agy"))
-            agent_type = normalize_agent_harness(raw_agent_type)
-            harness_spec = get_agent_harness_spec(agent_type)
-            internal_google_permissions = get_internal_google_default_permissions(
-                project_id=gcp_snapshot["project_id"],
-                location=gcp_snapshot["location"],
-            )
-            suite_name = payload.get("suite_name")
-
-            run_id_seed = scenario_id if len(scenario_list) == 1 else f"suite_{len(scenario_list)}_tests"
+            scenario_list = req["scenario_list"]
+            run_id_seed = req["scenario_id"] if len(scenario_list) == 1 else f"suite_{len(scenario_list)}_tests"
             run_id = TelemetryLogger.generate_run_id(run_id_seed)
 
-            def _runner_target() -> None:
-                start_time = time.time()
-                with RUNS_LOCK:
-                    ACTIVE_RUNS[run_id] = {
-                        "run_id": run_id,
-                        "scenario_id": scenario_id,
-                        "scenario_ids": scenario_list,
-                        "suite_name": suite_name,
-                        "model_alias": model_alias,
-                        "gcp_project_id": gcp_snapshot["project_id"],
-                        "gcp_location": gcp_snapshot["location"],
-                        "execution_mode": mode,
-                        "harbor": use_harbor,
-                        "environment_type": environment_type if use_harbor else "podman",
-                        "harness": agent_type,
-                        "agent_harness": agent_type,
-                        "harness_spec": harness_spec,
-                        "internal_google_permissions": internal_google_permissions,
-                        "status": "RUNNING",
-                        "start_time": start_time,
-                        "elapsed_seconds": 0.0,
-                        "current_phase": "candidate_generation",
-                        "completed_tests": 0,
-                        "total_tests": len(scenario_list),
-                        "passed": None,
-                    }
-
-                try:
-                    if len(scenario_list) == 1:
-                        single_sc = scenario_list[0]
-                        if use_harbor:
-                            from benchmaxxer.harbor import run_harbor_scenario_job
-
-                            result = run_harbor_scenario_job(
-                                scenario_id=single_sc,
-                                model_alias=model_alias,
-                                mode=mode,
-                                agent_type=agent_type,
-                                environment_type=environment_type,
-                            )
-                        else:
-                            result = execute_scenario_run(
-                                scenario_id=single_sc,
-                                model_alias=model_alias,
-                                mode=mode,
-                                candidate_override=candidate_override,
-                            )
-                        result["scenario_ids"] = scenario_list
-                        result["harness"] = agent_type
-                        result["agent_harness"] = agent_type
-                        result["harness_spec"] = harness_spec
-                        result["internal_google_permissions"] = internal_google_permissions
-                        result["test_results"] = [
-                            {
-                                "scenario_id": single_sc,
-                                "passed": result.get("passed", True),
-                                "rubric_score": result.get("rubric_score", 4.0),
-                                "duration_seconds": result.get("duration_seconds", 0.0),
-                                "total_tokens": result.get("total_tokens", 0),
-                                "estimated_cost_usd": result.get("estimated_cost_usd", 0.0),
-                                "is_custom": single_sc.startswith("argon_"),
-                                "agent_harness": agent_type,
-                            }
-                        ]
-                        result["gcp_project_id"] = gcp_snapshot["project_id"]
-                        result["gcp_location"] = gcp_snapshot["location"]
-                    else:
-                        # Multi-scenario custom test suite execution
-                        per_test_results: List[Dict[str, Any]] = []
-                        total_cand_ms = 0.0
-                        total_sand_ms = 0.0
-                        total_crit_ms = 0.0
-                        total_in_tok = 0
-                        total_out_tok = 0
-                        total_crit_tok = 0
-                        total_cand_cost = 0.0
-                        total_est_cost = 0.0
-                        combined_outputs: List[str] = []
-                        qwen_scores: List[float] = []
-                        minimax_scores: List[float] = []
-                        kimi_scores: List[float] = []
-                        comp_scores: List[float] = []
-                        last_rationale_qwen = ""
-                        last_rationale_minimax = ""
-                        last_rationale_kimi = ""
-
-                        for idx, sc_item in enumerate(scenario_list):
-                            with RUNS_LOCK:
-                                ACTIVE_RUNS[run_id]["current_phase"] = f"running ({idx + 1}/{len(scenario_list)}): {sc_item}"
-                                ACTIVE_RUNS[run_id]["completed_tests"] = idx
-
-                            if use_harbor:
-                                from benchmaxxer.harbor import run_harbor_scenario_job
-
-                                res_item = run_harbor_scenario_job(
-                                    scenario_id=sc_item,
-                                    model_alias=model_alias,
-                                    mode=mode,
-                                    agent_type=agent_type,
-                                    environment_type=environment_type,
-                                )
-                            else:
-                                res_item = execute_scenario_run(
-                                    scenario_id=sc_item,
-                                    model_alias=model_alias,
-                                    mode=mode,
-                                    candidate_override=candidate_override,
-                                )
-                            per_test_results.append(res_item)
-
-                            t_phases = res_item.get("timing", {}).get("phase_timings_ms", {})
-                            total_cand_ms += float(t_phases.get("candidate_generation", 0.0))
-                            total_sand_ms += float(t_phases.get("sandbox_execution", 0.0))
-                            total_crit_ms += float(t_phases.get("actor_critic_evaluation", 0.0))
-
-                            tok_u = res_item.get("token_usage", {})
-                            total_in_tok += int(res_item.get("input_tokens", tok_u.get("input_tokens", 0)))
-                            total_out_tok += int(res_item.get("output_tokens", tok_u.get("output_tokens", 0)))
-                            c_tok = int((tok_u.get("actor_critic_scores") or {}).get("total_tokens", 0))
-                            total_crit_tok += c_tok
-                            total_cand_cost += float(tok_u.get("candidate_cost_usd", res_item.get("estimated_cost_usd", 0.0)))
-                            total_est_cost += float(tok_u.get("total_estimated_cost_usd", res_item.get("estimated_cost_usd", 0.0)))
-
-                            ac = res_item.get("actor_critic_scores") or {}
-                            evals = ac.get("evaluations") or {}
-                            if "qwen" in evals:
-                                qwen_scores.append(float(evals["qwen"].get("normalized_score", 4.0)))
-                                last_rationale_qwen = evals["qwen"].get("rationale", "")
-                            if "minimax" in evals:
-                                minimax_scores.append(float(evals["minimax"].get("normalized_score", 4.0)))
-                                last_rationale_minimax = evals["minimax"].get("rationale", "")
-                            if "kimi_k" in evals:
-                                kimi_scores.append(float(evals["kimi_k"].get("normalized_score", 4.0)))
-                                last_rationale_kimi = evals["kimi_k"].get("rationale", "")
-                            if "composite_normalized_score" in ac:
-                                comp_scores.append(float(ac["composite_normalized_score"]))
-
-                            combined_outputs.append(
-                                f"// =========================================================================\n"
-                                f"// Test [{idx + 1}/{len(scenario_list)}]: {sc_item} "
-                                f"({'Custom Use Case' if sc_item.startswith('argon_') else 'Standard RFC Scenario'})\n"
-                                f"// Harness: {agent_type} | GCP Project: {gcp_snapshot['project_id']}\n"
-                                f"// =========================================================================\n"
-                                f"{res_item.get('candidate_output', '')}"
-                            )
-
-                        total_dur_ms = round(total_cand_ms + total_sand_ms + total_crit_ms, 2)
-                        total_dur_s = round(total_dur_ms / 1000.0, 3)
-                        all_passed = all(r.get("passed", False) for r in per_test_results)
-                        avg_qwen = round(sum(qwen_scores) / max(1, len(qwen_scores)), 2) if qwen_scores else 4.5
-                        avg_minimax = round(sum(minimax_scores) / max(1, len(minimax_scores)), 2) if minimax_scores else 4.5
-                        avg_kimi = round(sum(kimi_scores) / max(1, len(kimi_scores)), 2) if kimi_scores else 4.5
-                        avg_comp = round(sum(comp_scores) / max(1, len(comp_scores)), 2) if comp_scores else 4.5
-
-                        first_res = per_test_results[0]
-                        result = dict(first_res)
-                        result.update(
-                            {
-                                "scenario_id": scenario_id,
-                                "scenario_ids": scenario_list,
-                                "suite_name": suite_name or f"Custom Suite ({len(scenario_list)} Tests)",
-                                "model_alias": model_alias,
-                                "harness": agent_type,
-                                "agent_harness": agent_type,
-                                "harness_spec": harness_spec,
-                                "internal_google_permissions": internal_google_permissions,
-                                "gcp_project_id": gcp_snapshot["project_id"],
-                                "gcp_location": gcp_snapshot["location"],
-                                "passed": all_passed,
-                                "exit_code": 0 if all_passed else 1,
-                                "duration_ms": total_dur_ms,
-                                "duration_seconds": total_dur_s,
-                                "input_tokens": total_in_tok,
-                                "output_tokens": total_out_tok,
-                                "total_tokens": total_in_tok + total_out_tok + total_crit_tok,
-                                "estimated_cost_usd": round(total_est_cost, 6),
-                                "candidate_output": "\n\n".join(combined_outputs),
-                                "timing": {
-                                    "duration_ms": total_dur_ms,
-                                    "duration_seconds": total_dur_s,
-                                    "phase_timings_ms": {
-                                        "candidate_generation": round(total_cand_ms, 2),
-                                        "sandbox_execution": round(total_sand_ms, 2),
-                                        "actor_critic_evaluation": round(total_crit_ms, 2),
-                                    },
-                                },
-                                "token_usage": {
-                                    "input_tokens": total_in_tok,
-                                    "output_tokens": total_out_tok,
-                                    "candidate_input_tokens": total_in_tok,
-                                    "candidate_output_tokens": total_out_tok,
-                                    "candidate_cost_usd": round(total_cand_cost, 6),
-                                    "total_estimated_cost_usd": round(total_est_cost, 6),
-                                    "total_tokens": total_in_tok + total_out_tok + total_crit_tok,
-                                    "actor_critic_scores": {"total_tokens": total_crit_tok},
-                                },
-                                "actor_critic_scores": {
-                                    "composite_normalized_score": avg_comp,
-                                    "evaluations": {
-                                        "qwen": {"normalized_score": avg_qwen, "rationale": last_rationale_qwen},
-                                        "minimax": {"normalized_score": avg_minimax, "rationale": last_rationale_minimax},
-                                        "kimi_k": {"normalized_score": avg_kimi, "rationale": last_rationale_kimi},
-                                    },
-                                },
-                                "test_results": [
-                                    {
-                                        "run_id": r["run_id"],
-                                        "scenario_id": r["scenario_id"],
-                                        "passed": r.get("passed", True),
-                                        "rubric_score": r.get("rubric_score", 4.0),
-                                        "duration_seconds": r.get("duration_seconds", 0.0),
-                                        "total_tokens": r.get("total_tokens", 0),
-                                        "estimated_cost_usd": r.get("estimated_cost_usd", 0.0),
-                                        "is_custom": r["scenario_id"].startswith("argon_"),
-                                        "agent_harness": agent_type,
-                                    }
-                                    for r in per_test_results
-                                ],
-                            }
-                        )
-
-                    with RUNS_LOCK:
-                        ACTIVE_RUNS[run_id].update(result)
-                        ACTIVE_RUNS[run_id]["completed_tests"] = len(scenario_list)
-                        ACTIVE_RUNS[run_id]["status"] = "COMPLETED"
-                        ACTIVE_RUNS[run_id]["elapsed_seconds"] = round(time.time() - start_time, 2)
-                except Exception as ex:
-                    with RUNS_LOCK:
-                        ACTIVE_RUNS[run_id]["status"] = "FAILED"
-                        ACTIVE_RUNS[run_id]["error"] = str(ex)
-                        ACTIVE_RUNS[run_id]["elapsed_seconds"] = round(time.time() - start_time, 2)
-
-            if is_async:
-                t = threading.Thread(target=_runner_target, daemon=True)
+            if payload.get("async", True):
+                t = threading.Thread(
+                    target=run_evaluation,
+                    args=(run_id, req, ACTIVE_RUNS, RUNS_LOCK),
+                    daemon=True,
+                )
                 t.start()
                 self._send_json(
                     {
                         "run_id": run_id,
-                        "scenario_id": scenario_id,
+                        "scenario_id": req["scenario_id"],
                         "scenario_ids": scenario_list,
-                        "model_alias": model_alias,
-                        "harness": agent_type,
-                        "agent_harness": agent_type,
-                        "harbor": use_harbor,
-                        "environment_type": environment_type if use_harbor else "podman",
-                        "internal_google_permissions": internal_google_permissions,
-                        "gcp_project_id": gcp_snapshot["project_id"],
-                        "gcp_location": gcp_snapshot["location"],
+                        "model_alias": req["model_alias"],
+                        "harness": req["agent_type"],
+                        "agent_harness": req["agent_type"],
+                        "harbor": req["use_harbor"],
+                        "environment_type": req["environment_type"] if req["use_harbor"] else "podman",
+                        "internal_google_permissions": req["internal_google_permissions"],
+                        "gcp_project_id": req["gcp_project_id"],
+                        "gcp_location": req["gcp_location"],
+                        "warnings": req["warnings"],
                         "status": "RUNNING",
                         "message": "Evaluation started in background",
                     }
                 )
             else:
-                _runner_target()
+                run_evaluation(run_id, req, ACTIVE_RUNS, RUNS_LOCK)
                 with RUNS_LOCK:
                     res = dict(ACTIVE_RUNS[run_id])
                 self._send_json(res)

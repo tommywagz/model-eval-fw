@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Type
 
@@ -13,6 +14,7 @@ from benchmaxxer.models.providers import (
     VertexAnthropicClient,
     VertexEndpointClient,
     VertexGenAIClient,
+    VertexMaaSClient,
 )
 from benchmaxxer.telemetry.cache import ResponseCache
 
@@ -20,8 +22,29 @@ PROVIDER_MAP: Dict[str, Type[BaseModelClient]] = {
     "vertex_genai": VertexGenAIClient,
     "vertex_anthropic": VertexAnthropicClient,
     "vertex_endpoint": VertexEndpointClient,
+    "vertex_maas": VertexMaaSClient,
     "openai_compatible": OpenAICompatibleClient,
 }
+
+# Models discovered at runtime from the user's linked GCP project (Vertex AI Model Garden).
+# These take precedence over static configs so the selected MIQ always targets the linked project.
+_RUNTIME_MODELS: Dict[str, Dict[str, Any]] = {}
+_RUNTIME_LOCK = threading.Lock()
+
+
+def register_runtime_models(models: Dict[str, Dict[str, Any]], replace: bool = True) -> None:
+    """Register model alias configs discovered at runtime (e.g. from a linked GCP project)."""
+    with _RUNTIME_LOCK:
+        if replace:
+            _RUNTIME_MODELS.clear()
+        for alias, cfg in models.items():
+            _RUNTIME_MODELS[alias] = dict(cfg)
+
+
+def get_runtime_models() -> Dict[str, Dict[str, Any]]:
+    with _RUNTIME_LOCK:
+        return {k: dict(v) for k, v in _RUNTIME_MODELS.items()}
+
 
 DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
     "gemini-3.1-pro": {
@@ -257,6 +280,11 @@ def load_model_registry(config_path: Optional[str | Path] = None) -> Dict[str, D
             merged = dict(defaults)
             merged.update(cfg)
             registry[alias] = merged
+    runtime = get_runtime_models()
+    for alias, cfg in runtime.items():
+        cfg = dict(cfg)
+        cfg["_runtime"] = True
+        registry[alias] = cfg
     return registry
 
 
@@ -282,13 +310,15 @@ def get_model_client(
         )
 
     cfg = dict(registry[alias])
+    is_runtime = bool(cfg.pop("_runtime", False))
     env_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("VERTEX_PROJECT_ID")
-    if env_project and "project_id" not in overrides:
+    if env_project and "project_id" not in overrides and not (is_runtime and cfg.get("project_id")):
         cfg["project_id"] = env_project
     env_location = os.environ.get("VERTEX_LOCATION")
     if env_location and "location" not in overrides and "location" not in registry[alias]:
         cfg["location"] = env_location
     cfg.update(overrides)
+    cfg = {k: v for k, v in cfg.items() if v is not None}
 
     provider_key = str(cfg.pop("provider", "vertex_genai"))
     if provider_key not in PROVIDER_MAP:

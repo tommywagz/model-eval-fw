@@ -44,6 +44,7 @@ DIFFICULTY_WEIGHTS: Dict[str, int] = {
 AGENT_HARNESS_ALIASES: Dict[str, str] = {
     "agy": "agy",
     "antigravity": "agy",
+    "antigravity-cli": "agy",
     "google-agy": "agy",
     "jetski": "jetski",
     "google-jetski": "jetski",
@@ -52,6 +53,7 @@ AGENT_HARNESS_ALIASES: Dict[str, str] = {
     "claude code": "claude-code",
     "claude_code": "claude-code",
     "claudecode": "claude-code",
+    "claude": "claude-code",
     "opencode": "opencode",
     "open-code": "opencode",
     "open_code": "opencode",
@@ -59,23 +61,31 @@ AGENT_HARNESS_ALIASES: Dict[str, str] = {
     "codex": "codex",
     "codex-cli": "codex",
     "openai-codex": "codex",
+    "gemini-cli": "gemini-cli",
+    "gemini": "gemini-cli",
+    "gemini cli": "gemini-cli",
     "benchmaxxer": "benchmaxxer",
     "benchmaxxer-agent": "benchmaxxer",
     "oracle": "oracle",
 }
 
+# Placeholders used in `headless_command` templates:
+#   {binary} -> resolved local CLI path, {prompt} -> scenario instruction, {model} -> harness model arg
 AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
     "agy": {
         "id": "agy",
-        "name": "AGY (Antigravity)",
+        "name": "Antigravity (AGY)",
         "brand": "google",
-        "provider": "Google DeepMind Internal Harness",
-        "badge": "Internal Google Default",
+        "provider": "Google Antigravity CLI",
+        "badge": "Default Harness",
         "cli_binary": "agy",
-        "harbor_agent_name": "agy",
+        "cli_binaries": ["agy", "antigravity"],
+        "harbor_agent_name": "antigravity-cli",
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Internal Google DeepMind Antigravity (AGY) agentic coding harness executing inside Harbor sandboxes with Google Application Default Credentials (ADC) and Vertex AI IAM permissions.",
-        "tags": ["Internal Google ADC", "Harbor Sandbox", "Vertex AI Native", "Tool Use"],
+        "headless_command": ["{binary}", "-p", "{prompt}", "--output-format", "json", "--dangerously-skip-permissions", "--model", "{model}"],
+        "supported_brands": [],
+        "description": "Google Antigravity agentic coding harness (default). Runs headless (`agy -p`) on this machine and in Harbor sandboxes (`antigravity-cli`), routed to Vertex AI in your linked GCP project.",
+        "tags": ["Default", "Harbor: antigravity-cli", "Vertex AI", "Tool Use"],
         "supports_internal_google_permissions": True,
         "is_default": True,
         "selected": True,
@@ -84,13 +94,16 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "id": "jetski",
         "name": "Jetski",
         "brand": "jetski",
-        "provider": "Google Internal Agentic Platform",
+        "provider": "Google Jetski CLI",
         "badge": "Multi-Agent & MCP",
         "cli_binary": "jetski",
-        "harbor_agent_name": "jetski",
+        "cli_binaries": ["jetski"],
+        "harbor_agent_name": None,
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Internal Google Jetski agentic coding harness with native MCP integration (Harbor MCP & Jev), autonomous subagent orchestration, and internal Google default permissions.",
-        "tags": ["Internal Google ADC", "MCP Native", "Subagent Squad", "Harbor Sandbox"],
+        "headless_command": ["{binary}", "-p", "{prompt}", "--output-format", "json", "--dangerously-skip-permissions", "--model", "{model}"],
+        "supported_brands": [],
+        "description": "Jetski agentic coding harness with native MCP integration and subagent orchestration. Runs headless (`jetski -p`) on this machine; Harbor stages its output via the BenchMaxxer bridge agent.",
+        "tags": ["MCP Native", "Subagents", "Harbor Bridge Agent"],
         "supports_internal_google_permissions": True,
         "is_default": True,
         "selected": False,
@@ -99,13 +112,16 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "id": "claude-code",
         "name": "Claude Code",
         "brand": "anthropic",
-        "provider": "Anthropic CLI on Vertex AI",
+        "provider": "Anthropic Claude Code CLI",
         "badge": "Vertex Partner CLI",
         "cli_binary": "claude",
+        "cli_binaries": ["claude"],
         "harbor_agent_name": "claude-code",
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Anthropic Claude Code agentic terminal harness routed through Google Cloud Vertex AI Partner endpoints (CLAUDE_CODE_USE_VERTEX=1) with internal Google default permissions.",
-        "tags": ["CLAUDE_CODE_USE_VERTEX=1", "Internal Google ADC", "Harbor Sandbox", "Bash & Edit"],
+        "headless_command": ["{binary}", "-p", "{prompt}", "--output-format", "json", "--dangerously-skip-permissions", "--model", "{model}"],
+        "supported_brands": ["anthropic"],
+        "description": "Anthropic Claude Code terminal harness routed through Vertex AI (CLAUDE_CODE_USE_VERTEX=1) in your linked GCP project. Requires an Anthropic (Claude) MIQ.",
+        "tags": ["CLAUDE_CODE_USE_VERTEX=1", "Harbor: claude-code", "Bash & Edit"],
         "supports_internal_google_permissions": True,
         "is_default": True,
         "selected": False,
@@ -117,10 +133,13 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "provider": "OpenCode CLI Agent Harness",
         "badge": "Open Terminal Agent",
         "cli_binary": "opencode",
+        "cli_binaries": ["opencode"],
         "harbor_agent_name": "opencode",
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Open-source terminal coding agent harness configured to authenticate against Google Cloud Vertex AI Model Garden endpoints using internal Google default permissions.",
-        "tags": ["Vertex AI Model Garden", "Internal Google ADC", "Harbor Sandbox", "Polyglot"],
+        "headless_command": ["{binary}", "run", "-m", "{model}", "{prompt}"],
+        "supported_brands": [],
+        "description": "Open-source terminal coding agent using its `google-vertex` / `google-vertex-anthropic` providers against your linked GCP project.",
+        "tags": ["google-vertex provider", "Harbor: opencode", "Polyglot"],
         "supports_internal_google_permissions": True,
         "is_default": True,
         "selected": False,
@@ -129,15 +148,36 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "id": "codex",
         "name": "Codex",
         "brand": "codex",
-        "provider": "Codex CLI Agent Harness",
+        "provider": "OpenAI Codex CLI",
         "badge": "Sandboxed CLI Agent",
         "cli_binary": "codex",
+        "cli_binaries": ["codex"],
         "harbor_agent_name": "codex",
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Autonomous Codex CLI harness executing inside isolated Harbor container sandboxes with internal Google default permissions and least-privilege IAM credential bridging.",
-        "tags": ["Internal Google ADC", "Harbor Sandbox", "Zero-Trust Container", "Auto-Edit"],
+        "headless_command": ["{binary}", "exec", "--skip-git-repo-check", "-m", "{model}", "{prompt}"],
+        "supported_brands": [],
+        "description": "Codex CLI harness (`codex exec`). Configure a Vertex AI (OpenAI-compatible) model provider in ~/.codex/config.toml to route to your linked project.",
+        "tags": ["codex exec", "Harbor: codex", "Auto-Edit"],
         "supports_internal_google_permissions": True,
         "is_default": True,
+        "selected": False,
+    },
+    "gemini-cli": {
+        "id": "gemini-cli",
+        "name": "Gemini CLI",
+        "brand": "google",
+        "provider": "Google Gemini CLI",
+        "badge": "Open Source CLI",
+        "cli_binary": "gemini",
+        "cli_binaries": ["gemini"],
+        "harbor_agent_name": "gemini-cli",
+        "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
+        "headless_command": ["{binary}", "-p", "{prompt}", "-m", "{model}", "--yolo", "--output-format", "json"],
+        "supported_brands": ["gemini"],
+        "description": "Google Gemini CLI routed to Vertex AI (GOOGLE_GENAI_USE_VERTEXAI=true) in your linked project. Requires a Gemini MIQ.",
+        "tags": ["GOOGLE_GENAI_USE_VERTEXAI", "Harbor: gemini-cli"],
+        "supports_internal_google_permissions": True,
+        "is_default": False,
         "selected": False,
     },
     "benchmaxxer": {
@@ -147,10 +187,14 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "provider": "BenchMaxxer Native Adapter",
         "badge": "Direct Model Adapter",
         "cli_binary": "benchmaxxer",
-        "harbor_agent_name": "benchmaxxer",
+        "cli_binaries": [],
+        "builtin": True,
+        "harbor_agent_name": None,
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
-        "description": "Native BenchMaxxerHarborAgent adapter invoking candidate model clients directly inside Harbor container sandboxes with internal Google default permissions.",
-        "tags": ["Direct Model Client", "Internal Google ADC", "Deterministic Cache"],
+        "headless_command": None,
+        "supported_brands": [],
+        "description": "Native BenchMaxxerHarborAgent adapter invoking the MIQ directly through the Vertex AI SDK (no external coding agent).",
+        "tags": ["Direct Model Client", "Deterministic Cache"],
         "supports_internal_google_permissions": True,
         "is_default": False,
         "selected": False,
@@ -162,8 +206,12 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "provider": "Harbor Reference Solution Harness",
         "badge": "Reference Verifier",
         "cli_binary": "harbor",
+        "cli_binaries": [],
+        "builtin": True,
         "harbor_agent_name": "oracle",
         "import_path": None,
+        "headless_command": None,
+        "supported_brands": [],
         "description": "Harbor deterministic reference solution harness (solution/solve.sh -> tests/test.sh) for validating task fixtures and reward schemas.",
         "tags": ["Reference Solution", "Reward Verification", "Zero Token Spend"],
         "supports_internal_google_permissions": True,
@@ -171,6 +219,9 @@ AGENT_HARNESS_CATALOG: Dict[str, Dict[str, Any]] = {
         "selected": False,
     },
 }
+
+# User-registered harnesses (any coding agent CLI installed locally), keyed by canonical id.
+CUSTOM_AGENT_HARNESSES: Dict[str, Dict[str, Any]] = {}
 
 
 def normalize_agent_harness(agent_type: Optional[str]) -> str:
@@ -190,6 +241,8 @@ def get_agent_harness_spec(agent_type: Optional[str]) -> Dict[str, Any]:
     canonical = normalize_agent_harness(agent_type)
     if canonical in AGENT_HARNESS_CATALOG:
         return dict(AGENT_HARNESS_CATALOG[canonical])
+    if canonical in CUSTOM_AGENT_HARNESSES:
+        return dict(CUSTOM_AGENT_HARNESSES[canonical])
     return {
         "id": canonical,
         "name": canonical.replace("-", " ").title(),
@@ -197,19 +250,72 @@ def get_agent_harness_spec(agent_type: Optional[str]) -> Dict[str, Any]:
         "provider": "Custom Harbor Agent Harness",
         "badge": "Custom Harness",
         "cli_binary": canonical,
+        "cli_binaries": [canonical],
         "harbor_agent_name": canonical,
         "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
+        "headless_command": None,
+        "supported_brands": [],
         "description": f"Custom agent harness '{canonical}' configured to execute inside Harbor sandboxes with internal Google default permissions.",
         "tags": ["Custom Harness", "Internal Google ADC", "Harbor Sandbox"],
         "supports_internal_google_permissions": True,
         "is_default": False,
         "selected": False,
+        "is_custom": True,
     }
 
 
+def register_custom_agent_harness(
+    name: str,
+    cli_binary: str,
+    headless_command: Optional[List[str]] = None,
+    harbor_agent_name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Register any locally installed coding-agent CLI as a selectable harness.
+
+    ``headless_command`` is an argv template using ``{binary}``, ``{prompt}`` and ``{model}``;
+    it defaults to ``[{binary}, -p, {prompt}]`` which most agent CLIs accept.
+    """
+    clean_name = str(name or "").strip()
+    clean_bin = str(cli_binary or "").strip()
+    if not clean_name or not clean_bin:
+        raise ValueError("Both 'name' and 'cli_binary' are required to register a custom harness.")
+    canonical = re.sub(r"[^a-z0-9._-]+", "-", clean_name.lower()).strip("-") or "custom-harness"
+    if canonical in AGENT_HARNESS_CATALOG:
+        raise ValueError(f"'{canonical}' is a built-in harness; select it directly instead.")
+    template = list(headless_command) if headless_command else ["{binary}", "-p", "{prompt}"]
+    if "{prompt}" not in template:
+        template.append("{prompt}")
+    spec = {
+        "id": canonical,
+        "name": clean_name,
+        "brand": "custom",
+        "provider": "User-registered Coding Agent CLI",
+        "badge": "Custom Harness",
+        "cli_binary": clean_bin,
+        "cli_binaries": [clean_bin],
+        "harbor_agent_name": (harbor_agent_name or "").strip() or None,
+        "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
+        "headless_command": template,
+        "supported_brands": [],
+        "description": description
+        or f"Custom coding agent '{clean_name}' (`{clean_bin}`) executed headless on this machine; Harbor stages and verifies its output.",
+        "tags": ["Custom Harness", "Harbor Bridge Agent"],
+        "supports_internal_google_permissions": True,
+        "is_default": False,
+        "selected": False,
+        "is_custom": True,
+    }
+    CUSTOM_AGENT_HARNESSES[canonical] = spec
+    AGENT_HARNESS_ALIASES[canonical] = canonical
+    return dict(spec)
+
+
 def list_agent_harnesses() -> List[Dict[str, Any]]:
-    """Return the list of all configured agent harnesses."""
-    return [dict(spec) for spec in AGENT_HARNESS_CATALOG.values()]
+    """Return the list of all configured agent harnesses (built-in + user-registered)."""
+    return [dict(spec) for spec in AGENT_HARNESS_CATALOG.values()] + [
+        dict(spec) for spec in CUSTOM_AGENT_HARNESSES.values()
+    ]
 
 
 def get_internal_google_default_permissions(
@@ -294,6 +400,7 @@ def get_internal_google_default_permissions(
         "HARBOR_INTERNAL_GOOGLE_ADC": "true",
         "GOOGLE_GENAI_USE_VERTEXAI": "true",
         "CLAUDE_CODE_USE_VERTEX": "1",
+        "ANTHROPIC_VERTEX_PROJECT_ID": str(resolved_project),
         "GOOGLE_CLOUD_PROJECT": str(resolved_project),
         "VERTEX_PROJECT_ID": str(resolved_project),
         "GOOGLE_CLOUD_LOCATION": str(resolved_location),
@@ -753,6 +860,7 @@ class HarborScenarioPackager:
         agent_type: str = "oracle",
         n_concurrent_trials: int = 4,
         fixtures_override: Optional[str | Path] = None,
+        candidate_output_path: Optional[str | Path] = None,
     ) -> HarborScenarioJobPackage:
         """Package a single Test Scenario into a Harbor Job directory with individual Harbor Tasks."""
         spec = get_scenario_spec(scenario_id)
@@ -801,16 +909,23 @@ class HarborScenarioPackager:
             packaged_tasks.append(task_pkg)
 
         # Build Harbor JobConfig (`job.yaml` and `job.json`) targeting the configured environment container
-        if agent_clean == "benchmaxxer":
+        harness_spec = get_agent_harness_spec(agent_clean)
+        harbor_native_name = harness_spec.get("harbor_agent_name")
+        if candidate_output_path or agent_clean == "benchmaxxer":
+            # BenchMaxxer bridge agent: either invokes the MIQ directly ("benchmaxxer") or stages the
+            # output produced by the selected harness CLI on the host (live runs) into the sandbox.
+            bridge_kwargs: Dict[str, Any] = {
+                "mode": mode,
+                "scenario_id": scenario_id,
+                "agent_harness": agent_clean,
+            }
+            if candidate_output_path:
+                bridge_kwargs["candidate_output_path"] = str(candidate_output_path)
             agents_cfg = [
                 {
                     "import_path": "benchmaxxer.harbor.agent:BenchMaxxerHarborAgent",
                     "model_name": model_alias,
-                    "kwargs": {
-                        "mode": mode,
-                        "scenario_id": scenario_id,
-                        "agent_harness": agent_clean,
-                    },
+                    "kwargs": bridge_kwargs,
                 }
             ]
         elif agent_clean == "oracle":
@@ -821,10 +936,11 @@ class HarborScenarioPackager:
                 }
             ]
         else:
-            # Agent harnesses (agy, jetski, claude-code, opencode, codex, or custom)
+            # Harbor pre-integrated agent harnesses (antigravity-cli, claude-code, opencode, codex,
+            # gemini-cli) or a user-registered harness name.
             agents_cfg = [
                 {
-                    "name": agent_clean,
+                    "name": harbor_native_name or agent_clean,
                     "model_name": model_alias,
                 }
             ]

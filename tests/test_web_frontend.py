@@ -118,6 +118,8 @@ def test_gcp_project_location_and_miq_enablement(web_server: str) -> None:
             "mistral-large-3",
             "gemini-3.5-pro",
             "deepseek-r2",
+            # Later tests run gemini-4-argon; only models enabled in the linked project may be the MIQ.
+            "gemini-4-argon",
         ],
     }).encode("utf-8")
 

@@ -1455,3 +1455,190 @@ textarea:focus, select:focus, input[type="text"]:focus {
   border-top: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
 }
+
+/* ==========================================================================
+   GCP project linking status, harness install status, and evaluation report
+   ========================================================================== */
+
+.muted {
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.gcp-verify-partner-label {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.gcp-link-status {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.gcp-link-status[data-state="linked"] {
+  border-color: var(--google-green-border);
+  background-color: var(--google-green-soft);
+  color: var(--google-green);
+}
+
+.gcp-link-status[data-state="error"] {
+  border-color: var(--google-red-border);
+  background-color: var(--google-red-soft);
+  color: var(--google-red);
+}
+
+.gcp-link-status ul {
+  margin: 0.4rem 0 0 1.1rem;
+  padding: 0;
+}
+
+.install-chip.installed {
+  background-color: var(--google-green-soft);
+  color: var(--google-green);
+  border-color: var(--google-green-border);
+}
+
+.install-chip.missing {
+  background-color: var(--google-red-soft);
+  color: var(--google-red);
+  border-color: var(--google-red-border);
+}
+
+.install-chip.unverified {
+  background-color: var(--google-yellow-soft);
+  color: var(--google-yellow-dark);
+  border-color: var(--google-yellow-border);
+}
+
+.harness-card.not-installed {
+  opacity: 0.6;
+}
+
+.harness-card.not-installed.selected {
+  opacity: 1;
+}
+
+.harness-warning,
+.report-warnings {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background-color: var(--google-yellow-soft);
+  border: 1px solid var(--google-yellow-border);
+  color: var(--google-yellow-dark);
+}
+
+.custom-harness-panel {
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.custom-harness-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--google-blue);
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.report-summary-card {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+}
+
+.report-summary-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.report-summary-value {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.2rem;
+}
+
+.report-summary-sub {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.report-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.report-table th,
+.report-table td {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.report-table td:nth-child(2) {
+  white-space: normal;
+  min-width: 220px;
+}
+
+.report-table thead th {
+  background-color: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  position: sticky;
+  top: 0;
+}
+
+.report-table tfoot td {
+  background-color: var(--bg-tertiary);
+  border-bottom: none;
+}
+
+.report-table .pending-row td {
+  color: var(--text-muted);
+}
+
+.report-error {
+  margin-top: 0.25rem;
+  color: var(--google-red);
+  font-size: 0.72rem;
+  white-space: normal;
+}
+
+.report-footnote {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

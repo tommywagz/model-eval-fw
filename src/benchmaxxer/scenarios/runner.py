@@ -371,8 +371,13 @@ def execute_scenario_run(
     assess_provider_tokens: bool = True,
     critic_model: Optional[str] = None,
     no_critics: bool = False,
+    candidate_usage: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a full end-to-end scenario evaluation (Test Level), with individual test timer and token cost assessment."""
+    """Execute a full end-to-end scenario evaluation (Test Level), with individual test timer and token cost assessment.
+
+    ``candidate_usage`` (optional, used with ``candidate_override``) carries the real token usage,
+    latency and cost reported by the agent harness that produced the candidate.
+    """
     load_project_dotenv(dotenv_path=dotenv_path)
     spec = get_scenario_spec(scenario_id)
     prompt = spec["prompt"]
@@ -409,9 +414,10 @@ def execute_scenario_run(
     with test_timer.phase("candidate_generation"):
         if candidate_override is not None:
             candidate_output = candidate_override
-            input_tokens = len(prompt.split())
-            output_tokens = len(candidate_output.split())
-            latency_ms = 1.5
+            usage = candidate_usage or {}
+            input_tokens = int(usage.get("input_tokens") or len(prompt.split()))
+            output_tokens = int(usage.get("output_tokens") or len(candidate_output.split()))
+            latency_ms = float(usage.get("latency_ms") or 1.5)
             was_cached = False
         elif fixture_data and "candidate_output" in fixture_data:
             candidate_output = str(fixture_data["candidate_output"])
@@ -607,6 +613,8 @@ def execute_scenario_run(
 
     # 5. Build Test-Level Timing & Token Cost Results
     candidate_cost_usd = client.estimate_cost(input_tokens, output_tokens)
+    if candidate_usage and candidate_usage.get("reported_cost_usd") is not None:
+        candidate_cost_usd = round(float(candidate_usage["reported_cost_usd"]), 6)
     timing_result = build_test_timing_result(
         scenario_id=scenario_id,
         suite_slug=suite_slug,

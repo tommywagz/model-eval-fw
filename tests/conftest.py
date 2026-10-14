@@ -96,3 +96,17 @@ class _PytestHierarchyTimerPlugin:
 def pytest_configure(config: pytest.Config) -> None:
     if not config.pluginmanager.has_plugin("benchmaxxer_hierarchy_timer"):
         config.pluginmanager.register(_PytestHierarchyTimerPlugin(), "benchmaxxer_hierarchy_timer")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolated_benchmaxxer_state(tmp_path_factory: pytest.TempPathFactory):
+    """Keep tests from reading/writing the developer's persisted GCP link (.benchmaxxer/)."""
+    import os
+
+    previous = os.environ.get("BENCHMAXXER_STATE_DIR")
+    os.environ["BENCHMAXXER_STATE_DIR"] = str(tmp_path_factory.mktemp("benchmaxxer_state"))
+    yield
+    if previous is None:
+        os.environ.pop("BENCHMAXXER_STATE_DIR", None)
+    else:
+        os.environ["BENCHMAXXER_STATE_DIR"] = previous

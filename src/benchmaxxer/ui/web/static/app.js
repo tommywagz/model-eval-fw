@@ -6,8 +6,9 @@
  */
 
 const state = {
-  gcpProject: "benchmaxxer-eval-sandbox",
+  gcpProject: "",
   gcpLocation: "us-central1",
+  linkStatus: {},
   allModels: [],
   defaultModels: [],
   dropdownModels: [],
@@ -28,6 +29,36 @@ const state = {
   localTimer: null,
   localStartTime: null,
 };
+
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function fmtUsd(v, digits = 5) {
+  return `$${Number(v || 0).toFixed(digits)}`;
+}
+
+function fmtInt(v) {
+  return Number(v || 0).toLocaleString();
+}
+
+async function readJsonResponse(res) {
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (e) {
+    data = {};
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
 
 const TEMPLATES = {
   skill_bigquery_alert:
@@ -173,9 +204,10 @@ async function fetchHarnesses() {
   const container = document.getElementById("harness-cards-container");
   try {
     const res = await fetch("/api/harnesses");
-    const data = await res.json();
+    const data = await readJsonResponse(res);
+    const previousSelection = state.allHarnesses.length ? state.selectedHarnessId : null;
     state.allHarnesses = data.harnesses || [];
-    state.selectedHarnessId = data.default_harness || "agy";
+    state.selectedHarnessId = previousSelection || data.default_harness || "agy";
     state.internalGooglePermissions = data.internal_google_default_permissions || null;
 
     state.defaultHarnesses = state.allHarnesses.filter((h) => h.is_default !== false);
@@ -185,11 +217,19 @@ async function fetchHarnesses() {
     renderAdditionalHarnessesDropdown(state.dropdownHarnesses);
     updateActiveHarnessIndicator();
     updateInternalPermissionsBar();
+    updateHarnessWarning();
   } catch (err) {
     if (container) {
-      container.innerHTML = `<div class="error-msg">Error loading agent harnesses: ${err.message}</div>`;
+      container.innerHTML = `<div class="error-msg">Error loading agent harnesses: ${escapeHtml(err.message)}</div>`;
     }
   }
+}
+
+function harnessInstallChip(h) {
+  if (h.builtin) return `<span class="tag-chip install-chip installed">Built-in</span>`;
+  return h.installed
+    ? `<span class="tag-chip install-chip installed" title="${escapeHtml(h.install_status)}">✓ Installed</span>`
+    : `<span class="tag-chip install-chip missing" title="${escapeHtml(h.install_status)}">Not installed</span>`;
 }
 
 function renderHarnessCards(harnesses) {
@@ -200,34 +240,33 @@ function renderHarnessCards(harnesses) {
   harnesses.forEach((h) => {
     const isSelected = h.id === state.selectedHarnessId;
     const card = document.createElement("div");
-    card.className = `model-card harness-card ${isSelected ? "selected" : ""}`;
+    card.className = `model-card harness-card ${isSelected ? "selected" : ""} ${h.installed ? "" : "not-installed"}`;
     card.setAttribute("data-harness-id", h.id);
     card.onclick = () => selectHarness(h.id);
 
     card.innerHTML = `
       <div>
         <div class="model-card-top">
-          <div class="model-brand-logo" title="${h.provider}">
+          <div class="model-brand-logo" title="${escapeHtml(h.provider)}">
             ${getHarnessLogoSvg(h.id, h.brand)}
           </div>
           <div style="display: flex; align-items: center; gap: 0.4rem;">
-            <span class="badge badge-recommended">${h.badge || "Harbor Harness"}</span>
+            <span class="badge badge-recommended">${escapeHtml(h.badge || "Harbor Harness")}</span>
             <div class="model-select-check" aria-hidden="true">✓</div>
           </div>
         </div>
         <div class="model-card-header">
-          <span class="model-card-title">${h.name}</span>
+          <span class="model-card-title">${escapeHtml(h.name)}</span>
         </div>
-        <div class="model-provider">${h.provider} • <code>${h.cli_binary || h.id}</code></div>
-        <p class="model-desc">${h.description}</p>
+        <div class="model-provider">${escapeHtml(h.provider)} • <code>${escapeHtml(h.cli_binary || h.id)}</code></div>
+        <p class="model-desc">${escapeHtml(h.description)}</p>
         <div class="model-tags">
-          <span class="tag-chip">Harbor Sandbox Ready</span>
-          <span class="tag-chip">Internal Google ADC</span>
+          ${harnessInstallChip(h)}
+          ${h.harbor_agent_name ? `<span class="tag-chip">Harbor: ${escapeHtml(h.harbor_agent_name)}</span>` : `<span class="tag-chip">Harbor bridge agent</span>`}
         </div>
       </div>
       <div class="model-pricing">
-        <span>Sandbox: <span class="pricing-val">Harbor Podman/Docker</span></span>
-        <span>Perms: <span class="pricing-val">Default GCP IAM</span></span>
+        <span title="${escapeHtml(h.install_status || "")}">${h.binary_path ? `<code>${escapeHtml(h.binary_path)}</code>` : escapeHtml(h.install_status || "")}</span>
       </div>
     `;
     container.appendChild(card);
@@ -238,12 +277,12 @@ function renderAdditionalHarnessesDropdown(dropdownHarnesses) {
   const select = document.getElementById("additional-harnesses-dropdown");
   if (!select) return;
 
-  select.innerHTML = `<option value="">-- Additional Harnesses (${dropdownHarnesses.length} Native / Reference) --</option>`;
+  select.innerHTML = `<option value="">-- Additional Harnesses (${dropdownHarnesses.length}) --</option>`;
   dropdownHarnesses.forEach((h) => {
     const opt = document.createElement("option");
     opt.value = h.id;
     opt.selected = h.id === state.selectedHarnessId;
-    opt.textContent = `${h.name} (${h.id}) — ${h.provider}`;
+    opt.textContent = `${h.name} (${h.id}) — ${h.installed ? "installed" : "not installed"}`;
     select.appendChild(opt);
   });
 }
@@ -251,11 +290,8 @@ function renderAdditionalHarnessesDropdown(dropdownHarnesses) {
 function selectHarness(harnessId) {
   state.selectedHarnessId = harnessId;
 
-  const cards = document.querySelectorAll(".harness-card");
-  state.defaultHarnesses.forEach((h, idx) => {
-    if (cards[idx]) {
-      cards[idx].classList.toggle("selected", h.id === harnessId);
-    }
+  document.querySelectorAll(".harness-card").forEach((card) => {
+    card.classList.toggle("selected", card.getAttribute("data-harness-id") === harnessId);
   });
 
   const dropdown = document.getElementById("additional-harnesses-dropdown");
@@ -265,6 +301,7 @@ function selectHarness(harnessId) {
   }
 
   updateActiveHarnessIndicator();
+  updateHarnessWarning();
 }
 
 function onSelectDropdownHarness(harnessId) {
@@ -282,50 +319,101 @@ function updateActiveHarnessIndicator() {
   indicator.textContent = `Active Harness: ${found ? found.name : state.selectedHarnessId}`;
 }
 
+function updateHarnessWarning() {
+  const box = document.getElementById("harness-warning");
+  if (!box) return;
+  const h = state.allHarnesses.find((x) => x.id === state.selectedHarnessId);
+  const model = state.allModels.find((m) => m.id === state.selectedModelId);
+  const messages = [];
+  if (h && !h.installed) {
+    messages.push(
+      `<strong>${escapeHtml(h.name)}</strong> is not installed on this machine (${escapeHtml(h.install_status)}). ` +
+        `Install it and click "Re-detect" to use it for live runs; mock runs simulate it.`
+    );
+  }
+  if (h && model && Array.isArray(h.supported_brands) && h.supported_brands.length > 0 &&
+      !h.supported_brands.includes(String(model.brand || "").toLowerCase())) {
+    messages.push(
+      `<strong>${escapeHtml(h.name)}</strong> can only host ${escapeHtml(h.supported_brands.join(", "))} models; ` +
+        `the selected MIQ <strong>${escapeHtml(model.name)}</strong> is a ${escapeHtml(model.brand)} model.`
+    );
+  }
+  box.style.display = messages.length ? "block" : "none";
+  box.innerHTML = messages.map((m) => `<div>⚠ ${m}</div>`).join("");
+}
+
+async function registerCustomHarness() {
+  const name = document.getElementById("custom-harness-name").value.trim();
+  const binary = document.getElementById("custom-harness-binary").value.trim();
+  const command = document.getElementById("custom-harness-command").value.trim();
+  if (!name || !binary) {
+    alert("Please provide both a harness name and the CLI binary.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/harnesses/custom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, cli_binary: binary, headless_command: command || null }),
+    });
+    const data = await readJsonResponse(res);
+    await fetchHarnesses();
+    selectHarness(data.harness.id);
+    if (!data.harness.installed) {
+      alert(`Registered '${data.harness.name}', but '${binary}' was not found on this machine.`);
+    }
+  } catch (err) {
+    alert("Could not register harness: " + err.message);
+  }
+}
+
 function updateInternalPermissionsBar() {
   const saLabel = document.getElementById("sandbox-sa-label");
   if (saLabel) {
-    saLabel.textContent = `benchmaxxer-sa@${state.gcpProject}.iam.gserviceaccount.com`;
+    const sa = state.internalGooglePermissions && state.internalGooglePermissions.service_account;
+    saLabel.textContent = sa || `benchmaxxer-sa@${state.gcpProject}.iam.gserviceaccount.com`;
   }
+}
+
+function applyModelsSnapshot(data) {
+  state.gcpProject = data.project_id || state.gcpProject;
+  state.gcpLocation = data.location || state.gcpLocation;
+  state.linkStatus = data.link_status || {};
+  state.allModels = data.models || [];
+  state.models = state.allModels;
+  state.defaultModels = data.default_models || state.allModels.filter((m) => m.is_default && m.enabled);
+  state.dropdownModels = data.dropdown_models || state.allModels.filter((m) => m.enabled && !m.is_default);
+
+  // Keep the selected MIQ valid: it must be enabled in the linked project.
+  const enabled = state.allModels.filter((m) => m.enabled);
+  if (!enabled.some((m) => m.id === state.selectedModelId)) {
+    state.selectedModelId = (state.defaultModels[0] || enabled[0] || {}).id || "";
+  }
+
+  updateGcpHeaderUI();
+  updateInternalPermissionsBar();
+  renderGcpMiqToggles(state.allModels);
+  renderModelCards(state.defaultModels);
+  renderEnabledModelsDropdown(state.dropdownModels);
+  updateActiveModelIndicator();
+  updateHarnessWarning();
 }
 
 async function fetchModels() {
   const container = document.getElementById("model-cards-container");
   try {
     const res = await fetch("/api/models");
-    const data = await res.json();
-
-    state.gcpProject = data.project_id || "benchmaxxer-eval-sandbox";
-    state.gcpLocation = data.location || "us-central1";
-    state.allModels = data.models || [];
-    state.models = state.allModels;
-
-    // Separate the 5 default frontier models and the additional enabled GCP project models
-    state.defaultModels =
-      data.default_models && data.default_models.length > 0
-        ? data.default_models
-        : state.allModels.filter((m) => m.is_default);
-
-    state.dropdownModels =
-      data.dropdown_models ||
-      state.allModels.filter((m) => m.enabled && !m.is_default);
-
-    // Ensure selectedModelId is valid
-    if (!state.selectedModelId && state.defaultModels.length > 0) {
-      state.selectedModelId = state.defaultModels[0].id;
-    }
-
-    updateGcpHeaderUI();
-    updateInternalPermissionsBar();
-    renderGcpMiqToggles(state.allModels);
-    renderModelCards(state.defaultModels);
-    renderEnabledModelsDropdown(state.dropdownModels);
-    updateActiveModelIndicator();
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
   } catch (err) {
     if (container) {
-      container.innerHTML = `<div class="error-msg">Error loading models: ${err.message}</div>`;
+      container.innerHTML = `<div class="error-msg">Error loading models: ${escapeHtml(err.message)}</div>`;
     }
   }
+}
+
+function isDiscoveredProject() {
+  return state.linkStatus && state.linkStatus.source === "discovered";
 }
 
 function updateGcpHeaderUI() {
@@ -335,16 +423,43 @@ function updateGcpHeaderUI() {
   const locSelect = document.getElementById("gcp-location-select");
   const dropdownProjLabel = document.getElementById("dropdown-project-label");
   const enabledCountBadge = document.getElementById("enabled-miq-count-badge");
+  const savedBadge = document.getElementById("gcp-config-saved-badge");
+  const statusBox = document.getElementById("gcp-link-status");
 
-  if (statusText) statusText.textContent = `GCP: ${state.gcpProject}`;
+  const discovered = isDiscoveredProject();
+  if (statusText) statusText.textContent = discovered ? `GCP: ${state.gcpProject}` : `GCP: ${state.gcpProject} (not linked)`;
   if (headerLoc) headerLoc.textContent = state.gcpLocation;
-  if (projInput) projInput.value = state.gcpProject;
-  if (locSelect) locSelect.value = state.gcpLocation;
+  if (projInput && document.activeElement !== projInput) projInput.value = state.gcpProject;
+  if (locSelect) {
+    if (![...locSelect.options].some((o) => o.value === state.gcpLocation)) {
+      const opt = document.createElement("option");
+      opt.value = state.gcpLocation;
+      opt.textContent = state.gcpLocation;
+      locSelect.appendChild(opt);
+    }
+    locSelect.value = state.gcpLocation;
+  }
   if (dropdownProjLabel) dropdownProjLabel.textContent = `${state.gcpProject} • ${state.gcpLocation}`;
 
   const totalEnabled = state.allModels.filter((m) => m.enabled).length;
   if (enabledCountBadge) {
-    enabledCountBadge.textContent = `${totalEnabled} MIQ Models Enabled in Project`;
+    enabledCountBadge.textContent = `${totalEnabled} of ${state.allModels.length} Models Enabled`;
+  }
+  if (savedBadge) {
+    savedBadge.textContent = discovered ? `Linked: ${state.gcpProject} (${state.gcpLocation})` : "Not linked (offline demo catalog)";
+    savedBadge.className = `badge ${discovered ? "badge-speed" : "badge-coding"}`;
+  }
+  if (statusBox) {
+    const ls = state.linkStatus || {};
+    const errors = (ls.errors || []).filter(Boolean);
+    statusBox.setAttribute("data-state", discovered ? "linked" : errors.length ? "error" : "offline");
+    let html = escapeHtml(ls.message || "Offline demo catalog — link a GCP project to discover the models enabled in it.");
+    if (ls.credential_source) html += ` <span class="muted">• Credentials: ${escapeHtml(ls.credential_source)}</span>`;
+    if (ls.discovered_at) html += ` <span class="muted">• Discovered ${escapeHtml(ls.discovered_at)}</span>`;
+    if (errors.length) {
+      html += `<ul>${errors.slice(0, 6).map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
+    }
+    statusBox.innerHTML = html;
   }
 }
 
@@ -356,28 +471,82 @@ function toggleGcpConfigPanel() {
   if (input) input.focus();
 }
 
+function enablementChip(m) {
+  const map = {
+    enabled: ["installed", "Enabled"],
+    unverified: ["unverified", "Unverified"],
+    not_enabled: ["missing", "Not enabled"],
+    not_available: ["missing", "Not in region"],
+    error: ["missing", "Check failed"],
+    catalog: ["unverified", "Demo catalog"],
+  };
+  const [cls, label] = map[m.enablement] || (m.enabled ? ["installed", "Enabled"] : ["missing", "Disabled"]);
+  return `<span class="tag-chip install-chip ${cls}" title="${escapeHtml(m.status_detail || "")}">${label}</span>`;
+}
+
 function renderGcpMiqToggles(models) {
   const container = document.getElementById("gcp-miq-toggles-container");
   if (!container) return;
   container.innerHTML = "";
+  const discovered = isDiscoveredProject();
+
+  if (models.length === 0) {
+    container.innerHTML = `<div class="loading-placeholder">No models discovered yet.</div>`;
+    return;
+  }
 
   models.forEach((m) => {
     const item = document.createElement("div");
     item.className = `miq-toggle-item ${m.enabled ? "enabled" : ""}`;
-    item.onclick = () => toggleMiqModelInProject(m.id, !m.enabled);
-
+    const meta = `${escapeHtml(m.publisher || m.brand || "")} • ${escapeHtml(m.location || state.gcpLocation)}${m.launch_stage ? " • " + escapeHtml(m.launch_stage) : ""}`;
+    let control;
+    if (discovered && m.discovered) {
+      const canVerify = m.publisher && m.publisher !== "endpoint";
+      control = `
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          ${enablementChip(m)}
+          ${canVerify ? `<button type="button" class="chip-btn" onclick="event.stopPropagation(); verifyModelAccess('${escapeHtml(m.id)}', this)">Verify</button>` : ""}
+        </div>`;
+    } else {
+      item.onclick = () => toggleMiqModelInProject(m.id, !m.enabled);
+      control = `<input type="checkbox" ${m.enabled ? "checked" : ""} aria-label="Enable ${escapeHtml(m.name)} (demo catalog)" onclick="event.stopPropagation(); toggleMiqModelInProject('${escapeHtml(m.id)}', this.checked)">`;
+    }
     item.innerHTML = `
       <div class="miq-toggle-left">
         <div class="miq-toggle-brand">${getBrandLogoSvg(m.brand, m.id)}</div>
         <div style="min-width: 0;">
-          <div class="miq-toggle-name">${m.name}</div>
-          <div class="miq-toggle-meta">${m.is_default ? "Default Card" : "Dropdown MIQ"} • ${m.location || state.gcpLocation}</div>
+          <div class="miq-toggle-name" title="${escapeHtml(m.status_detail || m.name)}">${escapeHtml(m.name)}</div>
+          <div class="miq-toggle-meta">${meta}</div>
         </div>
       </div>
-      <input type="checkbox" ${m.enabled ? "checked" : ""} aria-label="Enable ${m.name} in GCP project" onclick="event.stopPropagation(); toggleMiqModelInProject('${m.id}', this.checked)">
+      ${control}
     `;
     container.appendChild(item);
   });
+}
+
+async function verifyModelAccess(modelId, btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+  }
+  try {
+    const res = await fetch("/api/gcp/models/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
+    const v = data.verification || {};
+    if (!v.enabled) alert(`${modelId}: ${v.detail || "not enabled"}`);
+  } catch (err) {
+    alert("Verification failed: " + err.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Verify";
+    }
+  }
 }
 
 async function toggleMiqModelInProject(modelId, enabledState) {
@@ -387,16 +556,8 @@ async function toggleMiqModelInProject(modelId, enabledState) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_id: modelId, enabled: enabledState }),
     });
-    const data = await res.json();
-    if (data.success) {
-      state.allModels = data.models || state.allModels;
-      state.defaultModels = data.default_models || state.defaultModels;
-      state.dropdownModels = data.dropdown_models || [];
-      updateGcpHeaderUI();
-      renderGcpMiqToggles(state.allModels);
-      renderModelCards(state.defaultModels);
-      renderEnabledModelsDropdown(state.dropdownModels);
-    }
+    const data = await readJsonResponse(res);
+    if (data.success) applyModelsSnapshot(data);
   } catch (err) {
     console.error("Failed to toggle MIQ model:", err);
   }
@@ -405,69 +566,71 @@ async function toggleMiqModelInProject(modelId, enabledState) {
 async function saveGcpConfiguration() {
   const projInput = document.getElementById("gcp-project-input");
   const locSelect = document.getElementById("gcp-location-select");
+  const verifyToggle = document.getElementById("gcp-verify-partner-toggle");
   const btn = document.getElementById("save-gcp-config-btn");
-  const savedBadge = document.getElementById("gcp-config-saved-badge");
 
-  const projectId = (projInput ? projInput.value.trim() : "") || "benchmaxxer-eval-sandbox";
+  const projectId = projInput ? projInput.value.trim() : "";
   const location = (locSelect ? locSelect.value : "") || "us-central1";
-  const enabledIds = state.allModels.filter((m) => m.enabled).map((m) => m.id);
+  if (!projectId) {
+    alert("Enter the ID of the GCP project you want to link.");
+    return;
+  }
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = "<span>⏳</span> Linking GCP Project...";
+    btn.innerHTML = "<span>⏳</span> Verifying project & discovering models...";
   }
 
   try {
-    const res = await fetch("/api/gcp/config", {
+    const res = await fetch("/api/gcp/link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         project_id: projectId,
         location: location,
-        enabled_model_ids: enabledIds,
+        verify_partner_access: Boolean(verifyToggle && verifyToggle.checked),
       }),
     });
-    const data = await res.json();
-    if (data.success) {
-      state.gcpProject = data.project_id;
-      state.gcpLocation = data.location;
-      state.allModels = data.models || [];
-      state.defaultModels = data.default_models || [];
-      state.dropdownModels = data.dropdown_models || [];
-
-      updateGcpHeaderUI();
-      updateInternalPermissionsBar();
-      renderGcpMiqToggles(state.allModels);
-      renderModelCards(state.defaultModels);
-      renderEnabledModelsDropdown(state.dropdownModels);
-
-      if (savedBadge) {
-        savedBadge.textContent = `Linked: ${state.gcpProject} (${state.gcpLocation})`;
-      }
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
+    if (!data.success) {
+      const lr = data.link_result || {};
+      alert(`Could not link ${projectId}: ${lr.message || "see details in the GCP panel"}`);
     }
   } catch (err) {
-    alert("Error updating GCP configuration: " + err.message);
+    alert("Error linking GCP project: " + err.message);
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>☁️</span> Link & Save GCP Config";
+      btn.innerHTML = "<span>☁️</span> Link &amp; Discover Models";
     }
   }
 }
 
+
 // ============================================================================
 // Step 1: Frontier Model Cards (4 Defaults) & Enabled GCP Project Dropdown
 // ============================================================================
+
+function pricingLabel(m) {
+  const src = m.pricing_source && m.pricing_source !== "catalog" ? ` (${m.pricing_source.replace(/_/g, " ")})` : "";
+  return `In: <span class="pricing-val">$${(Number(m.cost_per_1k_input_usd || 0) * 1000).toFixed(2)}/M</span> • Out: <span class="pricing-val">$${(Number(m.cost_per_1k_output_usd || 0) * 1000).toFixed(2)}/M</span><span class="muted">${escapeHtml(src)}</span>`;
+}
 
 function renderModelCards(models) {
   const container = document.getElementById("model-cards-container");
   if (!container) return;
   container.innerHTML = "";
 
+  if (models.length === 0) {
+    container.innerHTML = `<div class="loading-placeholder">No enabled models in ${escapeHtml(state.gcpProject)} (${escapeHtml(state.gcpLocation)}). Link a project above, or enable/verify models in Vertex AI Model Garden.</div>`;
+    return;
+  }
+
   models.forEach((m) => {
     const isSelected = m.id === state.selectedModelId;
     const card = document.createElement("div");
-    card.className = `model-card ${isSelected ? "selected" : ""}`;
+    card.className = `model-card miq-card ${isSelected ? "selected" : ""}`;
     card.setAttribute("data-model-id", m.id);
     card.onclick = () => selectModel(m.id);
 
@@ -481,26 +644,25 @@ function renderModelCards(models) {
     card.innerHTML = `
       <div>
         <div class="model-card-top">
-          <div class="model-brand-logo" title="${m.provider}">
+          <div class="model-brand-logo" title="${escapeHtml(m.provider)}">
             ${getBrandLogoSvg(m.brand, m.id)}
           </div>
           <div style="display: flex; align-items: center; gap: 0.4rem;">
-            <span class="badge ${badgeClass}">${m.badge || "Frontier MIQ"}</span>
+            <span class="badge ${badgeClass}">${escapeHtml(m.badge || "Frontier MIQ")}</span>
             <div class="model-select-check" aria-hidden="true">✓</div>
           </div>
         </div>
         <div class="model-card-header">
-          <span class="model-card-title">${m.name}</span>
+          <span class="model-card-title">${escapeHtml(m.name)}</span>
         </div>
-        <div class="model-provider">${m.provider}</div>
-        <p class="model-desc">${m.description}</p>
+        <div class="model-provider">${escapeHtml(m.provider)}</div>
+        <p class="model-desc">${escapeHtml(m.description)}</p>
         <div class="model-tags">
-          ${(m.tags || []).map((t) => `<span class="tag-chip">${t}</span>`).join("")}
+          ${(m.tags || []).map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}
         </div>
       </div>
       <div class="model-pricing">
-        <span>In: <span class="pricing-val">$${(m.cost_per_1k_input_usd * 1000).toFixed(2)}/M</span></span>
-        <span>Out: <span class="pricing-val">$${(m.cost_per_1k_output_usd * 1000).toFixed(2)}/M</span></span>
+        <span>${pricingLabel(m)}</span>
       </div>
     `;
     container.appendChild(card);
@@ -511,12 +673,12 @@ function renderEnabledModelsDropdown(dropdownModels) {
   const select = document.getElementById("enabled-models-dropdown");
   if (!select) return;
 
-  select.innerHTML = `<option value="">-- Select from ${dropdownModels.length} other enabled MIQ models in ${state.gcpProject} --</option>`;
+  select.innerHTML = `<option value="">-- Select from ${dropdownModels.length} other enabled models in ${escapeHtml(state.gcpProject)} --</option>`;
   dropdownModels.forEach((m) => {
     const opt = document.createElement("option");
     opt.value = m.id;
     opt.selected = m.id === state.selectedModelId;
-    opt.textContent = `${m.name} — ${m.provider} (${m.location || state.gcpLocation}) [$${(m.cost_per_1k_input_usd * 1000).toFixed(2)}/M in]`;
+    opt.textContent = `${m.name} — ${m.provider} (${m.location || state.gcpLocation}) [$${(Number(m.cost_per_1k_input_usd || 0) * 1000).toFixed(2)}/M in]`;
     select.appendChild(opt);
   });
 
@@ -526,12 +688,8 @@ function renderEnabledModelsDropdown(dropdownModels) {
 function selectModel(modelId) {
   state.selectedModelId = modelId;
 
-  // Update the 4 default cards selection state
-  const cards = document.querySelectorAll(".model-card");
-  state.defaultModels.forEach((m, idx) => {
-    if (cards[idx]) {
-      cards[idx].classList.toggle("selected", m.id === modelId);
-    }
+  document.querySelectorAll(".miq-card").forEach((card) => {
+    card.classList.toggle("selected", card.getAttribute("data-model-id") === modelId);
   });
 
   // Sync dropdown value if selected from default squares vs dropdown
@@ -543,12 +701,13 @@ function selectModel(modelId) {
 
   updateDropdownBanner();
   updateActiveModelIndicator();
+  updateHarnessWarning();
 }
 
 function onSelectDropdownModel(modelId) {
   if (!modelId) {
-    // Revert to Gemini 3.1 Pro default
-    selectModel("gemini-3.1-pro");
+    const fallback = state.defaultModels[0] || state.allModels.find((m) => m.enabled);
+    selectModel(fallback ? fallback.id : "");
     return;
   }
   selectModel(modelId);
@@ -626,7 +785,7 @@ function renderStandardScenariosChecklist() {
   if (!container) return;
   container.innerHTML = "";
 
-  const standardScenarios = state.allScenarios.filter((s) => !s.scenario_id.startswith?.("argon_") && !s.scenario_id.startsWith("argon_"));
+  const standardScenarios = getStandardScenarios();
   standardScenarios.forEach((s) => {
     const isChecked = state.customSuiteItems.some((item) => item.scenario_id === s.scenario_id);
     const label = document.createElement("label");
@@ -641,6 +800,30 @@ function renderStandardScenariosChecklist() {
     `;
     container.appendChild(label);
   });
+}
+
+function getStandardScenarios() {
+  return state.allScenarios.filter((s) => !s.is_custom && !s.scenario_id.startsWith("argon_"));
+}
+
+function selectAllStandardScenarios() {
+  getStandardScenarios().forEach((s) => {
+    if (!state.customSuiteItems.some((i) => i.scenario_id === s.scenario_id)) {
+      addScenarioToCustomSuite(s, false);
+    }
+  });
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+}
+
+function clearStandardScenarios() {
+  state.customSuiteItems = state.customSuiteItems.filter((i) => i.is_custom);
+  if (state.customSuiteItems.length > 0) {
+    state.activeScenarioId = state.customSuiteItems[0].scenario_id;
+    state.activeSuiteSpec = state.customSuiteItems[0];
+  }
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
 }
 
 function toggleStandardScenarioInSuite(scenarioId, checked) {
@@ -733,7 +916,7 @@ function renderCustomSuiteTray() {
   if (state.customSuiteItems.length === 0) {
     listEl.innerHTML = `
       <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; border: 1px dashed var(--border-color); border-radius: 8px;">
-        Your custom test suite is empty. Add 1+ Standard Benchmark Scenarios and/or synthesize 1+ Custom Use Cases on the left.
+        Your test suite is empty. Check any number of pre-configured standard tests and/or add your own test scenarios on the left (at least one test is required to run).
       </div>
     `;
     return;
@@ -936,13 +1119,18 @@ function renderSuitePreview(spec) {
 async function startEvaluation() {
   if (state.isEvaluating) return;
 
-  const scenarioIds =
-    state.customSuiteItems.length > 0
-      ? state.customSuiteItems.map((i) => i.scenario_id)
-      : [state.activeScenarioId];
+  // The suite is exactly what the user composed: any mix of standard + custom tests (>= 1 total).
+  const scenarioIds = state.customSuiteItems.map((i) => i.scenario_id);
+  if (scenarioIds.length === 0) {
+    alert("Your test suite is empty. Add at least one pre-configured standard test or one of your own test scenarios.");
+    return;
+  }
+  if (!state.selectedModelId) {
+    alert("Select a Model in Question (MIQ) enabled in your linked GCP project first.");
+    return;
+  }
 
-  const scenarioId = scenarioIds[0];
-  const modelAlias = state.selectedModelId || "gemini-3.1-pro";
+  const modelAlias = state.selectedModelId;
   const agentHarness = state.selectedHarnessId || "agy";
   const harborToggle = document.getElementById("harbor-sandbox-toggle");
   const useHarbor = harborToggle ? Boolean(harborToggle.checked) : true;
@@ -952,15 +1140,11 @@ async function startEvaluation() {
   const nameInput = document.getElementById("custom-suite-name-input");
   const suiteName = nameInput ? nameInput.value.trim() : "Custom Frontier Evaluation Suite";
 
-  if (!scenarioId) {
-    alert("Please define a use case or select at least one scenario first.");
-    return;
-  }
-
   // Reset UI
   state.isEvaluating = true;
+  state.activeRunData = null;
   document.getElementById("run-eval-btn").disabled = true;
-  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing via ${agentHarness.toUpperCase()} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
+  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing via ${escapeHtml(agentHarness)} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
   document.getElementById("timer-status-badge").textContent = `Running (${agentHarness})`;
   document.getElementById("timer-status-badge").className = "badge badge-recommended";
 
@@ -980,7 +1164,7 @@ async function startEvaluation() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        scenario_id: scenarioId,
+        scenario_id: scenarioIds[0],
         scenario_ids: scenarioIds,
         suite_name: suiteName,
         model_alias: modelAlias,
@@ -993,14 +1177,21 @@ async function startEvaluation() {
       }),
     });
 
-    const initData = await res.json();
-    const runId = initData.run_id;
-
-    // Start polling status
-    pollEvaluationStatus(runId);
+    const initData = await readJsonResponse(res);
+    renderReport({
+      status: "RUNNING",
+      model_alias: modelAlias,
+      agent_harness: agentHarness,
+      scenario_ids: scenarioIds,
+      warnings: initData.warnings || [],
+      test_results: [],
+      completed_tests: 0,
+      total_tests: scenarioIds.length,
+    });
+    pollEvaluationStatus(initData.run_id);
   } catch (err) {
-    stopEvaluationUI();
-    alert("Evaluation failed to launch: " + err.message);
+    stopEvaluationUI("Error");
+    alert("Evaluation could not start: " + err.message);
   }
 }
 
@@ -1014,15 +1205,18 @@ function pollEvaluationStatus(runId) {
 
       const data = await res.json();
       updateTelemetryUI(data);
+      renderReport(data);
 
       if (data.status === "COMPLETED" || data.status === "FAILED") {
         clearInterval(state.pollTimer);
         state.pollTimer = null;
-        stopEvaluationUI();
+        stopEvaluationUI(data.status === "COMPLETED" ? "Complete" : "Failed");
         state.activeRunData = data;
         displayEvaluationResults(data);
-        prepareRepositoryExport(data);
+        if (data.status === "COMPLETED") prepareRepositoryExport(data);
         fetchTokenTelemetry();
+        const reportSection = document.getElementById("eval-report-section");
+        if (reportSection) reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     } catch (err) {
       console.error("Polling error:", err);
@@ -1030,7 +1224,7 @@ function pollEvaluationStatus(runId) {
   }, 600);
 }
 
-function stopEvaluationUI() {
+function stopEvaluationUI(label = "Complete") {
   state.isEvaluating = false;
   if (state.localTimer) {
     clearInterval(state.localTimer);
@@ -1039,8 +1233,176 @@ function stopEvaluationUI() {
   const btn = document.getElementById("run-eval-btn");
   btn.disabled = false;
   btn.innerHTML = '<span class="btn-icon">▶</span> Run Assessment';
-  document.getElementById("timer-status-badge").textContent = "Complete";
-  document.getElementById("timer-status-badge").className = "badge badge-speed";
+  document.getElementById("timer-status-badge").textContent = label;
+  document.getElementById("timer-status-badge").className = `badge ${label === "Complete" ? "badge-speed" : "badge-danger"}`;
+}
+
+// ============================================================================
+// Evaluation Report (bottom of the page): metrics, token cost & time per test
+// ============================================================================
+
+function renderReport(data) {
+  const section = document.getElementById("eval-report-section");
+  if (!section) return;
+  section.style.display = "block";
+
+  const rows = Array.isArray(data.test_results) ? data.test_results : [];
+  const report = data.report || {};
+  const total = data.total_tests || (data.scenario_ids || []).length || rows.length;
+  const done = data.completed_tests !== undefined ? data.completed_tests : rows.length;
+
+  const badge = document.getElementById("eval-report-status-badge");
+  if (badge) {
+    if (data.status === "RUNNING") {
+      badge.textContent = `RUNNING ${done}/${total}`;
+      badge.className = "badge badge-recommended";
+    } else {
+      const allPassed = rows.length > 0 && rows.every((r) => r.status === "PASSED");
+      badge.textContent = data.status === "FAILED" ? "FAILED" : allPassed ? "ALL PASSED" : "COMPLETED WITH FAILURES";
+      badge.className = `badge ${allPassed && data.status !== "FAILED" ? "badge-speed" : "badge-danger"}`;
+    }
+  }
+
+  const subtitle = document.getElementById("eval-report-subtitle");
+  if (subtitle) {
+    const modelName = report.model_name || data.model_alias || state.selectedModelId;
+    const harnessName = report.harness_name || data.agent_harness || state.selectedHarnessId;
+    const where = report.gcp_project_id || data.gcp_project_id || state.gcpProject;
+    subtitle.innerHTML = `MIQ <strong>${escapeHtml(modelName)}</strong> hosted by <strong>${escapeHtml(harnessName)}</strong> • Project <code>${escapeHtml(where)}</code> • ${escapeHtml(report.execution_mode || data.execution_mode || "")} mode${report.harbor || data.harbor ? " • Harbor " + escapeHtml(report.environment_type || data.environment_type || "") : ""}`;
+  }
+
+  const warningsBox = document.getElementById("eval-report-warnings");
+  const warnings = (report.warnings || data.warnings || []).filter(Boolean);
+  if (warningsBox) {
+    const errorLine = data.status === "FAILED" && data.error ? [`Run failed: ${data.error}`] : [];
+    const all = [...warnings, ...errorLine];
+    warningsBox.style.display = all.length ? "block" : "none";
+    warningsBox.innerHTML = all.map((w) => `<div>⚠ ${escapeHtml(w)}</div>`).join("");
+  }
+
+  const sum = (key) => rows.reduce((acc, r) => acc + Number(r[key] || 0), 0);
+  const passedCount = rows.filter((r) => r.status === "PASSED").length;
+  const scored = rows.filter((r) => r.status !== "ERROR");
+  const avgScore = scored.length ? scored.reduce((a, r) => a + Number(r.composite_score || 0), 0) / scored.length : 0;
+  const summary = document.getElementById("eval-report-summary");
+  if (summary) {
+    const cards = [
+      ["Tests", `${done}/${total}`, `${rows.filter((r) => !r.is_custom).length} standard • ${rows.filter((r) => r.is_custom).length} custom`],
+      ["Pass Rate", `${rows.length ? ((100 * passedCount) / rows.length).toFixed(0) : 0}%`, `${passedCount} passed • ${rows.length - passedCount} failed/error`],
+      ["Avg Critic Score", `${avgScore.toFixed(2)} / 5`, "Actor-critic composite"],
+      ["Total Time", `${sum("wall_seconds").toFixed(2)} s`, `avg ${(rows.length ? sum("wall_seconds") / rows.length : 0).toFixed(2)} s / test`],
+      ["Total Tokens", fmtInt(sum("total_tokens")), `${fmtInt(sum("input_tokens"))} in • ${fmtInt(sum("output_tokens"))} out • ${fmtInt(sum("critic_tokens"))} critic`],
+      ["Total Cost", fmtUsd(sum("estimated_cost_usd")), `MIQ ${fmtUsd(sum("candidate_cost_usd"))} • critics ${fmtUsd(sum("critic_cost_usd"))}`],
+    ];
+    summary.innerHTML = cards
+      .map(
+        ([label, value, sub]) => `
+        <div class="report-summary-card">
+          <div class="report-summary-label">${escapeHtml(label)}</div>
+          <div class="report-summary-value">${escapeHtml(value)}</div>
+          <div class="report-summary-sub">${escapeHtml(sub)}</div>
+        </div>`
+      )
+      .join("");
+  }
+
+  const tbody = document.getElementById("eval-report-tbody");
+  const tfoot = document.getElementById("eval-report-tfoot");
+  if (tbody) {
+    const pending = (data.scenario_ids || []).slice(rows.length);
+    tbody.innerHTML =
+      rows
+        .map((r, idx) => {
+          const statusCls = r.status === "PASSED" ? "badge-speed" : "badge-danger";
+          const harborCell =
+            r.harbor_tasks_total !== undefined && r.harbor_tasks_total !== null
+              ? `${r.harbor_tasks_passed}/${r.harbor_tasks_total}`
+              : "—";
+          return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(r.scenario_name || r.scenario_id)}</strong><div class="muted mono">${escapeHtml(r.scenario_id)}</div>${r.error ? `<div class="report-error">${escapeHtml(r.error)}</div>` : ""}</td>
+            <td><span class="badge ${r.is_custom ? "badge-coding" : "badge-recommended"}">${r.is_custom ? "Custom" : "Standard"}</span></td>
+            <td><span class="badge ${statusCls}">${escapeHtml(r.status)}</span></td>
+            <td class="mono">${Number(r.rubric_score || 0).toFixed(1)} / ${Number(r.composite_score || 0).toFixed(2)}</td>
+            <td class="mono">${harborCell}</td>
+            <td class="mono">${Number(r.wall_seconds || 0).toFixed(2)} s</td>
+            <td class="mono">${fmtInt(r.input_tokens)}</td>
+            <td class="mono">${fmtInt(r.output_tokens)}</td>
+            <td class="mono">${fmtInt(r.critic_tokens)}</td>
+            <td class="mono" title="Token source: ${escapeHtml(r.token_source || "")}">${fmtUsd(r.candidate_cost_usd)}</td>
+            <td class="mono"><strong>${fmtUsd(r.estimated_cost_usd)}</strong></td>
+          </tr>`;
+        })
+        .join("") +
+      pending
+        .map(
+          (sid, i) => `
+          <tr class="pending-row">
+            <td>${rows.length + i + 1}</td>
+            <td><strong>${escapeHtml(sid)}</strong></td>
+            <td colspan="10" class="muted">${i === 0 && data.status === "RUNNING" ? "⏳ Running…" : "Queued"}</td>
+          </tr>`
+        )
+        .join("");
+  }
+  if (tfoot) {
+    tfoot.innerHTML = rows.length
+      ? `
+      <tr>
+        <td></td>
+        <td colspan="3"><strong>Total (${rows.length} test${rows.length > 1 ? "s" : ""})</strong></td>
+        <td class="mono">avg ${avgScore.toFixed(2)}</td>
+        <td></td>
+        <td class="mono"><strong>${sum("wall_seconds").toFixed(2)} s</strong></td>
+        <td class="mono">${fmtInt(sum("input_tokens"))}</td>
+        <td class="mono">${fmtInt(sum("output_tokens"))}</td>
+        <td class="mono">${fmtInt(sum("critic_tokens"))}</td>
+        <td class="mono">${fmtUsd(sum("candidate_cost_usd"))}</td>
+        <td class="mono"><strong>${fmtUsd(sum("estimated_cost_usd"))}</strong></td>
+      </tr>`
+      : "";
+  }
+  state.lastReportData = data;
+}
+
+function _downloadBlob(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadReportJson() {
+  const data = state.lastReportData;
+  if (!data) return;
+  _downloadBlob(
+    `benchmaxxer-report-${data.run_id || "run"}.json`,
+    JSON.stringify({ report: data.report || {}, test_results: data.test_results || [] }, null, 2),
+    "application/json"
+  );
+}
+
+function downloadReportCsv() {
+  const data = state.lastReportData;
+  if (!data || !Array.isArray(data.test_results)) return;
+  const cols = [
+    "scenario_id", "scenario_name", "is_custom", "status", "rubric_score", "composite_score",
+    "harbor_tasks_passed", "harbor_tasks_total", "wall_seconds", "duration_seconds",
+    "input_tokens", "output_tokens", "critic_tokens", "total_tokens",
+    "candidate_cost_usd", "critic_cost_usd", "estimated_cost_usd", "token_source", "error",
+  ];
+  const esc = (v) => {
+    const s = v === undefined || v === null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [cols.join(",")].concat(data.test_results.map((r) => cols.map((c) => esc(r[c])).join(",")));
+  _downloadBlob(`benchmaxxer-report-${data.run_id || "run"}.csv`, lines.join("\n"), "text/csv");
 }
 
 function updateTelemetryUI(data) {
@@ -1106,16 +1468,16 @@ function displayEvaluationResults(data) {
         (tr) => `
         <div class="suite-result-row">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span class="badge ${tr.passed ? "badge-speed" : "badge-danger"}">${tr.passed ? "PASS" : "FAIL"}</span>
+            <span class="badge ${tr.passed ? "badge-speed" : "badge-danger"}">${tr.status === "ERROR" ? "ERROR" : tr.passed ? "PASS" : "FAIL"}</span>
             <span class="badge ${tr.is_custom ? "badge-coding" : "badge-recommended"}">${
           tr.is_custom ? "Custom Use Case" : "Standard Benchmark"
         }</span>
-            <strong>${tr.scenario_id}</strong>
+            <strong>${escapeHtml(tr.scenario_name || tr.scenario_id)}</strong>
           </div>
           <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary);">
-            Score: ${Number(tr.rubric_score || 4.0).toFixed(1)}/5 • ${Number(tr.duration_seconds || 0).toFixed(2)}s • ${
-          tr.total_tokens || 0
-        } tok
+            Score: ${Number(tr.rubric_score || 0).toFixed(1)}/5 • ${Number(tr.wall_seconds || tr.duration_seconds || 0).toFixed(2)}s • ${
+          fmtInt(tr.total_tokens)
+        } tok • ${fmtUsd(tr.estimated_cost_usd)}
           </div>
         </div>
       `
@@ -1124,7 +1486,7 @@ function displayEvaluationResults(data) {
   }
 
   const acScores = data.actor_critic_scores || {};
-  const compScore = acScores.composite_normalized_score || 4.2;
+  const compScore = acScores.composite_normalized_score || 0;
   document.getElementById("composite-score-text").textContent = `${Number(compScore).toFixed(1)} / 5.0`;
 
   const evals = acScores.evaluations || {};

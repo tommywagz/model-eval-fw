@@ -184,6 +184,8 @@ class ArgonSuiteCreator:
         suite_slug = spec["suite_slug"]
 
         SCENARIO_CATALOG[scenario_id] = {
+            "scenario_name": spec.get("scenario_name", scenario_id),
+            "is_custom": True,
             "pillar": spec["pillar"],
             "suite_name": spec["suite_name"],
             "suite_slug": suite_slug,

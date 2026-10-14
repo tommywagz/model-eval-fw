@@ -452,10 +452,36 @@ class HarborPodmanRunner:
         cache_dir: Optional[str | Path] = None,
         dotenv_path: Optional[str | Path] = None,
         tokens_script_path: Optional[str | Path] = None,
+        candidate_override: Optional[str] = None,
+        candidate_usage: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Package a Test Scenario as a Harbor Job and run all Individual Tests as Harbor Tasks."""
+        """Package a Test Scenario as a Harbor Job and run all Individual Tests as Harbor Tasks.
+
+        When ``candidate_override`` is supplied (the selected harness CLI already generated the
+        candidate on the host), it is staged into the Harbor sandbox via the BenchMaxxer bridge
+        agent and evaluated instead of re-generating it.
+        """
         job_timer = ExecutionTimer(name=f"harbor_job:{scenario_id}", level="test").start()
         agent_clean = normalize_agent_harness(agent_type)
+
+        candidate_output_path: Optional[Path] = None
+        if candidate_override is not None:
+            staging_dir = self.output_dir / "_host_candidates"
+            staging_dir.mkdir(parents=True, exist_ok=True)
+            candidate_output_path = (staging_dir / f"{scenario_id}.json").resolve()
+            candidate_output_path.write_text(
+                json.dumps(
+                    {
+                        "scenario_id": scenario_id,
+                        "agent_harness": agent_clean,
+                        "candidate_output": candidate_override,
+                        **(candidate_usage or {}),
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
         with job_timer.phase("package_harbor_job"):
             job_pkg = self.packager.package_scenario_job(
@@ -464,6 +490,7 @@ class HarborPodmanRunner:
                 mode=mode,
                 agent_type=agent_clean,
                 fixtures_override=fixtures_path,
+                candidate_output_path=candidate_output_path,
             )
 
         with job_timer.phase("validate_harbor_config"):
@@ -564,6 +591,8 @@ class HarborPodmanRunner:
                 telemetry_dir=telemetry_dir,
                 dotenv_path=dotenv_path,
                 tokens_script_path=tokens_script_path,
+                candidate_override=candidate_override,
+                candidate_usage=candidate_usage,
             )
 
         job_timer.stop()
@@ -1181,6 +1210,8 @@ def run_harbor_scenario_job(
     cache_dir: Optional[str | Path] = None,
     dotenv_path: Optional[str | Path] = None,
     tokens_script_path: Optional[str | Path] = None,
+    candidate_override: Optional[str] = None,
+    candidate_usage: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Convenience function to package and run a single scenario as a Harbor Job."""
     runner = HarborRunner(
@@ -1201,6 +1232,8 @@ def run_harbor_scenario_job(
         cache_dir=cache_dir,
         dotenv_path=dotenv_path,
         tokens_script_path=tokens_script_path,
+        candidate_override=candidate_override,
+        candidate_usage=candidate_usage,
     )
 
 

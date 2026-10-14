@@ -166,46 +166,39 @@ Open **`http://localhost:8080`** (or `http://127.0.0.1:8080`) in any modern brow
 +----------------------------------------------------------------------------------------------------+
 |                         BENCHMAXXER EVALUATION STUDIO (Powered by Harbor & Jev)                    |
 +----------------------------------------------------------------------------------------------------+
-|  [0. Link GCP Project]   Configure GCP Project ID, Location, & enable Model Garden MIQs            |
-|  [1. Frontier Models]    5 Primary Cards (Gemini 3.1 Pro, 3.8 Flash, Opus 5.1, Sonnet 5.5, Mistral)|
-|                          + Dropdown selector for additional enabled MIQ models in linked project   |
-|  [⚙. Agent Harness]      Select Harness (AGY, Jetski, Claude Code, OpenCode, Codex) running inside |
-|                          Harbor Sandboxes with Internal Google Default Permissions (ADC & IAM)     |
-|  [2. Custom Test Suite]  Combine 1+ Standard Benchmark Scenarios AND 1+ Custom Argon Use Cases     |
-|  [3. Run Assessment]     Observe real-time hierarchical execution timers & token costs ($ USD)     |
+|  [0. Link GCP Project]   Enter ANY project ID -> verify access + Vertex AI -> discover Model Garden |
+|  [1. Model in Question]  Pick any model ENABLED in the linked project (featured cards + dropdown)   |
+|  [⚙. Agent Harness]      Antigravity (default), Jetski, Claude Code, OpenCode, Codex, Gemini CLI or |
+|                          any registered CLI -- auto-detected; must be installed on this machine    |
+|  [2. Test Suite]         All / some / one / none of the standard tests + your own custom tests     |
+|  [3. Run Assessment]     Live timers & token costs while each test runs (optionally in Harbor)     |
 |  [4. Export to Repo]     Insert result (Skill, Workflow, or Codebase) into target Git repository   |
+|  [📊 Report]             Bottom of page: per-test result, score, time, tokens & cost + totals      |
 +----------------------------------------------------------------------------------------------------+
 ```
 
-##### Step 0: Configure Linked Google Cloud Project, Region & Enabled MIQ Models
-* Click the **`GCP: <project_id>`** pill in the top header or use the **Google Cloud Project & Vertex AI Model Garden (MIQ) Configuration** card to:
-  * Set your linked **GCP Project ID** (e.g., `benchmaxxer-eval-sandbox`) and **Vertex AI Region / Location** (`us-central1`, `us-east5`, `europe-west4`, `global`, etc.).
-  * Enable or disable assessable Frontier Models (MIQs) in your linked GCP project. Enabled models automatically populate the dropdown selector in Section 1.
+##### Step 0: Link a Google Cloud Project & Discover Its Model Garden Models
+* Authenticate once on the machine running the studio: `gcloud auth login && gcloud auth application-default login`.
+* In the **Google Cloud Project & Vertex AI Model Garden (MIQ) Configuration** card, enter **any GCP project ID** you can access, pick a **Vertex AI region**, and click **Link & Discover Models** (`POST /api/gcp/link`). The studio:
+  1. Obtains an access token from ADC (`google-auth` or `gcloud`), verifies the project (Cloud Resource Manager) and that `aiplatform.googleapis.com` is enabled (Service Usage).
+  2. Discovers usable models: first-party **Gemini** publisher models (verified with the free `countTokens` API), **partner/MaaS** models (Anthropic, Mistral, Meta, DeepSeek, Qwen, ...) from the Model Garden catalog, and **self-deployed Vertex AI Endpoints** in the project.
+  3. Partner models must be enabled per project in Model Garden. Tick *"Also verify partner-model access"* while linking, or click **Verify** next to a model (`POST /api/gcp/models/verify`). Anthropic is checked with the free count-tokens API; other partners use a 1-token request.
+* The link (project, region, discovered models) is persisted in `.benchmaxxer/gcp_link.json` (override with `BENCHMAXXER_STATE_DIR`) and restored on restart. Until a project is linked, an offline demo catalog is shown, which can only be used in **mock** mode.
 
-##### Step 1: Select Frontier Models (5 Flagship Cards + Linked GCP Project Dropdown)
-* Choose from the **5 primary Frontier Model select squares** (each featuring its provider brand emblem):
-  * **Gemini 3.1 Pro** (`gemini-3.1-pro`): Google DeepMind (Vertex AI) flagship multimodal frontier reasoning & agentic coding model.
-  * **Gemini 3.8 Flash** (`gemini-3.8-flash`): Google DeepMind (Vertex AI) ultra-low-latency frontier model for high-frequency tool dispatch.
-  * **Claude Opus 5.1** (`claude-opus-5.1`): Anthropic on Vertex AI flagship frontier model for deep architectural synthesis & multi-file refactoring.
-  * **Claude Sonnet 5.5** (`claude-sonnet-5.5`): Anthropic on Vertex AI frontier software engineering & autonomous coding model.
-  * **Mistral Large 3** (`mistral-large-3`, badged **Latest Mistral Release**): Mistral AI on Vertex AI flagship frontier model for multilingual reasoning and polyglot code synthesis.
-* Or use the **"Other Models Enabled in Linked GCP Project"** dropdown menu (`#enabled-models-dropdown`) to select any additional enabled MIQ model in your project (e.g., *Gemini 4 Argon*, *Fable 5.1*, *Claude 3.5 Sonnet*, *Llama 3.1 70B Instruct*, etc.).
+##### Step 1: Select the Model in Question (MIQ)
+* Only models **enabled in the linked project** are selectable. Up to 5 featured models are shown as cards; every other enabled model is in the **"Other Models Enabled in Linked GCP Project"** dropdown (`#enabled-models-dropdown`).
+* Discovered models are registered at runtime with the model factory (`register_runtime_models`), so the scenario runner, Harbor bridge agent and telemetry all call Vertex AI in the linked project (`vertex_genai`, `vertex_anthropic`, `vertex_maas` (OpenAI-compatible MaaS) or `vertex_endpoint`).
 
-##### Layer 2 (`⚙`): Configure Agent Harness & Harbor Sandbox Permissions
-* Select which **Agent Harness** executes the evaluation run inside the Harbor sandbox:
-  * **AGY (Antigravity)** (`agy`) — Google DeepMind internal agentic coding harness.
-  * **Jetski** (`jetski`) — Google internal Jetski autonomous agent harness & multi-agent orchestrator.
-  * **Claude Code** (`claude-code`) — Anthropic Claude Code CLI harness on Vertex AI.
-  * **OpenCode** (`opencode`) — OpenCode terminal coding agent harness on Vertex AI.
-  * **Codex CLI** (`codex`) — OpenAI Codex CLI agent harness in Harbor containers.
-  * Plus an **Additional Harnesses** dropdown for **BenchMaxxer Native** (`benchmaxxer`) and **Harbor Oracle** (`oracle`).
-* Toggle **"Run in Harbor Sandbox"** and select the container runtime (`podman`, `docker`, `modal`, `daytona`). All Harbor sandboxes automatically mount **Internal Google Default Permissions** (`/var/run/secrets/google/adc.json`, service account `benchmaxxer-sa@<project_id>.iam.gserviceaccount.com`, and least-privilege Vertex AI IAM roles).
+##### Layer 2 (`⚙`): Choose the Agent Harness
+* **Antigravity (`agy`)** is the default. Also built in: **Jetski** (`jetski`), **Claude Code** (`claude`), **OpenCode** (`opencode`), **Codex** (`codex`), **Gemini CLI** (`gemini`), plus **BenchMaxxer Native** (direct Vertex SDK) and the **Harbor Oracle**.
+* Harnesses are **auto-detected** on this machine (PATH plus common install dirs); cards show *Installed* / *Not installed*. Click **⟳ Re-detect** after installing one. Use **"Register another coding agent installed on this machine"** (`POST /api/harnesses/custom`) to add any other CLI with a headless command template such as `{binary} --message {prompt} --model {model} --yes`.
+* In **live** mode the selected harness runs headless on the host (for example `agy -p`, `jetski -p`, `claude -p`, `opencode run`, `codex exec`, `gemini -p`). Its environment routes it to Vertex AI in the linked project (`GOOGLE_CLOUD_PROJECT`, `CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_VERTEX_PROJECT_ID`, `GOOGLE_GENAI_USE_VERTEXAI=true`, ...). The harness's reported token usage and cost go into the report. With **Run in Harbor Sandbox** enabled, its output is staged into the Harbor job by the BenchMaxxer bridge agent and verified by the Harbor tasks. Harbor pre-integrated agent names are used where they exist (`antigravity-cli`, `claude-code`, `opencode`, `codex`, `gemini-cli`).
+* Live runs are rejected if the harness is not installed, or if it cannot host the chosen model (Claude Code needs an Anthropic model, Gemini CLI a Gemini model). Mock runs simulate the harness and spend nothing.
 
-##### Step 2: Define Use Case & Make Your Own Test Suite (1+ Standard + 1+ Custom Use Cases)
-* Build a composite custom test suite combining **1+ Standard Benchmark Scenarios** (from the 13 RFC suites) and **1+ Custom Created Use Cases** (synthesized on the fly by the **Argon Agent**):
-  * **+ Create Custom Use Case (Argon Agent)**: Enter a title and plain-English description of any task or capability and click **"Synthesize & Add Custom Use Case to Suite"**.
-  * **+ Add Standard Benchmark Scenarios (13 RFC)**: Check 1 or more canonical RFC scenarios (`oauth_api_enablement`, `storage_operations`, `complex_skill_synthesis`, etc.) to include in your suite.
-  * Save and name your composite suite in the **"Your Custom Test Suite"** composer panel (`POST /api/suites/custom`).
+##### Step 2: Build the Test Suite (all / some / one / none + your own)
+* **+ Add Pre-configured Standard Tests**: check any subset of the standard tests, or use **Select All** / **Select None**.
+* **+ Add Your Own Test Scenario (Argon Agent)**: describe a task in plain English. It is synthesized into a test and added to the suite.
+* A suite needs at least one test of either kind. Running an empty suite is rejected (`400`). Custom-only suites are supported.
 
 ##### Step 3: Run Assessment & Monitor Live Telemetry
 * Choose the sandbox execution mode:
@@ -216,6 +209,13 @@ Open **`http://localhost:8080`** (or `http://127.0.0.1:8080`) in any modern brow
   * **Live Token & Cost Telemetry**: Displays candidate input and output tokens, critic panel tokens, total tokens consumed, and the exact estimated spend in **USD ($)** calculated from the model's Model Garden pricing rates.
   * **Multi-Perspective Critic Evaluation**: Review deterministic pass rates, per-test suite breakdown, and rubric evaluations (1–5 scale).
   * **Side-by-Side Code Viewer**: Inspect the generated completion output with a 1-click clipboard copy button.
+
+##### Evaluation Report (bottom of the page)
+* While the suite runs, the **Evaluation Report** section at the bottom of the page fills in row by row. When the run finishes, the page scrolls to it. Each test row shows:
+  * result (PASSED / FAILED / ERROR with the error message), Jev rubric score / actor-critic composite, and Harbor tasks passed;
+  * **wall-clock time** for the test;
+  * MIQ **input / output tokens**, critic tokens, **MIQ cost** and **total cost** (MIQ + critic panel). Token source: harness-reported, Vertex-reported, estimated, or simulated in mock mode.
+* Summary cards show pass rate, average score, total time, total tokens and total cost. Download the report as **JSON** or **CSV**. The same data is returned by `GET /api/runs/<run_id>` (`test_results` and `report`).
 
 ##### Step 4: Insert Result into an Existing Git Repository
 * Once the assessment finishes, the **"Insert Result into Existing Repository"** panel unlocks:
