@@ -687,11 +687,14 @@ def load_configuration() -> Path:
 
 
 def build_benchmaxxer_telemetry_summary(telemetry_dir: Path | None = None) -> dict[str, Any]:
-    """Summarize test, suite, and framework level token usage & costs from BenchMaxxer telemetry."""
+    """Summarize test, suite, and framework level token usage & costs from DevBench telemetry."""
     src_dir = PROJECT_ROOT / "src"
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
-    from benchmaxxer.telemetry.tokens import summarize_logged_token_costs
+    try:
+        from devbench.telemetry.tokens import summarize_logged_token_costs
+    except ImportError:
+        from benchmaxxer.telemetry.tokens import summarize_logged_token_costs
 
     dotenv_path = load_configuration()
     readings = [item.__dict__ for item in collect_readings()]
@@ -708,7 +711,9 @@ def main() -> None:
     group.add_argument("--quit", action="store_true", help="stop an existing overlay")
     group.add_argument("--check", action="store_true", help="fetch readings as JSON without a GUI; errors exit 1")
     group.add_argument(
+        "--devbench",
         "--benchmaxxer",
+        dest="devbench",
         action="store_true",
         help="output test, suite, and framework level token cost assessment alongside provider readings",
     )
@@ -716,10 +721,10 @@ def main() -> None:
         "--telemetry-dir",
         type=str,
         default=None,
-        help="optional BenchMaxxer telemetry directory for --benchmaxxer mode",
+        help="optional DevBench telemetry directory for --devbench mode",
     )
     args = parser.parse_args()
-    if args.benchmaxxer:
+    if getattr(args, "devbench", False):
         t_dir = Path(args.telemetry_dir) if args.telemetry_dir else None
         report = build_benchmaxxer_telemetry_summary(telemetry_dir=t_dir)
         print(json.dumps(report, indent=2))

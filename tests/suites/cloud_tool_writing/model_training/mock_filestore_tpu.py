@@ -66,15 +66,15 @@ except ImportError:
     import tiny_trainer as TT  # type: ignore[no-redef]
 
 try:
-    from benchmaxxer.execution.lifecycle import ResourceLifecycleManager
-    from benchmaxxer.execution.mocks import MockGKEVertexService
+    from devbench.execution.lifecycle import ResourceLifecycleManager
+    from devbench.execution.mocks import MockGKEVertexService
 
     BACKEND_NAME = (
-        "MockFilestoreTPUService (suite) over benchmaxxer.execution.mocks.MockGKEVertexService + "
-        "benchmaxxer.execution.lifecycle.ResourceLifecycleManager"
+        "MockFilestoreTPUService (suite) over devbench.execution.mocks.MockGKEVertexService + "
+        "devbench.execution.lifecycle.ResourceLifecycleManager"
     )
 except Exception:  # pragma: no cover - vendored fallback keeps the suite runnable standalone
-    BACKEND_NAME = "MockFilestoreTPUService (suite), vendored fallback (benchmaxxer.execution not importable)"
+    BACKEND_NAME = "MockFilestoreTPUService (suite), vendored fallback (devbench.execution not importable)"
 
     @dataclass
     class _ProvisionedResource:

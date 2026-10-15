@@ -63,15 +63,15 @@ SUITE_DIR = Path(__file__).resolve().parent
 LAUNCHER_PATH = SUITE_DIR / "container_entry.py"
 
 try:
-    from benchmaxxer.execution.lifecycle import ResourceLifecycleManager
-    from benchmaxxer.execution.mocks import MockCloudRunService
+    from devbench.execution.lifecycle import ResourceLifecycleManager
+    from devbench.execution.mocks import MockCloudRunService
 
     BACKEND_NAME = (
-        "benchmaxxer.execution.mocks.MockCloudRunService + "
-        "benchmaxxer.execution.lifecycle.ResourceLifecycleManager (strict sandbox wrapper)"
+        "devbench.execution.mocks.MockCloudRunService + "
+        "devbench.execution.lifecycle.ResourceLifecycleManager (strict sandbox wrapper)"
     )
 except Exception:  # pragma: no cover - vendored fallback keeps the suite runnable standalone
-    BACKEND_NAME = "vendored fallback (benchmaxxer.execution not importable)"
+    BACKEND_NAME = "vendored fallback (devbench.execution not importable)"
 
     @dataclass
     class _ProvisionedResource:

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from benchmaxxer.scenarios.runner import execute_scenario_run
-from benchmaxxer.ui.inspector import (
+from devbench.scenarios.runner import execute_scenario_run
+from devbench.ui.inspector import (
     main as inspector_main,
     render_run_inspection,
     run_manual_calibration,
@@ -31,7 +31,7 @@ def test_inspector_ui_renders_metadata_diffs_and_critic_panel(tmp_path: Path) ->
     render_run_inspection(run_result, console=console)
     output = buf.getvalue()
 
-    assert "BenchMaxxer Run Inspector" in output
+    assert "devbench Run Inspector" in output
     assert "complex_skill_synthesis" in output
     assert "gemini-1.5-pro" in output
     assert "Side-by-Side Code Comparison" in output

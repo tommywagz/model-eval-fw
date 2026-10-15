@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-from benchmaxxer.scenarios.runner import (
+from devbench.scenarios.runner import (
     execute_framework_run,
     execute_scenario_run,
     execute_suite_run,
 )
-from benchmaxxer.telemetry.timer import ExecutionTimer
-from benchmaxxer.telemetry.tokens import (
+from devbench.telemetry.timer import ExecutionTimer
+from devbench.telemetry.tokens import (
     TokensScriptBridge,
     load_project_dotenv,
     resolve_project_dotenv,
@@ -49,11 +50,14 @@ def test_project_dotenv_and_tokens_script_integration() -> None:
     # Verify .agents/scripts/tokens --check executes cleanly using the project .env
     tokens_script = repo_root / ".agents" / "scripts" / "tokens"
     assert tokens_script.is_file()
+    test_env = dict(os.environ)
+    test_env["GOOGLE_CLOUD_COMMAND"] = 'python3 -c "import json; print(json.dumps({\'tokens\': 100, \'detail\': \'test\'}))"'
     proc = subprocess.run(
         [str(tokens_script), "--check"],
         capture_output=True,
         text=True,
         check=True,
+        env=test_env,
     )
     readings = json.loads(proc.stdout)
     assert isinstance(readings, list)
@@ -158,11 +162,11 @@ def test_test_suite_and_framework_level_time_and_token_cost_results(tmp_path: Pa
     assert len(fw_res["token_usage"]["per_suite_tokens"]) == 3
     assert len(fw_res["token_usage"]["per_test_tokens"]) == 13
 
-    # 4. Verify .agents/scripts/tokens --benchmaxxer summarizes test, suite, and framework costs
+    # 4. Verify .agents/scripts/tokens --devbench summarizes test, suite, and framework costs
     repo_root = Path(__file__).resolve().parent.parent
     tokens_script = repo_root / ".agents" / "scripts" / "tokens"
     proc_bm = subprocess.run(
-        [str(tokens_script), "--benchmaxxer", "--telemetry-dir", str(telemetry_dir)],
+        [str(tokens_script), "--devbench", "--telemetry-dir", str(telemetry_dir)],
         capture_output=True,
         text=True,
         check=True,

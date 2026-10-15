@@ -11,17 +11,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from benchmaxxer.critics.panel import ActorCriticPanel
-from benchmaxxer.models.base import BaseModelClient
-from benchmaxxer.models.factory import get_model_client, load_model_registry
-from benchmaxxer.models.providers import (
+from devbench.critics.panel import ActorCriticPanel
+from devbench.models.base import BaseModelClient
+from devbench.models.factory import get_model_client, load_model_registry
+from devbench.models.providers import (
     OpenAICompatibleClient,
     VertexAnthropicClient,
     VertexEndpointClient,
     VertexGenAIClient,
     VertexMaaSClient,
 )
-from benchmaxxer.scenarios.runner import execute_scenario_run
+from devbench.scenarios.runner import execute_scenario_run
 from test_runner import build_arg_parser, main as top_level_runner_main
 
 
@@ -242,9 +242,9 @@ def test_cli_flags_for_project_location_and_routing(tmp_path: Path) -> None:
     assert rc == 0
 
 
-def test_benchmaxxer_cli_dispatcher_with_project_and_location(tmp_path: Path) -> None:
-    """Verify `benchmaxxer run` CLI accepts --project and --location flags."""
-    from benchmaxxer.cli import main as cli_main
+def test_devbench_cli_dispatcher_with_project_and_location(tmp_path: Path) -> None:
+    """Verify `devbench run` CLI accepts --project and --location flags."""
+    from devbench.cli import main as cli_main
 
     rc = cli_main([
         "run",
@@ -253,15 +253,15 @@ def test_benchmaxxer_cli_dispatcher_with_project_and_location(tmp_path: Path) ->
         "--mode", "mock",
         "--project", "gemini-api-505408",
         "--location", "global",
-        "--cache-dir", str(tmp_path / "benchmaxxer_cache"),
-        "--telemetry-dir", str(tmp_path / "benchmaxxer_telemetry"),
+        "--cache-dir", str(tmp_path / "devbench_cache"),
+        "--telemetry-dir", str(tmp_path / "devbench_telemetry"),
     ])
     assert rc == 0
 
 
 def test_web_ui_initializes_from_env_gcp_project_and_location(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify web server initializes GCP runtime state from GOOGLE_CLOUD_PROJECT / VERTEX_LOCATION."""
-    import benchmaxxer.ui.web.server as web_server
+    import devbench.ui.web.server as web_server
 
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "env-project-xyz")
     monkeypatch.setenv("VERTEX_LOCATION", "europe-west1")

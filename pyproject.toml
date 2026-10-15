@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "benchmaxxer"
+name = "devbench"
 version = "0.2.0"
-description = "BenchMaxxer: Frontier Model Evaluation & Multi-Model Actor-Critic Verification Framework"
+description = "devbench: Frontier Model Evaluation & Multi-Model Actor-Critic Verification Framework"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-benchmaxxer = "benchmaxxer.cli:main"
+devbench = "devbench.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

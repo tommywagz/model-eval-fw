@@ -1,0 +1,1712 @@
+/**
+ * devbench Evaluation Studio - Client Application Controller
+ * Supports Frontier Model (MIQ) Selection, GCP Project & Location Linking,
+ * Custom Multi-Test Suite Builder (1+ Standard + 1+ Custom Argon Use Cases),
+ * Live Hierarchical Telemetry, and Git Repository Export.
+ */
+
+const state = {
+  gcpProject: "",
+  gcpLocation: "us-central1",
+  linkStatus: {},
+  allModels: [],
+  defaultModels: [],
+  dropdownModels: [],
+  models: [],
+  selectedModelId: "gemini-3.1-pro",
+  allHarnesses: [],
+  defaultHarnesses: [],
+  dropdownHarnesses: [],
+  selectedHarnessId: "agy",
+  internalGooglePermissions: null,
+  allScenarios: [],
+  customSuiteItems: [],
+  activeScenarioId: "complex_skill_synthesis",
+  activeSuiteSpec: null,
+  activeRunData: null,
+  isEvaluating: false,
+  pollTimer: null,
+  localTimer: null,
+  localStartTime: null,
+};
+
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function fmtUsd(v, digits = 5) {
+  return `$${Number(v || 0).toFixed(digits)}`;
+}
+
+function fmtInt(v) {
+  return Number(v || 0).toLocaleString();
+}
+
+async function readJsonResponse(res) {
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (e) {
+    data = {};
+  }
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+const TEMPLATES = {
+  skill_bigquery_alert:
+    "Create an agent skill that queries BigQuery logs for critical anomalies, formats an alert with diagnostic metadata, and publishes a structured message to Google Cloud Pub/Sub.",
+  gcp_cloudrun_workflow:
+    "Generate a production Dockerfile and cloudbuild.yaml to deploy an authenticated FastAPI service on Cloud Run with Filestore volume mounting and least-privilege IAM roles.",
+  codebase_flask_to_go:
+    "Port a legacy Python Flask REST API with SQLite database access into a high-concurrency Go Gin service with clean separation of handlers, models, and connection pooling.",
+};
+
+// ============================================================================
+// Frontier Model & Agent Harness Brand Logos (Inline SVG Emblems)
+// ============================================================================
+
+function getHarnessLogoSvg(harnessId, brand) {
+  const id = (harnessId || "").toLowerCase();
+  const b = (brand || "").toLowerCase();
+
+  if (id === "agy" || id === "jetski" || b === "google") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Google Agent Harness Logo">
+        <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+        <path d="M12 6L17 12L12 18L7 12L12 6Z" fill="#1a73e8"/>
+        <circle cx="12" cy="12" r="2.2" fill="#ffffff"/>
+      </svg>
+    `;
+  }
+  if (id === "claude-code" || b === "anthropic") {
+    return getBrandLogoSvg("anthropic", id);
+  }
+  if (id === "opencode" || b === "opencode") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="OpenCode Harness Logo">
+        <rect x="2.5" y="4" width="19" height="16" rx="3.5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+        <path d="M7 9.5L10.5 12L7 14.5M12 14.5H16.5" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+  if (id === "codex" || b === "openai") {
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Codex CLI Harness Logo">
+        <circle cx="12" cy="12" r="9.5" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+        <path d="M9.5 9L6.5 12L9.5 15M14.5 9L17.5 12L14.5 15" stroke="#8430ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+  return getBrandLogoSvg(brand, harnessId);
+}
+
+function getBrandLogoSvg(brand, modelId) {
+  const b = (brand || "").toLowerCase();
+  const id = (modelId || "").toLowerCase();
+
+  if (b === "gemini" || id.includes("gemini")) {
+    // Google Gemini Sparkle Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Google Gemini Logo">
+        <defs>
+          <linearGradient id="geminiGrad-${id.replace(/[^a-z0-9]/g, "")}" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#1a73e8"/>
+            <stop offset="50%" stop-color="#4285f4"/>
+            <stop offset="100%" stop-color="#34a853"/>
+          </linearGradient>
+        </defs>
+        <path d="M12 2C12 7.52 16.48 12 22 12C16.48 12 12 16.48 12 22C12 16.48 7.52 12 2 12C7.52 12 12 7.52 12 2Z" fill="url(#geminiGrad-${id.replace(/[^a-z0-9]/g, "")})"/>
+      </svg>
+    `;
+  }
+
+  if (b === "mistral" || id.includes("mistral")) {
+    // Mistral AI Stepped Block 'M' Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Mistral AI Logo">
+        <rect x="3" y="4" width="4" height="4" fill="#FFD800"/>
+        <rect x="17" y="4" width="4" height="4" fill="#FFD800"/>
+        <rect x="3" y="8" width="8" height="4" fill="#FFAF00"/>
+        <rect x="13" y="8" width="8" height="4" fill="#FFAF00"/>
+        <rect x="3" y="12" width="18" height="4" fill="#FF8205"/>
+        <rect x="3" y="16" width="4" height="4" fill="#FA500F"/>
+        <rect x="10" y="16" width="4" height="4" fill="#FA500F"/>
+        <rect x="17" y="16" width="4" height="4" fill="#FA500F"/>
+      </svg>
+    `;
+  }
+
+  if (b === "anthropic" || id.includes("opus") || id.includes("sonnet") || id.includes("claude")) {
+    // Anthropic Claude Starburst Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Anthropic Claude Logo">
+        <circle cx="12" cy="12" r="10" fill="#fef3ec" stroke="#d97757" stroke-width="1.6"/>
+        <path d="M12 5V19M5 12H19M7.2 7.2L16.8 16.8M16.8 7.2L7.2 16.8" stroke="#d97757" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    `;
+  }
+
+  if (b === "fable" || id.includes("fable")) {
+    // Fable AI Geometric Prism Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Fable AI Logo">
+        <rect x="3" y="3" width="18" height="18" rx="5" fill="#e4f7fb" stroke="#007b83" stroke-width="1.8"/>
+        <path d="M8 7H16M8 12H14M8 7V17" stroke="#007b83" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="15.5" cy="15.5" r="2" fill="#007b83"/>
+      </svg>
+    `;
+  }
+
+  if (b === "meta" || id.includes("llama")) {
+    // Meta Infinity Loop Emblem
+    return `
+      <svg viewBox="0 0 24 24" fill="none" aria-label="Meta Llama Logo">
+        <path d="M5 15C3.5 15 2.5 13.5 2.5 12C2.5 9.5 4.5 8 6.5 8C8.8 8 10.5 10.2 12 12.2C13.5 10.2 15.2 8 17.5 8C19.5 8 21.5 9.5 21.5 12C21.5 13.5 20.5 15 19 15C17.2 15 15.8 13.4 14.5 11.6L12 15L9.5 11.6C8.2 13.4 6.8 15 5 15Z" stroke="#0668E1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+
+  // Default Vertex AI / Partner Model Hex Emblem
+  return `
+    <svg viewBox="0 0 24 24" fill="none" aria-label="Vertex AI Partner Model Logo">
+      <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+      <circle cx="12" cy="12" r="3" fill="#1a73e8"/>
+    </svg>
+  `;
+}
+
+// ============================================================================
+// Initialization & Data Fetching
+// ============================================================================
+
+document.addEventListener("DOMContentLoaded", () => {
+  initStudio();
+});
+
+async function initStudio() {
+  await Promise.all([
+    fetchModels(),
+    fetchHarnesses(),
+    fetchScenarios(),
+    fetchTokenTelemetry(),
+  ]);
+}
+
+async function fetchHarnesses() {
+  const container = document.getElementById("harness-cards-container");
+  try {
+    const res = await fetch("/api/harnesses");
+    const data = await readJsonResponse(res);
+    const previousSelection = state.allHarnesses.length ? state.selectedHarnessId : null;
+    state.allHarnesses = data.harnesses || [];
+    state.selectedHarnessId = previousSelection || data.default_harness || "agy";
+    state.internalGooglePermissions = data.internal_google_default_permissions || null;
+
+    state.defaultHarnesses = state.allHarnesses.filter((h) => h.is_default !== false);
+    state.dropdownHarnesses = state.allHarnesses.filter((h) => h.is_default === false);
+
+    renderHarnessCards(state.defaultHarnesses);
+    renderAdditionalHarnessesDropdown(state.dropdownHarnesses);
+    updateActiveHarnessIndicator();
+    updateInternalPermissionsBar();
+    updateHarnessWarning();
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="error-msg">Error loading agent harnesses: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function harnessInstallChip(h) {
+  if (h.builtin) return `<span class="tag-chip install-chip installed">Built-in</span>`;
+  return h.installed
+    ? `<span class="tag-chip install-chip installed" title="${escapeHtml(h.install_status)}">✓ Installed</span>`
+    : `<span class="tag-chip install-chip missing" title="${escapeHtml(h.install_status)}">Not installed</span>`;
+}
+
+function renderHarnessCards(harnesses) {
+  const container = document.getElementById("harness-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+
+  harnesses.forEach((h) => {
+    const isSelected = h.id === state.selectedHarnessId;
+    const card = document.createElement("div");
+    card.className = `model-card harness-card ${isSelected ? "selected" : ""} ${h.installed ? "" : "not-installed"}`;
+    card.setAttribute("data-harness-id", h.id);
+    card.onclick = () => selectHarness(h.id);
+
+    card.innerHTML = `
+      <div>
+        <div class="model-card-top">
+          <div class="model-brand-logo" title="${escapeHtml(h.provider)}">
+            ${getHarnessLogoSvg(h.id, h.brand)}
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge badge-recommended">${escapeHtml(h.badge || "Harbor Harness")}</span>
+            <div class="model-select-check" aria-hidden="true">✓</div>
+          </div>
+        </div>
+        <div class="model-card-header">
+          <span class="model-card-title">${escapeHtml(h.name)}</span>
+        </div>
+        <div class="model-provider">${escapeHtml(h.provider)} • <code>${escapeHtml(h.cli_binary || h.id)}</code></div>
+        <p class="model-desc">${escapeHtml(h.description)}</p>
+        <div class="model-tags">
+          ${harnessInstallChip(h)}
+          ${h.harbor_agent_name ? `<span class="tag-chip">Harbor: ${escapeHtml(h.harbor_agent_name)}</span>` : `<span class="tag-chip">Harbor bridge agent</span>`}
+        </div>
+      </div>
+      <div class="model-pricing">
+        <span title="${escapeHtml(h.install_status || "")}">${h.binary_path ? `<code>${escapeHtml(h.binary_path)}</code>` : escapeHtml(h.install_status || "")}</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderAdditionalHarnessesDropdown(dropdownHarnesses) {
+  const select = document.getElementById("additional-harnesses-dropdown");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">-- Additional Harnesses (${dropdownHarnesses.length}) --</option>`;
+  dropdownHarnesses.forEach((h) => {
+    const opt = document.createElement("option");
+    opt.value = h.id;
+    opt.selected = h.id === state.selectedHarnessId;
+    opt.textContent = `${h.name} (${h.id}) — ${h.installed ? "installed" : "not installed"}`;
+    select.appendChild(opt);
+  });
+}
+
+function selectHarness(harnessId) {
+  state.selectedHarnessId = harnessId;
+
+  document.querySelectorAll(".harness-card").forEach((card) => {
+    card.classList.toggle("selected", card.getAttribute("data-harness-id") === harnessId);
+  });
+
+  const dropdown = document.getElementById("additional-harnesses-dropdown");
+  if (dropdown) {
+    const isDropdown = state.dropdownHarnesses.some((h) => h.id === harnessId);
+    dropdown.value = isDropdown ? harnessId : "";
+  }
+
+  updateActiveHarnessIndicator();
+  updateHarnessWarning();
+}
+
+function onSelectDropdownHarness(harnessId) {
+  if (!harnessId) {
+    selectHarness("agy");
+    return;
+  }
+  selectHarness(harnessId);
+}
+
+function updateActiveHarnessIndicator() {
+  const indicator = document.getElementById("active-harness-indicator");
+  if (!indicator) return;
+  const found = state.allHarnesses.find((h) => h.id === state.selectedHarnessId);
+  indicator.textContent = `Active Harness: ${found ? found.name : state.selectedHarnessId}`;
+}
+
+function updateHarnessWarning() {
+  const box = document.getElementById("harness-warning");
+  if (!box) return;
+  const h = state.allHarnesses.find((x) => x.id === state.selectedHarnessId);
+  const model = state.allModels.find((m) => m.id === state.selectedModelId);
+  const messages = [];
+  if (h && !h.installed) {
+    messages.push(
+      `<strong>${escapeHtml(h.name)}</strong> is not installed on this machine (${escapeHtml(h.install_status)}). ` +
+        `Install it and click "Re-detect" to use it for live runs; mock runs simulate it.`
+    );
+  }
+  if (h && model && Array.isArray(h.supported_brands) && h.supported_brands.length > 0 &&
+      !h.supported_brands.includes(String(model.brand || "").toLowerCase())) {
+    messages.push(
+      `<strong>${escapeHtml(h.name)}</strong> can only host ${escapeHtml(h.supported_brands.join(", "))} models; ` +
+        `the selected MIQ <strong>${escapeHtml(model.name)}</strong> is a ${escapeHtml(model.brand)} model.`
+    );
+  }
+  box.style.display = messages.length ? "block" : "none";
+  box.innerHTML = messages.map((m) => `<div>⚠ ${m}</div>`).join("");
+}
+
+async function registerCustomHarness() {
+  const name = document.getElementById("custom-harness-name").value.trim();
+  const binary = document.getElementById("custom-harness-binary").value.trim();
+  const command = document.getElementById("custom-harness-command").value.trim();
+  if (!name || !binary) {
+    alert("Please provide both a harness name and the CLI binary.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/harnesses/custom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, cli_binary: binary, headless_command: command || null }),
+    });
+    const data = await readJsonResponse(res);
+    await fetchHarnesses();
+    selectHarness(data.harness.id);
+    if (!data.harness.installed) {
+      alert(`Registered '${data.harness.name}', but '${binary}' was not found on this machine.`);
+    }
+  } catch (err) {
+    alert("Could not register harness: " + err.message);
+  }
+}
+
+function updateInternalPermissionsBar() {
+  const saLabel = document.getElementById("sandbox-sa-label");
+  if (saLabel) {
+    const sa = state.internalGooglePermissions && state.internalGooglePermissions.service_account;
+    saLabel.textContent = sa || `devbench-sa@${state.gcpProject}.iam.gserviceaccount.com`;
+  }
+}
+
+function applyModelsSnapshot(data) {
+  state.gcpProject = data.project_id || state.gcpProject;
+  state.gcpLocation = data.location || state.gcpLocation;
+  state.linkStatus = data.link_status || {};
+  state.allModels = data.models || [];
+  state.models = state.allModels;
+  state.defaultModels = data.default_models || state.allModels.filter((m) => m.is_default && m.enabled);
+  state.dropdownModels = data.dropdown_models || state.allModels.filter((m) => m.enabled && !m.is_default);
+
+  // Keep the selected MIQ valid: it must be enabled in the linked project.
+  const enabled = state.allModels.filter((m) => m.enabled);
+  if (!enabled.some((m) => m.id === state.selectedModelId)) {
+    state.selectedModelId = (state.defaultModels[0] || enabled[0] || {}).id || "";
+  }
+
+  updateGcpHeaderUI();
+  updateInternalPermissionsBar();
+  renderGcpMiqToggles(state.allModels);
+  renderModelCards(state.defaultModels);
+  renderEnabledModelsDropdown(state.dropdownModels);
+  updateActiveModelIndicator();
+  updateHarnessWarning();
+}
+
+async function fetchModels() {
+  const container = document.getElementById("model-cards-container");
+  try {
+    const res = await fetch("/api/models");
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="error-msg">Error loading models: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function isDiscoveredProject() {
+  return state.linkStatus && state.linkStatus.source === "discovered";
+}
+
+function updateGcpHeaderUI() {
+  const statusText = document.getElementById("gcp-status-text");
+  const headerLoc = document.getElementById("gcp-header-location");
+  const projInput = document.getElementById("gcp-project-input");
+  const locSelect = document.getElementById("gcp-location-select");
+  const dropdownProjLabel = document.getElementById("dropdown-project-label");
+  const enabledCountBadge = document.getElementById("enabled-miq-count-badge");
+  const savedBadge = document.getElementById("gcp-config-saved-badge");
+  const statusBox = document.getElementById("gcp-link-status");
+
+  const discovered = isDiscoveredProject();
+  if (statusText) statusText.textContent = discovered ? `GCP: ${state.gcpProject}` : `GCP: ${state.gcpProject} (not linked)`;
+  if (headerLoc) headerLoc.textContent = state.gcpLocation;
+  if (projInput && document.activeElement !== projInput) projInput.value = state.gcpProject;
+  if (locSelect) {
+    if (![...locSelect.options].some((o) => o.value === state.gcpLocation)) {
+      const opt = document.createElement("option");
+      opt.value = state.gcpLocation;
+      opt.textContent = state.gcpLocation;
+      locSelect.appendChild(opt);
+    }
+    locSelect.value = state.gcpLocation;
+  }
+  if (dropdownProjLabel) dropdownProjLabel.textContent = `${state.gcpProject} • ${state.gcpLocation}`;
+
+  const totalEnabled = state.allModels.filter((m) => m.enabled).length;
+  if (enabledCountBadge) {
+    enabledCountBadge.textContent = `${totalEnabled} of ${state.allModels.length} Models Enabled`;
+  }
+  if (savedBadge) {
+    savedBadge.textContent = discovered ? `Linked: ${state.gcpProject} (${state.gcpLocation})` : "Not linked (offline demo catalog)";
+    savedBadge.className = `badge ${discovered ? "badge-speed" : "badge-coding"}`;
+  }
+  if (statusBox) {
+    const ls = state.linkStatus || {};
+    const errors = (ls.errors || []).filter(Boolean);
+    statusBox.setAttribute("data-state", discovered ? "linked" : errors.length ? "error" : "offline");
+    let html = escapeHtml(ls.message || "Offline demo catalog — link a GCP project to discover the models enabled in it.");
+    if (ls.credential_source) html += ` <span class="muted">• Credentials: ${escapeHtml(ls.credential_source)}</span>`;
+    if (ls.discovered_at) html += ` <span class="muted">• Discovered ${escapeHtml(ls.discovered_at)}</span>`;
+    if (errors.length) {
+      html += `<ul>${errors.slice(0, 6).map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
+    }
+    statusBox.innerHTML = html;
+  }
+}
+
+function toggleGcpConfigPanel() {
+  const panel = document.getElementById("gcp-config-panel");
+  if (!panel) return;
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const input = document.getElementById("gcp-project-input");
+  if (input) input.focus();
+}
+
+function enablementChip(m) {
+  const map = {
+    enabled: ["installed", "Enabled"],
+    unverified: ["unverified", "Unverified"],
+    not_enabled: ["missing", "Not enabled"],
+    not_available: ["missing", "Not in region"],
+    error: ["missing", "Check failed"],
+    catalog: ["unverified", "Demo catalog"],
+  };
+  const [cls, label] = map[m.enablement] || (m.enabled ? ["installed", "Enabled"] : ["missing", "Disabled"]);
+  return `<span class="tag-chip install-chip ${cls}" title="${escapeHtml(m.status_detail || "")}">${label}</span>`;
+}
+
+function renderGcpMiqToggles(models) {
+  const container = document.getElementById("gcp-miq-toggles-container");
+  if (!container) return;
+  container.innerHTML = "";
+  const discovered = isDiscoveredProject();
+
+  if (models.length === 0) {
+    container.innerHTML = `<div class="loading-placeholder">No models discovered yet.</div>`;
+    return;
+  }
+
+  models.forEach((m) => {
+    const item = document.createElement("div");
+    item.className = `miq-toggle-item ${m.enabled ? "enabled" : ""}`;
+    const meta = `${escapeHtml(m.publisher || m.brand || "")} • ${escapeHtml(m.location || state.gcpLocation)}${m.launch_stage ? " • " + escapeHtml(m.launch_stage) : ""}`;
+    let control;
+    if (discovered && m.discovered) {
+      const canVerify = m.publisher && m.publisher !== "endpoint";
+      control = `
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          ${enablementChip(m)}
+          ${canVerify ? `<button type="button" class="chip-btn" onclick="event.stopPropagation(); verifyModelAccess('${escapeHtml(m.id)}', this)">Verify</button>` : ""}
+        </div>`;
+    } else {
+      item.onclick = () => toggleMiqModelInProject(m.id, !m.enabled);
+      control = `<input type="checkbox" ${m.enabled ? "checked" : ""} aria-label="Enable ${escapeHtml(m.name)} (demo catalog)" onclick="event.stopPropagation(); toggleMiqModelInProject('${escapeHtml(m.id)}', this.checked)">`;
+    }
+    item.innerHTML = `
+      <div class="miq-toggle-left">
+        <div class="miq-toggle-brand">${getBrandLogoSvg(m.brand, m.id)}</div>
+        <div style="min-width: 0;">
+          <div class="miq-toggle-name" title="${escapeHtml(m.status_detail || m.name)}">${escapeHtml(m.name)}</div>
+          <div class="miq-toggle-meta">${meta}</div>
+        </div>
+      </div>
+      ${control}
+    `;
+    container.appendChild(item);
+  });
+}
+
+let currentModelForAccessVerify = null;
+
+function showModelAccessModal(info = {}) {
+  const modal = document.getElementById("model-access-modal");
+  if (!modal) return;
+
+  const modelId = info.model_id || state.selectedModelId || "unknown-model";
+  currentModelForAccessVerify = modelId;
+  const projectId = info.project_id || state.gcpProject || "not-specified";
+  const location = info.location || state.gcpLocation || "us-central1";
+  const errorMsg = info.message || info.detail || info.error || "Vertex AI Model Garden access denied or model terms not accepted.";
+  const statusBadge = info.error_status || "PERMISSION_DENIED";
+
+  const modelIdEl = document.getElementById("modal-model-id");
+  if (modelIdEl) modelIdEl.textContent = modelId;
+
+  const projIdEl = document.getElementById("modal-project-id");
+  if (projIdEl) projIdEl.textContent = projectId;
+
+  const locEl = document.getElementById("modal-location");
+  if (locEl) locEl.textContent = location;
+
+  const badgeEl = document.getElementById("modal-status-badge");
+  if (badgeEl) badgeEl.textContent = statusBadge;
+
+  const errorTextEl = document.getElementById("modal-error-text");
+  if (errorTextEl) errorTextEl.textContent = errorMsg;
+
+  const mgLink = document.getElementById("modal-model-garden-link");
+  if (mgLink) {
+    mgLink.href = info.model_garden_url || `https://console.cloud.google.com/vertex-ai/model-garden?project=${encodeURIComponent(projectId)}`;
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeModelAccessModal() {
+  const modal = document.getElementById("model-access-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function handleModalBackdropClick(e) {
+  if (e.target && e.target.id === "model-access-modal") {
+    closeModelAccessModal();
+  }
+}
+
+function copyAdcLoginCommand(btn) {
+  const cmd = "gcloud auth application-default login";
+  navigator.clipboard.writeText(cmd).then(() => {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    }
+  }).catch(() => {
+    prompt("Copy command:", cmd);
+  });
+}
+
+function copyModalAdcCommand(btn) {
+  copyAdcLoginCommand(btn);
+}
+
+async function retryModelVerificationFromModal() {
+  if (!currentModelForAccessVerify) {
+    closeModelAccessModal();
+    return;
+  }
+  const btn = document.getElementById("modal-reverify-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Checking…</span>";
+  }
+  try {
+    await verifyModelAccess(currentModelForAccessVerify);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>↻ Re-Verify Model Access</span>";
+    }
+  }
+}
+
+async function verifyModelAccess(modelId, btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+  }
+  try {
+    const res = await fetch("/api/gcp/models/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
+    const v = data.verification || {};
+    if (!v.enabled) {
+      showModelAccessModal({
+        model_id: modelId,
+        model_name: v.model_name || modelId,
+        project_id: data.project_id || v.project_id,
+        location: data.location || v.location,
+        message: v.detail || v.message || "Model is not enabled in this GCP project",
+        error_status: v.enablement || "NOT_ENABLED",
+        model_garden_url: v.model_garden_url,
+      });
+    } else {
+      closeModelAccessModal();
+    }
+  } catch (err) {
+    if (err.data && (err.data.error_type === "MODEL_ACCESS_DENIED" || err.data.model_id)) {
+      showModelAccessModal(err.data);
+    } else {
+      alert("Verification failed: " + err.message);
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Verify";
+    }
+  }
+}
+
+async function toggleMiqModelInProject(modelId, enabledState) {
+  try {
+    const res = await fetch("/api/gcp/models/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId, enabled: enabledState }),
+    });
+    const data = await readJsonResponse(res);
+    if (data.success) applyModelsSnapshot(data);
+  } catch (err) {
+    console.error("Failed to toggle MIQ model:", err);
+  }
+}
+
+async function saveGcpConfiguration() {
+  const projInput = document.getElementById("gcp-project-input");
+  const locSelect = document.getElementById("gcp-location-select");
+  const verifyToggle = document.getElementById("gcp-verify-partner-toggle");
+  const btn = document.getElementById("save-gcp-config-btn");
+
+  const projectId = projInput ? projInput.value.trim() : "";
+  const location = (locSelect ? locSelect.value : "") || "us-central1";
+  if (!projectId) {
+    alert("Enter the ID of the GCP project you want to link.");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Verifying project & discovering models...";
+  }
+
+  try {
+    const res = await fetch("/api/gcp/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        location: location,
+        verify_partner_access: Boolean(verifyToggle && verifyToggle.checked),
+      }),
+    });
+    const data = await readJsonResponse(res);
+    applyModelsSnapshot(data);
+    if (!data.success) {
+      const lr = data.link_result || {};
+      alert(`Could not link ${projectId}: ${lr.message || "see details in the GCP panel"}`);
+    }
+  } catch (err) {
+    alert("Error linking GCP project: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>☁️</span> Link &amp; Discover Models";
+    }
+  }
+}
+
+
+// ============================================================================
+// Step 1: Frontier Model Cards (4 Defaults) & Enabled GCP Project Dropdown
+// ============================================================================
+
+function pricingLabel(m) {
+  const src = m.pricing_source && m.pricing_source !== "catalog" ? ` (${m.pricing_source.replace(/_/g, " ")})` : "";
+  return `In: <span class="pricing-val">$${(Number(m.cost_per_1k_input_usd || 0) * 1000).toFixed(2)}/M</span> • Out: <span class="pricing-val">$${(Number(m.cost_per_1k_output_usd || 0) * 1000).toFixed(2)}/M</span><span class="muted">${escapeHtml(src)}</span>`;
+}
+
+function renderModelCards(models) {
+  const container = document.getElementById("model-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (models.length === 0) {
+    container.innerHTML = `<div class="loading-placeholder">No enabled models in ${escapeHtml(state.gcpProject)} (${escapeHtml(state.gcpLocation)}). Link a project above, or enable/verify models in Vertex AI Model Garden.</div>`;
+    return;
+  }
+
+  models.forEach((m) => {
+    const isSelected = m.id === state.selectedModelId;
+    const card = document.createElement("div");
+    card.className = `model-card miq-card ${isSelected ? "selected" : ""}`;
+    card.setAttribute("data-model-id", m.id);
+    card.onclick = () => selectModel(m.id);
+
+    const badgeClass =
+      m.badge && m.badge.includes("Flagship")
+        ? "badge-recommended"
+        : m.badge && m.badge.includes("Speed")
+        ? "badge-speed"
+        : "badge-coding";
+
+    card.innerHTML = `
+      <div>
+        <div class="model-card-top">
+          <div class="model-brand-logo" title="${escapeHtml(m.provider)}">
+            ${getBrandLogoSvg(m.brand, m.id)}
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge ${badgeClass}">${escapeHtml(m.badge || "Frontier MIQ")}</span>
+            <div class="model-select-check" aria-hidden="true">✓</div>
+          </div>
+        </div>
+        <div class="model-card-header">
+          <span class="model-card-title">${escapeHtml(m.name)}</span>
+        </div>
+        <div class="model-provider">${escapeHtml(m.provider)}</div>
+        <p class="model-desc">${escapeHtml(m.description)}</p>
+        <div class="model-tags">
+          ${(m.tags || []).map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="model-pricing">
+        <span>${pricingLabel(m)}</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderEnabledModelsDropdown(dropdownModels) {
+  const select = document.getElementById("enabled-models-dropdown");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">-- Select from ${dropdownModels.length} other enabled models in ${escapeHtml(state.gcpProject)} --</option>`;
+  dropdownModels.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.selected = m.id === state.selectedModelId;
+    opt.textContent = `${m.name} — ${m.provider} (${m.location || state.gcpLocation}) [$${(Number(m.cost_per_1k_input_usd || 0) * 1000).toFixed(2)}/M in]`;
+    select.appendChild(opt);
+  });
+
+  updateDropdownBanner();
+}
+
+function selectModel(modelId) {
+  state.selectedModelId = modelId;
+
+  document.querySelectorAll(".miq-card").forEach((card) => {
+    card.classList.toggle("selected", card.getAttribute("data-model-id") === modelId);
+  });
+
+  // Sync dropdown value if selected from default squares vs dropdown
+  const dropdown = document.getElementById("enabled-models-dropdown");
+  if (dropdown) {
+    const isDropdownModel = state.dropdownModels.some((m) => m.id === modelId);
+    dropdown.value = isDropdownModel ? modelId : "";
+  }
+
+  updateDropdownBanner();
+  updateActiveModelIndicator();
+  updateHarnessWarning();
+}
+
+function onSelectDropdownModel(modelId) {
+  if (!modelId) {
+    const fallback = state.defaultModels[0] || state.allModels.find((m) => m.enabled);
+    selectModel(fallback ? fallback.id : "");
+    return;
+  }
+  selectModel(modelId);
+}
+
+function updateDropdownBanner() {
+  const banner = document.getElementById("selected-dropdown-model-banner");
+  if (!banner) return;
+
+  const selectedDropdownModel = state.dropdownModels.find((m) => m.id === state.selectedModelId);
+  if (!selectedDropdownModel) {
+    banner.style.display = "none";
+    return;
+  }
+
+  banner.style.display = "flex";
+  document.getElementById("dropdown-selected-logo").innerHTML = getBrandLogoSvg(
+    selectedDropdownModel.brand,
+    selectedDropdownModel.id
+  );
+  document.getElementById("dropdown-selected-name").textContent = `${selectedDropdownModel.name} (${selectedDropdownModel.provider})`;
+  document.getElementById("dropdown-selected-desc").textContent = selectedDropdownModel.description;
+  document.getElementById("dropdown-selected-pricing").textContent = `In: $${(
+    selectedDropdownModel.cost_per_1k_input_usd * 1000
+  ).toFixed(2)}/M • Out: $${(selectedDropdownModel.cost_per_1k_output_usd * 1000).toFixed(2)}/M`;
+}
+
+function updateActiveModelIndicator() {
+  const indicator = document.getElementById("active-model-indicator");
+  if (!indicator) return;
+  const found = state.allModels.find((m) => m.id === state.selectedModelId);
+  indicator.textContent = `Active Model: ${found ? found.name : state.selectedModelId}`;
+}
+
+// ============================================================================
+// Step 2: Scenarios & Custom Multi-Test Suite Builder
+// ============================================================================
+
+async function fetchScenarios() {
+  const select = document.getElementById("preset-scenario-select");
+  try {
+    const res = await fetch("/api/scenarios");
+    const data = await res.json();
+    const scenarios = data.scenarios || [];
+    state.allScenarios = scenarios;
+
+    if (select) {
+      select.innerHTML = '<option value="">-- Choose a standard benchmark scenario --</option>';
+      scenarios.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.scenario_id;
+        opt.textContent = `[${s.difficulty}] ${s.scenario_id} (${s.suite_slug})`;
+        select.appendChild(opt);
+      });
+    }
+
+    // Initialize default suite with 1 standard scenario so user can immediately run or add more
+    if (state.customSuiteItems.length === 0 && scenarios.length > 0) {
+      const defaultSc =
+        scenarios.find((s) => s.scenario_id === "oauth_api_enablement") || scenarios[0];
+      addScenarioToCustomSuite(defaultSc, false);
+    }
+
+    renderStandardScenariosChecklist();
+    renderCustomSuiteTray();
+  } catch (err) {
+    if (select) {
+      select.innerHTML = `<option value="">Error loading scenarios: ${err.message}</option>`;
+    }
+  }
+}
+
+function renderStandardScenariosChecklist() {
+  const container = document.getElementById("standard-scenarios-checklist");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const standardScenarios = getStandardScenarios();
+  standardScenarios.forEach((s) => {
+    const isChecked = state.customSuiteItems.some((item) => item.scenario_id === s.scenario_id);
+    const label = document.createElement("label");
+    label.className = `scenario-check-card ${isChecked ? "checked" : ""}`;
+
+    label.innerHTML = `
+      <input type="checkbox" ${isChecked ? "checked" : ""} onchange="toggleStandardScenarioInSuite('${s.scenario_id}', this.checked)">
+      <div style="min-width: 0;">
+        <div style="font-weight: 600; color: var(--text-primary); word-break: break-word;">${s.scenario_id}</div>
+        <div style="font-size: 0.7rem; color: var(--text-secondary);">[${s.difficulty}] ${s.suite_slug}</div>
+      </div>
+    `;
+    container.appendChild(label);
+  });
+}
+
+function getStandardScenarios() {
+  return state.allScenarios.filter((s) => !s.is_custom && !s.scenario_id.startsWith("argon_"));
+}
+
+function selectAllStandardScenarios() {
+  getStandardScenarios().forEach((s) => {
+    if (!state.customSuiteItems.some((i) => i.scenario_id === s.scenario_id)) {
+      addScenarioToCustomSuite(s, false);
+    }
+  });
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+}
+
+function clearStandardScenarios() {
+  state.customSuiteItems = state.customSuiteItems.filter((i) => i.is_custom);
+  if (state.customSuiteItems.length > 0) {
+    state.activeScenarioId = state.customSuiteItems[0].scenario_id;
+    state.activeSuiteSpec = state.customSuiteItems[0];
+  }
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+}
+
+function toggleStandardScenarioInSuite(scenarioId, checked) {
+  if (checked) {
+    const found = state.allScenarios.find((s) => s.scenario_id === scenarioId) || {
+      scenario_id: scenarioId,
+      scenario_name: scenarioId,
+      difficulty: "Medium",
+      pillar: "Standard devbench RFC Suite",
+      suite_slug: "cloud_tool_writing",
+      is_custom: false,
+    };
+    addScenarioToCustomSuite(found, true);
+  } else {
+    removeScenarioFromCustomSuite(scenarioId);
+  }
+}
+
+function addSelectedPresetToSuite() {
+  const select = document.getElementById("preset-scenario-select");
+  if (!select || !select.value) {
+    alert("Please select a standard scenario from the dropdown first.");
+    return;
+  }
+  toggleStandardScenarioInSuite(select.value, true);
+}
+
+function addScenarioToCustomSuite(scObj, showPreview = true) {
+  const exists = state.customSuiteItems.some((item) => item.scenario_id === scObj.scenario_id);
+  const normalized = {
+    scenario_id: scObj.scenario_id,
+    scenario_name: scObj.scenario_name || scObj.scenario_id,
+    difficulty: scObj.difficulty || "Medium",
+    pillar: scObj.pillar || "Standard devbench RFC Suite",
+    suite_slug: scObj.suite_slug || "agent_skill_creation",
+    is_custom: Boolean(scObj.is_custom || scObj.scenario_id.startsWith("argon_")),
+    scenario_summary:
+      scObj.scenario_summary ||
+      scObj.prompt ||
+      `Evaluating frontier model adherence against scenario: ${scObj.scenario_id}`,
+    primary_metrics: scObj.primary_metrics || ["average_pass_rate", "actor_critic_quality_score"],
+    assertions: scObj.assertions || [
+      { name: "deterministic_execution_pass", description: "All assertions pass" },
+      { name: "actor_critic_rubric_threshold", description: "Score >= 3.0 / 5.0" },
+    ],
+  };
+
+  if (!exists) {
+    state.customSuiteItems.push(normalized);
+  }
+
+  state.activeScenarioId = normalized.scenario_id;
+  state.activeSuiteSpec = normalized;
+
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+  if (showPreview) {
+    renderSuitePreview(normalized);
+  }
+}
+
+function removeScenarioFromCustomSuite(scenarioId) {
+  state.customSuiteItems = state.customSuiteItems.filter((i) => i.scenario_id !== scenarioId);
+  if (state.customSuiteItems.length > 0) {
+    state.activeScenarioId = state.customSuiteItems[0].scenario_id;
+    state.activeSuiteSpec = state.customSuiteItems[0];
+  }
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+}
+
+function clearCustomSuite() {
+  state.customSuiteItems = [];
+  renderStandardScenariosChecklist();
+  renderCustomSuiteTray();
+}
+
+function renderCustomSuiteTray() {
+  const listEl = document.getElementById("custom-suite-items-list");
+  const stdBadge = document.getElementById("suite-standard-count-badge");
+  const custBadge = document.getElementById("suite-custom-count-badge");
+  if (!listEl) return;
+
+  const stdCount = state.customSuiteItems.filter((i) => !i.is_custom).length;
+  const custCount = state.customSuiteItems.filter((i) => i.is_custom).length;
+
+  if (stdBadge) stdBadge.textContent = `${stdCount} Standard`;
+  if (custBadge) custBadge.textContent = `${custCount} Custom`;
+
+  if (state.customSuiteItems.length === 0) {
+    listEl.innerHTML = `
+      <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; border: 1px dashed var(--border-color); border-radius: 8px;">
+        Your test suite is empty. Check any number of pre-configured standard tests and/or add your own test scenarios on the left (at least one test is required to run).
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = "";
+  state.customSuiteItems.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "suite-item-row";
+    const typeBadgeClass = item.is_custom ? "badge-speed" : "badge-recommended";
+    const typeLabel = item.is_custom ? "Custom Use Case" : "Standard RFC";
+
+    row.innerHTML = `
+      <div class="suite-item-info" onclick="inspectSuiteItem('${item.scenario_id}')" title="Click to preview test specification">
+        <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">${idx + 1}.</span>
+        <span class="badge ${typeBadgeClass}">${typeLabel}</span>
+        <span class="suite-item-name">${item.scenario_name || item.scenario_id}</span>
+        <span class="badge">${item.difficulty}</span>
+      </div>
+      <button type="button" class="remove-suite-item-btn" onclick="removeScenarioFromCustomSuite('${item.scenario_id}')" title="Remove from suite">×</button>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+function inspectSuiteItem(scenarioId) {
+  const item = state.customSuiteItems.find((i) => i.scenario_id === scenarioId);
+  if (item) {
+    state.activeScenarioId = item.scenario_id;
+    state.activeSuiteSpec = item;
+    renderSuitePreview(item);
+  }
+}
+
+async function saveCustomTestSuite() {
+  if (state.customSuiteItems.length === 0) {
+    alert("Please add at least 1 test (Standard Benchmark or Custom Use Case) to your suite.");
+    return;
+  }
+
+  const nameInput = document.getElementById("custom-suite-name-input");
+  const suiteName = (nameInput ? nameInput.value.trim() : "") || "Custom Frontier Evaluation Suite";
+  const scenarioIds = state.customSuiteItems.map((i) => i.scenario_id);
+
+  const btn = document.getElementById("save-custom-suite-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Saving Suite...";
+  }
+
+  try {
+    const res = await fetch("/api/suites/custom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        suite_name: suiteName,
+        scenario_ids: scenarioIds,
+      }),
+    });
+    const data = await res.json();
+    if (data.success && data.suite) {
+      const s = data.suite;
+      renderSuitePreview({
+        scenario_id: s.suite_slug,
+        scenario_name: `${s.suite_name} (${s.scenarios.length} Tests: ${s.standard_scenarios.length} Standard + ${s.custom_scenarios.length} Custom)`,
+        pillar: "Composite Custom Benchmark Suite",
+        difficulty: "Multi-Tier",
+        scenario_summary: `Included tests: ${s.scenarios.join(", ")}`,
+        primary_metrics: s.primary_metrics,
+        assertions: s.assertions,
+      });
+    } else {
+      alert("Could not save custom suite: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Error saving custom suite: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>📦</span> Save Custom Test Suite";
+    }
+  }
+}
+
+async function fetchTokenTelemetry() {
+  const pillText = document.getElementById("token-summary-text");
+  try {
+    const res = await fetch("/api/telemetry/tokens");
+    const data = await res.json();
+    if (data.total_cost_usd !== undefined) {
+      pillText.textContent = `Session Spend: $${data.total_cost_usd.toFixed(4)} USD`;
+    } else {
+      pillText.textContent = "Telemetry Ready";
+    }
+  } catch (err) {
+    pillText.textContent = "Telemetry Active";
+  }
+}
+
+function switchUseCaseTab(tab) {
+  document.getElementById("tab-custom-btn").classList.toggle("active", tab === "custom");
+  document.getElementById("tab-presets-btn").classList.toggle("active", tab === "presets");
+  document.getElementById("tab-custom").classList.toggle("active", tab === "custom");
+  document.getElementById("tab-presets").classList.toggle("active", tab === "presets");
+}
+
+function applyTemplate(templateId) {
+  const text = TEMPLATES[templateId] || "";
+  document.getElementById("scenario-prompt-input").value = text;
+}
+
+async function generateArgonSuite() {
+  const promptInput = document.getElementById("scenario-prompt-input").value.trim();
+  const titleEl = document.getElementById("custom-scenario-title-input");
+  const titleInput = titleEl ? titleEl.value.trim() : "";
+
+  if (!promptInput) {
+    alert("Please enter a description for your custom use case.");
+    return;
+  }
+
+  const btn = document.getElementById("generate-suite-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-icon">⏳</span> Synthesizing with Argon...';
+
+  try {
+    const res = await fetch("/api/scenarios/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: promptInput, title: titleInput }),
+    });
+
+    const data = await res.json();
+    if (data.success && data.suite_spec) {
+      const spec = data.suite_spec;
+      spec.is_custom = true;
+      state.activeSuiteSpec = spec;
+      state.activeScenarioId = spec.scenario_id;
+      state.allScenarios.push(spec);
+
+      // Add synthesized custom use case to the user's Custom Test Suite
+      addScenarioToCustomSuite(spec, true);
+      if (titleEl) titleEl.value = "";
+    } else {
+      alert("Argon test generation failed: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Error communicating with Argon Agent: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">✨</span> Synthesize & Add Custom Use Case to Suite';
+  }
+}
+
+function onSelectPresetScenario() {
+  const select = document.getElementById("preset-scenario-select");
+  const val = select.value;
+  if (!val) return;
+
+  const found = state.allScenarios.find((s) => s.scenario_id === val) || {
+    scenario_id: val,
+    scenario_name: val,
+    pillar: "Standard devbench RFC Suite",
+    difficulty: "Medium",
+    scenario_summary: `Evaluating frontier model adherence against RFC benchmark scenario: ${val}`,
+    primary_metrics: ["average_pass_rate", "actor_critic_quality_score"],
+    assertions: [
+      { name: "deterministic_execution_pass", description: "All assertions pass" },
+      { name: "actor_critic_rubric_threshold", description: "Score >= 3.0 / 5.0" },
+    ],
+  };
+
+  addScenarioToCustomSuite(found, true);
+}
+
+function renderSuitePreview(spec) {
+  const card = document.getElementById("suite-preview-card");
+  card.style.display = "block";
+
+  document.getElementById("preview-pillar-badge").textContent = spec.pillar || "Core Benchmark";
+  document.getElementById("preview-difficulty-badge").textContent = spec.difficulty || "Medium";
+  document.getElementById("preview-title").textContent = spec.scenario_name || spec.scenario_id;
+  document.getElementById("preview-summary").textContent = spec.scenario_summary || "";
+
+  const metricsList = document.getElementById("preview-metrics-list");
+  metricsList.innerHTML = (spec.primary_metrics || [])
+    .map((m) => `<li><strong>${m}</strong></li>`)
+    .join("");
+
+  const assertionsList = document.getElementById("preview-assertions-list");
+  assertionsList.innerHTML = (spec.assertions || [])
+    .map((a) => `<li>${typeof a === "object" ? a.name : a}</li>`)
+    .join("");
+}
+
+// ============================================================================
+// Step 3: Run Assessment & Live Telemetry
+// ============================================================================
+
+async function startEvaluation() {
+  if (state.isEvaluating) return;
+
+  // The suite is exactly what the user composed: any mix of standard + custom tests (>= 1 total).
+  const scenarioIds = state.customSuiteItems.map((i) => i.scenario_id);
+  if (scenarioIds.length === 0) {
+    alert("Your test suite is empty. Add at least one pre-configured standard test or one of your own test scenarios.");
+    return;
+  }
+  if (!state.selectedModelId) {
+    alert("Select a Model in Question (MIQ) enabled in your linked GCP project first.");
+    return;
+  }
+
+  const modelAlias = state.selectedModelId;
+  const agentHarness = state.selectedHarnessId || "agy";
+  const harborToggle = document.getElementById("harbor-sandbox-toggle");
+  const useHarbor = harborToggle ? Boolean(harborToggle.checked) : true;
+  const harborEnvSelect = document.getElementById("harbor-env-select");
+  const environmentType = harborEnvSelect ? harborEnvSelect.value : "podman";
+  const mode = document.querySelector('input[name="exec-mode"]:checked').value;
+  const nameInput = document.getElementById("custom-suite-name-input");
+  const suiteName = nameInput ? nameInput.value.trim() : "Custom Frontier Evaluation Suite";
+
+  // Reset UI
+  state.isEvaluating = true;
+  state.activeRunData = null;
+  document.getElementById("run-eval-btn").disabled = true;
+  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing via ${escapeHtml(agentHarness)} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
+  document.getElementById("timer-status-badge").textContent = `Running (${agentHarness})`;
+  document.getElementById("timer-status-badge").className = "badge badge-recommended";
+
+  // Hide export and previous results
+  document.getElementById("results-container").style.display = "none";
+  document.getElementById("repo-export-section").style.display = "none";
+
+  // Start local live timer ticker
+  state.localStartTime = Date.now();
+  state.localTimer = setInterval(() => {
+    const elapsed = (Date.now() - state.localStartTime) / 1000;
+    document.getElementById("metric-duration").innerHTML = `${elapsed.toFixed(2)} <span class="metric-unit">s</span>`;
+  }, 100);
+
+  try {
+    const res = await fetch("/api/eval/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scenario_id: scenarioIds[0],
+        scenario_ids: scenarioIds,
+        suite_name: suiteName,
+        model_alias: modelAlias,
+        agent_type: agentHarness,
+        harness: agentHarness,
+        harbor: useHarbor,
+        environment_type: environmentType,
+        mode: mode,
+        async: true,
+      }),
+    });
+
+    const initData = await readJsonResponse(res);
+    renderReport({
+      status: "RUNNING",
+      model_alias: modelAlias,
+      agent_harness: agentHarness,
+      scenario_ids: scenarioIds,
+      warnings: initData.warnings || [],
+      test_results: [],
+      completed_tests: 0,
+      total_tests: scenarioIds.length,
+    });
+    pollEvaluationStatus(initData.run_id);
+  } catch (err) {
+    stopEvaluationUI("Error");
+    if (err.data && (err.data.error_type === "MODEL_ACCESS_DENIED" || err.data.model_id)) {
+      showModelAccessModal(err.data);
+    } else {
+      alert("Evaluation could not start: " + err.message);
+    }
+  }
+}
+
+function pollEvaluationStatus(runId) {
+  if (state.pollTimer) clearInterval(state.pollTimer);
+
+  state.pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/runs/${runId}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      updateTelemetryUI(data);
+      renderReport(data);
+
+      if (data.status === "COMPLETED" || data.status === "FAILED") {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+        stopEvaluationUI(data.status === "COMPLETED" ? "Complete" : "Failed");
+        state.activeRunData = data;
+        displayEvaluationResults(data);
+        if (data.model_access_error) {
+          showModelAccessModal(data.model_access_error);
+        }
+        if (data.status === "COMPLETED") prepareRepositoryExport(data);
+        fetchTokenTelemetry();
+        const reportSection = document.getElementById("eval-report-section");
+        if (reportSection) reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (err) {
+      console.error("Polling error:", err);
+    }
+  }, 600);
+}
+
+function stopEvaluationUI(label = "Complete") {
+  state.isEvaluating = false;
+  if (state.localTimer) {
+    clearInterval(state.localTimer);
+    state.localTimer = null;
+  }
+  const btn = document.getElementById("run-eval-btn");
+  btn.disabled = false;
+  btn.innerHTML = '<span class="btn-icon">▶</span> Run Assessment';
+  document.getElementById("timer-status-badge").textContent = label;
+  document.getElementById("timer-status-badge").className = `badge ${label === "Complete" ? "badge-speed" : "badge-danger"}`;
+}
+
+// ============================================================================
+// Evaluation Report (bottom of the page): metrics, token cost & time per test
+// ============================================================================
+
+function renderReport(data) {
+  const section = document.getElementById("eval-report-section");
+  if (!section) return;
+  section.style.display = "block";
+
+  const rows = Array.isArray(data.test_results) ? data.test_results : [];
+  const report = data.report || {};
+  const total = data.total_tests || (data.scenario_ids || []).length || rows.length;
+  const done = data.completed_tests !== undefined ? data.completed_tests : rows.length;
+
+  const badge = document.getElementById("eval-report-status-badge");
+  if (badge) {
+    if (data.status === "RUNNING") {
+      badge.textContent = `RUNNING ${done}/${total}`;
+      badge.className = "badge badge-recommended";
+    } else {
+      const allPassed = rows.length > 0 && rows.every((r) => r.status === "PASSED");
+      badge.textContent = data.status === "FAILED" ? "FAILED" : allPassed ? "ALL PASSED" : "COMPLETED WITH FAILURES";
+      badge.className = `badge ${allPassed && data.status !== "FAILED" ? "badge-speed" : "badge-danger"}`;
+    }
+  }
+
+  const subtitle = document.getElementById("eval-report-subtitle");
+  if (subtitle) {
+    const modelName = report.model_name || data.model_alias || state.selectedModelId;
+    const harnessName = report.harness_name || data.agent_harness || state.selectedHarnessId;
+    const where = report.gcp_project_id || data.gcp_project_id || state.gcpProject;
+    subtitle.innerHTML = `MIQ <strong>${escapeHtml(modelName)}</strong> hosted by <strong>${escapeHtml(harnessName)}</strong> • Project <code>${escapeHtml(where)}</code> • ${escapeHtml(report.execution_mode || data.execution_mode || "")} mode${report.harbor || data.harbor ? " • Harbor " + escapeHtml(report.environment_type || data.environment_type || "") : ""}`;
+  }
+
+  const warningsBox = document.getElementById("eval-report-warnings");
+  const warnings = (report.warnings || data.warnings || []).filter(Boolean);
+  if (warningsBox) {
+    const errorLine = data.status === "FAILED" && data.error ? [`Run failed: ${data.error}`] : [];
+    const all = [...warnings, ...errorLine];
+    warningsBox.style.display = all.length ? "block" : "none";
+    warningsBox.innerHTML = all.map((w) => `<div>⚠ ${escapeHtml(w)}</div>`).join("");
+  }
+
+  const sum = (key) => rows.reduce((acc, r) => acc + Number(r[key] || 0), 0);
+  const passedCount = rows.filter((r) => r.status === "PASSED").length;
+  const scored = rows.filter((r) => r.status !== "ERROR");
+  const avgScore = scored.length ? scored.reduce((a, r) => a + Number(r.composite_score || 0), 0) / scored.length : 0;
+  const summary = document.getElementById("eval-report-summary");
+  if (summary) {
+    const cards = [
+      ["Tests", `${done}/${total}`, `${rows.filter((r) => !r.is_custom).length} standard • ${rows.filter((r) => r.is_custom).length} custom`],
+      ["Pass Rate", `${rows.length ? ((100 * passedCount) / rows.length).toFixed(0) : 0}%`, `${passedCount} passed • ${rows.length - passedCount} failed/error`],
+      ["Avg Critic Score", `${avgScore.toFixed(2)} / 5`, "Actor-critic composite"],
+      ["Total Time", `${sum("wall_seconds").toFixed(2)} s`, `avg ${(rows.length ? sum("wall_seconds") / rows.length : 0).toFixed(2)} s / test`],
+      ["Total Tokens", fmtInt(sum("total_tokens")), `${fmtInt(sum("input_tokens"))} in • ${fmtInt(sum("output_tokens"))} out • ${fmtInt(sum("critic_tokens"))} critic`],
+      ["Total Cost", fmtUsd(sum("estimated_cost_usd")), `MIQ ${fmtUsd(sum("candidate_cost_usd"))} • critics ${fmtUsd(sum("critic_cost_usd"))}`],
+    ];
+    summary.innerHTML = cards
+      .map(
+        ([label, value, sub]) => `
+        <div class="report-summary-card">
+          <div class="report-summary-label">${escapeHtml(label)}</div>
+          <div class="report-summary-value">${escapeHtml(value)}</div>
+          <div class="report-summary-sub">${escapeHtml(sub)}</div>
+        </div>`
+      )
+      .join("");
+  }
+
+  const tbody = document.getElementById("eval-report-tbody");
+  const tfoot = document.getElementById("eval-report-tfoot");
+  if (tbody) {
+    const pending = (data.scenario_ids || []).slice(rows.length);
+    tbody.innerHTML =
+      rows
+        .map((r, idx) => {
+          const statusCls = r.status === "PASSED" ? "badge-speed" : "badge-danger";
+          const harborCell =
+            r.harbor_tasks_total !== undefined && r.harbor_tasks_total !== null
+              ? `${r.harbor_tasks_passed}/${r.harbor_tasks_total}`
+              : "—";
+          return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(r.scenario_name || r.scenario_id)}</strong><div class="muted mono">${escapeHtml(r.scenario_id)}</div>${r.error ? `<div class="report-error">${escapeHtml(r.error)}</div>` : ""}</td>
+            <td><span class="badge ${r.is_custom ? "badge-coding" : "badge-recommended"}">${r.is_custom ? "Custom" : "Standard"}</span></td>
+            <td><span class="badge ${statusCls}">${escapeHtml(r.status)}</span></td>
+            <td class="mono">${Number(r.rubric_score || 0).toFixed(1)} / ${Number(r.composite_score || 0).toFixed(2)}</td>
+            <td class="mono">${harborCell}</td>
+            <td class="mono">${Number(r.wall_seconds || 0).toFixed(2)} s</td>
+            <td class="mono">${fmtInt(r.input_tokens)}</td>
+            <td class="mono">${fmtInt(r.output_tokens)}</td>
+            <td class="mono">${fmtInt(r.critic_tokens)}</td>
+            <td class="mono" title="Token source: ${escapeHtml(r.token_source || "")}">${fmtUsd(r.candidate_cost_usd)}</td>
+            <td class="mono"><strong>${fmtUsd(r.estimated_cost_usd)}</strong></td>
+          </tr>`;
+        })
+        .join("") +
+      pending
+        .map(
+          (sid, i) => `
+          <tr class="pending-row">
+            <td>${rows.length + i + 1}</td>
+            <td><strong>${escapeHtml(sid)}</strong></td>
+            <td colspan="10" class="muted">${i === 0 && data.status === "RUNNING" ? "⏳ Running…" : "Queued"}</td>
+          </tr>`
+        )
+        .join("");
+  }
+  if (tfoot) {
+    tfoot.innerHTML = rows.length
+      ? `
+      <tr>
+        <td></td>
+        <td colspan="3"><strong>Total (${rows.length} test${rows.length > 1 ? "s" : ""})</strong></td>
+        <td class="mono">avg ${avgScore.toFixed(2)}</td>
+        <td></td>
+        <td class="mono"><strong>${sum("wall_seconds").toFixed(2)} s</strong></td>
+        <td class="mono">${fmtInt(sum("input_tokens"))}</td>
+        <td class="mono">${fmtInt(sum("output_tokens"))}</td>
+        <td class="mono">${fmtInt(sum("critic_tokens"))}</td>
+        <td class="mono">${fmtUsd(sum("candidate_cost_usd"))}</td>
+        <td class="mono"><strong>${fmtUsd(sum("estimated_cost_usd"))}</strong></td>
+      </tr>`
+      : "";
+  }
+  state.lastReportData = data;
+}
+
+function _downloadBlob(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadReportJson() {
+  const data = state.lastReportData;
+  if (!data) return;
+  _downloadBlob(
+    `devbench-report-${data.run_id || "run"}.json`,
+    JSON.stringify({ report: data.report || {}, test_results: data.test_results || [] }, null, 2),
+    "application/json"
+  );
+}
+
+function downloadReportCsv() {
+  const data = state.lastReportData;
+  if (!data || !Array.isArray(data.test_results)) return;
+  const cols = [
+    "scenario_id", "scenario_name", "is_custom", "status", "rubric_score", "composite_score",
+    "harbor_tasks_passed", "harbor_tasks_total", "wall_seconds", "duration_seconds",
+    "input_tokens", "output_tokens", "critic_tokens", "total_tokens",
+    "candidate_cost_usd", "critic_cost_usd", "estimated_cost_usd", "token_source", "error",
+  ];
+  const esc = (v) => {
+    const s = v === undefined || v === null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [cols.join(",")].concat(data.test_results.map((r) => cols.map((c) => esc(r[c])).join(",")));
+  _downloadBlob(`devbench-report-${data.run_id || "run"}.csv`, lines.join("\n"), "text/csv");
+}
+
+function updateTelemetryUI(data) {
+  if (data.duration_seconds !== undefined) {
+    document.getElementById("metric-duration").innerHTML = `${Number(data.duration_seconds).toFixed(2)} <span class="metric-unit">s</span>`;
+  }
+
+  const timing = data.timing || {};
+  const phaseTimings = timing.phase_timings_ms || {};
+  const candMs = phaseTimings.candidate_generation || data.latency_ms || 0;
+  const sandMs = phaseTimings.sandbox_execution || 0;
+  const critMs = phaseTimings.actor_critic_evaluation || 0;
+  const totalPhaseMs = Math.max(1, candMs + sandMs + critMs);
+
+  document.getElementById("timing-candidate-ms").textContent = `${Math.round(candMs)} ms`;
+  document.getElementById("timing-sandbox-ms").textContent = `${Math.round(sandMs)} ms`;
+  document.getElementById("timing-critic-ms").textContent = `${Math.round(critMs)} ms`;
+
+  document.getElementById("bar-candidate").style.width = `${Math.round((candMs / totalPhaseMs) * 100)}%`;
+  document.getElementById("bar-sandbox").style.width = `${Math.round((sandMs / totalPhaseMs) * 100)}%`;
+  document.getElementById("bar-critic").style.width = `${Math.round((critMs / totalPhaseMs) * 100)}%`;
+
+  const tokenUsage = data.token_usage || {};
+  const inputTok = data.input_tokens || tokenUsage.candidate_input_tokens || 0;
+  const outputTok = data.output_tokens || tokenUsage.candidate_output_tokens || 0;
+  const criticTok = (tokenUsage.actor_critic_scores && tokenUsage.actor_critic_scores.total_tokens) || 0;
+  const totalTok = data.total_tokens || inputTok + outputTok + criticTok;
+  const costUsd = data.estimated_cost_usd || tokenUsage.candidate_cost_usd || 0.0;
+
+  document.getElementById("metric-cost").innerHTML = `$${Number(costUsd).toFixed(5)} <span class="metric-unit">USD</span>`;
+  document.getElementById("stat-input-tokens").textContent = inputTok.toLocaleString();
+  document.getElementById("stat-output-tokens").textContent = outputTok.toLocaleString();
+  document.getElementById("stat-critic-tokens").textContent = criticTok.toLocaleString();
+  document.getElementById("stat-total-tokens").textContent = totalTok.toLocaleString();
+}
+
+function displayEvaluationResults(data) {
+  const container = document.getElementById("results-container");
+  container.style.display = "block";
+
+  const passed = data.passed || data.exit_code === 0;
+  const statusBadge = document.getElementById("eval-status-badge");
+  statusBadge.textContent = passed ? "PASSED" : "FAILED";
+  statusBadge.className = `badge ${passed ? "badge-speed" : "badge-danger"}`;
+
+  const titleEl = document.getElementById("eval-result-title");
+  if (titleEl) {
+    const testCount = (data.test_results && data.test_results.length) || 1;
+    const harnessLabel = data.agent_harness || data.harness || state.selectedHarnessId || "agy";
+    titleEl.textContent =
+      testCount > 1
+        ? `Assessment Results — ${data.model_alias} • Harness: ${harnessLabel} (${testCount} Suite Tests)`
+        : `Assessment Results — ${data.model_alias} • Harness: ${harnessLabel}`;
+  }
+
+  // Render Multi-Test Suite Breakdown if available
+  const breakdownBox = document.getElementById("suite-tests-breakdown");
+  const breakdownList = document.getElementById("suite-tests-breakdown-list");
+  if (breakdownBox && breakdownList && Array.isArray(data.test_results) && data.test_results.length > 0) {
+    breakdownBox.style.display = "block";
+    breakdownList.innerHTML = data.test_results
+      .map(
+        (tr) => `
+        <div class="suite-result-row">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge ${tr.passed ? "badge-speed" : "badge-danger"}">${tr.status === "ERROR" ? "ERROR" : tr.passed ? "PASS" : "FAIL"}</span>
+            <span class="badge ${tr.is_custom ? "badge-coding" : "badge-recommended"}">${
+          tr.is_custom ? "Custom Use Case" : "Standard Benchmark"
+        }</span>
+            <strong>${escapeHtml(tr.scenario_name || tr.scenario_id)}</strong>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary);">
+            Score: ${Number(tr.rubric_score || 0).toFixed(1)}/5 • ${Number(tr.wall_seconds || tr.duration_seconds || 0).toFixed(2)}s • ${
+          fmtInt(tr.total_tokens)
+        } tok • ${fmtUsd(tr.estimated_cost_usd)}
+          </div>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  const acScores = data.actor_critic_scores || {};
+  const compScore = acScores.composite_normalized_score || 0;
+  document.getElementById("composite-score-text").textContent = `${Number(compScore).toFixed(1)} / 5.0`;
+
+  const evals = acScores.evaluations || {};
+  if (evals.qwen) {
+    document.getElementById("critic-score-qwen").textContent = `${evals.qwen.normalized_score} / 5`;
+    document.getElementById("critic-rationale-qwen").textContent =
+      evals.qwen.rationale || "Architectural modularity verified.";
+  }
+  if (evals.minimax) {
+    document.getElementById("critic-score-minimax").textContent = `${evals.minimax.normalized_score} / 5`;
+    document.getElementById("critic-rationale-minimax").textContent =
+      evals.minimax.rationale || "Execution assertions pass deterministically.";
+  }
+  if (evals.kimi_k) {
+    document.getElementById("critic-score-kimi").textContent = `${evals.kimi_k.normalized_score} / 5`;
+    document.getElementById("critic-rationale-kimi").textContent =
+      evals.kimi_k.rationale || "GCP API & parameter grounding verified.";
+  }
+
+  const codeBlock = document.getElementById("candidate-output-code");
+  codeBlock.textContent = data.candidate_output || "// No candidate output recorded";
+}
+
+function copyOutputText() {
+  const code = document.getElementById("candidate-output-code").textContent;
+  navigator.clipboard.writeText(code);
+  alert("Candidate output copied to clipboard!");
+}
+
+// ============================================================================
+// Step 4: Repository Insertion
+// ============================================================================
+
+function prepareRepositoryExport(data) {
+  const section = document.getElementById("repo-export-section");
+  section.style.display = "block";
+
+  const suiteSlug = data.suite_slug || "agent_skill_creation";
+  const scenarioId = data.scenario_id || "scenario";
+
+  const titleEl = document.getElementById("export-title");
+  const subEl = document.getElementById("export-subtitle");
+  const iconEl = document.getElementById("export-icon");
+  const pathInput = document.getElementById("repo-subpath-input");
+
+  if (suiteSlug === "agent_skill_creation") {
+    iconEl.textContent = "🧠";
+    titleEl.textContent = "Artifact: Agent Skill Package";
+    subEl.textContent = "Generates Skill.md specification, Python skill implementation, and automated test suite.";
+    pathInput.value = `skills/${scenarioId}`;
+  } else if (suiteSlug === "cloud_tool_writing") {
+    iconEl.textContent = "☁️";
+    titleEl.textContent = "Artifact: GCP Workflow Package";
+    subEl.textContent = "Generates cloudbuild.yaml, Dockerfile, provisioning scripts, and README.md.";
+    pathInput.value = `workflows/${scenarioId}`;
+  } else {
+    iconEl.textContent = "🔄";
+    titleEl.textContent = "Artifact: Translated Codebase Module";
+    subEl.textContent = "Generates translated source files, modular boundaries, and refactored architecture.";
+    pathInput.value = `src/${scenarioId}`;
+  }
+}
+
+async function exportToRepository() {
+  const repoAddr = document.getElementById("repo-address-input").value.trim();
+  const branch = document.getElementById("repo-branch-input").value.trim() || "main";
+  const targetDir = document.getElementById("repo-subpath-input").value.trim();
+
+  if (!repoAddr) {
+    alert("Please provide a Git repository address (e.g. /path/to/repo or https://github.com/...)");
+    return;
+  }
+
+  if (!state.activeRunData) {
+    alert("No active evaluation run found to export.");
+    return;
+  }
+
+  const btn = document.getElementById("insert-repo-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-icon">⏳</span> Inserting...';
+
+  try {
+    const res = await fetch("/api/export/repo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        repo_address: repoAddr,
+        run_id: state.activeRunData.run_id,
+        branch: branch,
+        target_dir: targetDir,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      const alertBox = document.getElementById("export-alert");
+      alertBox.style.display = "flex";
+      document.getElementById("export-alert-msg").textContent = `Inserted ${data.inserted_files.length} artifact files into ${data.target_subpath} on branch ${data.branch}.`;
+      document.getElementById("export-commit-hash").textContent = data.commit_hash;
+      document.getElementById("export-branch-name").textContent = data.branch;
+
+      const filesList = document.getElementById("export-files-list");
+      filesList.innerHTML = (data.inserted_files || []).map((f) => `<li>+ ${f}</li>`).join("");
+    } else {
+      alert("Repository export failed: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Error during repository insertion: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">📥</span> Insert into Repository';
+  }
+}

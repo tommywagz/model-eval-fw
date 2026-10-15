@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "project_id": "benchmaxxer-eval-sandbox",
+  "project_id": "devbench-eval-sandbox",
   "service_accounts": {
-    "benchmaxxer_eval": "benchmaxxer-sa@benchmaxxer-eval-sandbox.iam.gserviceaccount.com"
+    "devbench_eval": "devbench-sa@devbench-eval-sandbox.iam.gserviceaccount.com"
   },
   "required_scopes": [
     "https://www.googleapis.com/auth/cloud-platform"

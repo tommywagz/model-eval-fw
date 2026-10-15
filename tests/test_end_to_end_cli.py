@@ -1,4 +1,4 @@
-"""End-to-End Acceptance Tests for test_runner.py and benchmaxxer CLI."""
+"""End-to-End Acceptance Tests for test_runner.py and devbench CLI."""
 
 from __future__ import annotations
 

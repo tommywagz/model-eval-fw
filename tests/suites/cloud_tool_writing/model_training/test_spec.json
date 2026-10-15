@@ -62,8 +62,8 @@
     }
   },
   "telemetry": {
-    "timer_integration": "benchmaxxer.telemetry.timer.ExecutionTimer at test, suite and framework level",
-    "token_cost_integration": "benchmaxxer.telemetry.tokens.TokensScriptBridge (--capture-tokens runs .agents/scripts/tokens --check)",
+    "timer_integration": "devbench.telemetry.timer.ExecutionTimer at test, suite and framework level",
+    "token_cost_integration": "devbench.telemetry.tokens.TokensScriptBridge (--capture-tokens runs .agents/scripts/tokens --check)",
     "levels": ["test", "suite", "framework"]
   }
 }

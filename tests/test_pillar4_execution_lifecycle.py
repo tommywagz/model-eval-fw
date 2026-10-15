@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from benchmaxxer.execution import ExecutionSandbox, teardown_fixture
+from devbench.execution import ExecutionSandbox, teardown_fixture
 
 
 def test_execution_sandbox_mode_switch() -> None:

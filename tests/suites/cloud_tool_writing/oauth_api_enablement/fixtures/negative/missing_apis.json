@@ -1,5 +1,5 @@
 {
-  "service_account": "benchmaxxer-sa@benchmaxxer-eval-sandbox.iam.gserviceaccount.com",
+  "service_account": "devbench-sa@devbench-eval-sandbox.iam.gserviceaccount.com",
   "enabled_apis": [
     "aiplatform.googleapis.com"
   ],

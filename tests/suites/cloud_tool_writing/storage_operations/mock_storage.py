@@ -2,7 +2,7 @@
 
 ``StrictStorageSandbox`` puts API-shaped client facades (``bigquery``, ``gcs``,
 ``firestore``) in front of the framework's ``MockStorageSuiteService``
-(``benchmaxxer.execution.mocks``). The framework mock only keeps dicts: its
+(``devbench.execution.mocks``). The framework mock only keeps dicts: its
 ``bq_query`` returns canned rows and GCS accepts any payload. The facades add
 the semantics a real tool author has to handle:
 
@@ -29,9 +29,9 @@ import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 try:  # Prefer the framework mock so the suite exercises the shared interface.
-    from benchmaxxer.execution.mocks import MockStorageSuiteService as _Backend
+    from devbench.execution.mocks import MockStorageSuiteService as _Backend
 
-    BACKEND_NAME = "benchmaxxer.execution.mocks.MockStorageSuiteService"
+    BACKEND_NAME = "devbench.execution.mocks.MockStorageSuiteService"
 except Exception:  # pragma: no cover - vendored fallback keeps the suite hermetic
     BACKEND_NAME = "vendored_fallback.MockStorageSuiteService"
 

@@ -1,9 +1,9 @@
-# BenchMaxxer Unified Model Registry
+# devbench Unified Model Registry
 # Maps logical model aliases to provider classes, Vertex AI / MaaS endpoint configs,
 # project locations, pricing rates, and deterministic generation defaults.
 
 defaults:
-  project_id: "benchmaxxer-eval-sandbox"
+  project_id: "devbench-eval-sandbox"
   location: "us-central1"
   temperature: 0.0
   max_output_tokens: 4096
@@ -16,7 +16,7 @@ models:
   gemini-3.1-pro:
     provider: "vertex_genai"
     model_name: "gemini-3.1-pro-001"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00150
@@ -30,7 +30,7 @@ models:
   gemini-3.8-flash:
     provider: "vertex_genai"
     model_name: "gemini-3.8-flash-001"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00015
@@ -44,7 +44,7 @@ models:
   claude-opus-5.1:
     provider: "vertex_anthropic"
     model_name: "claude-opus-5-1@20260601"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
     cost_per_1k_input_usd: 0.00500
@@ -56,7 +56,7 @@ models:
   claude-sonnet-5.5:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-5-5@20260514"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
@@ -68,8 +68,8 @@ models:
   mistral-large-latest:
     provider: "vertex_endpoint"
     model_name: "mistralai/mistral-large-3-latest"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
+    project_id: "devbench-eval-sandbox"
     location: "europe-west4"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
@@ -82,7 +82,7 @@ models:
   gemini-4-argon:
     provider: "vertex_genai"
     model_name: "gemini-4-argon-001"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
@@ -96,8 +96,8 @@ models:
   fable-5.1:
     provider: "vertex_endpoint"
     model_name: "fable-ai/fable-5.1-frontier"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/fable-5-1-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/fable-5-1-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00250
@@ -110,7 +110,7 @@ models:
   sonnet-5.5:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-5-5@20260514"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
@@ -125,7 +125,7 @@ models:
   gemini-3.5-pro:
     provider: "vertex_genai"
     model_name: "gemini-3.5-pro-002"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00125
@@ -139,7 +139,7 @@ models:
   gemini-1.5-pro:
     provider: "vertex_genai"
     model_name: "gemini-1.5-pro-002"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00125
@@ -153,7 +153,7 @@ models:
   gemini-1.5-flash:
     provider: "vertex_genai"
     model_name: "gemini-1.5-flash-002"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.000075
@@ -170,7 +170,7 @@ models:
   claude-3-5-sonnet:
     provider: "vertex_anthropic"
     model_name: "claude-3-5-sonnet-v2@20241022"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
@@ -182,7 +182,7 @@ models:
   claude-3-5-haiku:
     provider: "vertex_anthropic"
     model_name: "claude-3-5-haiku@20241022"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
     cost_per_1k_input_usd: 0.00080
@@ -194,8 +194,8 @@ models:
   llama-4-405b:
     provider: "vertex_endpoint"
     model_name: "meta/llama-4-405b-instruct"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/llama-4-405b-instruct-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-4-405b-instruct-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00150
@@ -208,8 +208,8 @@ models:
   llama-3.1-70b:
     provider: "vertex_endpoint"
     model_name: "meta/llama-3.1-70b-instruct"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/llama-31-70b-instruct-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-31-70b-instruct-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00080
@@ -222,8 +222,8 @@ models:
   deepseek-r2:
     provider: "vertex_endpoint"
     model_name: "deepseek-ai/deepseek-r2-reasoning"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/deepseek-r2-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/deepseek-r2-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00055
@@ -236,8 +236,8 @@ models:
   mistral-large-3:
     provider: "vertex_endpoint"
     model_name: "mistralai/mistral-large-3"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
+    project_id: "devbench-eval-sandbox"
     location: "europe-west4"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
@@ -250,8 +250,8 @@ models:
   qwen-3-72b:
     provider: "vertex_endpoint"
     model_name: "Qwen/Qwen3-72B-Instruct"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/qwen3-72b-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/qwen3-72b-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
     cost_per_1k_input_usd: 0.00080
@@ -272,7 +272,7 @@ models:
   critic-frontier-anthropic:
     provider: "vertex_anthropic"
     model_name: "claude-3-5-sonnet-v2@20241022"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "critic"
     cost_per_1k_input_usd: 0.00300
@@ -285,7 +285,7 @@ models:
   critic-frontier-gemini:
     provider: "vertex_genai"
     model_name: "gemini-1.5-pro-002"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"
     cost_per_1k_input_usd: 0.00125
@@ -299,8 +299,8 @@ models:
   critic-qwen:
     provider: "vertex_endpoint"
     model_name: "Qwen/Qwen2.5-72B-Instruct"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/critic-qwen-25-72b-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/critic-qwen-25-72b-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"
     critic_persona: "ArchitecturalCritic"
@@ -316,7 +316,7 @@ models:
     provider: "openai_compatible"
     model_name: "MiniMax-Text-01"
     base_url: "http://localhost:8000/v1"
-    project_id: "benchmaxxer-eval-sandbox"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"
     critic_persona: "TestHarnessCritic"
@@ -332,8 +332,8 @@ models:
     provider: "openai_compatible"
     model_name: "Kimi-K1.5-Instruct"
     base_url: "http://localhost:8001/v1"
-    endpoint_resource_name: "projects/benchmaxxer-eval-sandbox/locations/us-central1/endpoints/critic-kimi-k-ep"
-    project_id: "benchmaxxer-eval-sandbox"
+    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/critic-kimi-k-ep"
+    project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"
     critic_persona: "PlatformComplianceCritic"

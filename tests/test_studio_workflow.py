@@ -25,17 +25,17 @@ from typing import Any, Dict, Optional, Tuple
 
 import pytest
 
-from benchmaxxer.gcp import model_garden
-from benchmaxxer.harbor import (
+from devbench.gcp import model_garden
+from devbench.harbor import (
     detect_harness,
     list_detected_harnesses,
     register_custom_agent_harness,
     run_harness_headless,
 )
-from benchmaxxer.harbor.harnesses import parse_harness_output
-from benchmaxxer.models.factory import get_model_client, register_runtime_models
-from benchmaxxer.scenarios.runner import SCENARIO_CATALOG
-from benchmaxxer.ui.web import server as web_server_module
+from devbench.harbor.harnesses import parse_harness_output
+from devbench.models.factory import get_model_client, register_runtime_models
+from devbench.scenarios.runner import SCENARIO_CATALOG
+from devbench.ui.web import server as web_server_module
 
 PROJECT = "my-linked-eval-proj"
 LOCATION = "us-central1"
@@ -150,12 +150,12 @@ def test_discovered_models_resolve_to_linked_project_clients() -> None:
 
 def test_harness_catalog_detection_and_custom_registration(tmp_path: Path) -> None:
     harnesses = {h["id"]: h for h in list_detected_harnesses()}
-    for hid in ("agy", "jetski", "claude-code", "opencode", "codex", "gemini-cli", "benchmaxxer", "oracle"):
+    for hid in ("agy", "jetski", "claude-code", "opencode", "codex", "gemini-cli", "devbench", "oracle"):
         assert hid in harnesses
         assert "installed" in harnesses[hid]
     assert harnesses["agy"]["is_default"] is True
     assert harnesses["agy"]["harbor_agent_name"] == "antigravity-cli"
-    assert harnesses["benchmaxxer"]["installed"] is True  # built-in
+    assert harnesses["devbench"]["installed"] is True  # built-in
 
     missing = register_custom_agent_harness(name="Ghost Agent", cli_binary="definitely-not-installed-xyz")
     assert detect_harness(missing)["installed"] is False
@@ -227,7 +227,7 @@ def linked_server(monkeypatch: pytest.MonkeyPatch):
 
     saved_state = web_server_module.GCP_RUNTIME_STATE
     web_server_module.GCP_RUNTIME_STATE = None
-    from benchmaxxer.scenarios.runner import SUITE_CATALOG
+    from devbench.scenarios.runner import SUITE_CATALOG
     import copy as _copy
 
     saved_scenarios = dict(SCENARIO_CATALOG)
@@ -245,7 +245,7 @@ def linked_server(monkeypatch: pytest.MonkeyPatch):
     httpd.server_close()
     web_server_module.GCP_RUNTIME_STATE = saved_state
     register_runtime_models({}, replace=True)
-    (Path(os.environ["BENCHMAXXER_STATE_DIR"]) / "gcp_link.json").unlink(missing_ok=True)
+    (Path(os.environ["DEVBENCH_STATE_DIR"]) / "gcp_link.json").unlink(missing_ok=True)
     # Undo custom (Argon) test registrations so other test modules see the stock catalogs.
     SCENARIO_CATALOG.clear()
     SCENARIO_CATALOG.update(saved_scenarios)
@@ -279,7 +279,7 @@ def test_full_studio_workflow_link_select_run_and_report(linked_server: str) -> 
     assert "claude-opus-4-1" not in enabled_ids
 
     # Persisted for the next server start (isolated state dir from conftest).
-    persisted = Path(os.environ["BENCHMAXXER_STATE_DIR"]) / "gcp_link.json"
+    persisted = Path(os.environ["DEVBENCH_STATE_DIR"]) / "gcp_link.json"
     assert json.loads(persisted.read_text())["project_id"] == PROJECT
 
     # 2. A model that is not enabled in the linked project cannot be the MIQ.
@@ -364,15 +364,15 @@ def test_live_runs_require_installed_harness_and_compatible_model(linked_server:
 
 
 def test_live_runs_require_linked_project() -> None:
-    from benchmaxxer.ui.web.eval_runner import EvalRequestError, resolve_eval_request
+    from devbench.ui.web.eval_runner import EvalRequestError, resolve_eval_request
 
     snapshot = {
-        "project_id": "benchmaxxer-eval-sandbox",
+        "project_id": "devbench-eval-sandbox",
         "location": LOCATION,
         "link_status": {"source": "offline_catalog"},
         "models": [{"id": "gemini-3.1-pro", "name": "Gemini 3.1 Pro", "brand": "gemini", "enabled": True}],
     }
     with pytest.raises(EvalRequestError, match="linked GCP project"):
-        resolve_eval_request({"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-3.1-pro", "mode": "live", "agent_type": "benchmaxxer"}, snapshot)
+        resolve_eval_request({"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-3.1-pro", "mode": "live", "agent_type": "devbench"}, snapshot)
     with pytest.raises(EvalRequestError, match="Unknown test"):
         resolve_eval_request({"scenario_ids": ["nope_not_a_test"], "model_alias": "gemini-3.1-pro"}, snapshot)

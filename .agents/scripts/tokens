@@ -17,7 +17,7 @@ case "${1:-}" in
     shift
     exec "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@"
     ;;
-  --check|--benchmaxxer|--refresh|--quit|--help|-h)
+  --check|--devbench|--benchmaxxer|--refresh|--quit|--help|-h)
     exec "$PYTHON_BIN" "$script_dir/token_overlay.py" "$@"
     ;;
   ""|--show) ;;

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmaxxer.orchestrator.backlog import BacklogManager
-from benchmaxxer.orchestrator.parser import parse_scenarios_markdown
+from devbench.orchestrator.backlog import BacklogManager
+from devbench.orchestrator.parser import parse_scenarios_markdown
 
 
 def test_parse_scenarios_markdown_extracts_all_13_scenarios() -> None:
@@ -55,7 +55,7 @@ def test_backlog_manager_populates_manifests_symlinks_and_backlog_md(tmp_path: P
     backlog_md = jobs_dir / "BACKLOG.md"
     assert backlog_md.exists()
     content_md = backlog_md.read_text(encoding="utf-8")
-    assert "BenchMaxxer Orchestrator Scenario Backlog" in content_md
+    assert "devbench Orchestrator Scenario Backlog" in content_md
     assert "job-01-oauth-api-enablement" in content_md
     assert "job-13-complex-skill-synthesis" in content_md
 

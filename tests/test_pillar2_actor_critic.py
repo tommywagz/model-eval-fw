@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from benchmaxxer.critics import (
+from devbench.critics import (
     DIMENSION_1_QWEN,
     DIMENSION_2_MINIMAX,
     DIMENSION_3_KIMI_K,
@@ -21,7 +21,7 @@ from benchmaxxer.critics import (
     get_rubric_for_critic,
     load_critic_prompt_template,
 )
-from benchmaxxer.telemetry.cache import CriticCache
+from devbench.telemetry.cache import CriticCache
 
 
 def test_rubric_dimensions_and_scoring_anchors() -> None:
@@ -136,7 +136,7 @@ def test_actor_critic_panel_positive_vs_negative_discrimination(tmp_path: Path) 
 
 
 def test_resolve_frontier_critic_model_avoids_candidate_and_provisioned_throughput() -> None:
-    from benchmaxxer.critics import resolve_frontier_critic_model
+    from devbench.critics import resolve_frontier_critic_model
 
     # Gemini candidate models resolve to Claude frontier model on Vertex
     assert resolve_frontier_critic_model("gemini-1.5-pro") == "claude-3-5-sonnet"
@@ -180,7 +180,7 @@ def test_actor_critic_panel_switches_to_frontier_model_different_from_candidate(
 
 
 def test_scenario_execution_with_frontier_critics_and_no_critics_mode(tmp_path: Path) -> None:
-    from benchmaxxer.scenarios.runner import execute_scenario_run
+    from devbench.scenarios.runner import execute_scenario_run
 
     # 1. Run with frontier critics (candidate=gemini-1.5-pro -> critics use claude-3-5-sonnet)
     res_frontier = execute_scenario_run(

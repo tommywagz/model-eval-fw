@@ -1,4 +1,4 @@
-"""Automated Regression Suite for BenchMaxxer Web Frontend, Argon Suite Creator, GCP MIQ Config, Custom Suites, Telemetry, and Repo Inserter."""
+"""Automated Regression Suite for devbench Web Frontend, Argon Suite Creator, GCP MIQ Config, Custom Suites, Telemetry, and Repo Inserter."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from benchmaxxer.ui.web.argon_agent import ArgonSuiteCreator
-from benchmaxxer.ui.web.repo_inserter import RepoInserter
-from benchmaxxer.ui.web.server import (
-    BenchMaxxerRequestHandler,
+from devbench.ui.web.argon_agent import ArgonSuiteCreator
+from devbench.ui.web.repo_inserter import RepoInserter
+from devbench.ui.web.server import (
+    devbenchRequestHandler,
     load_frontend_config,
     start_web_server,
 )
@@ -22,7 +22,7 @@ from benchmaxxer.ui.web.server import (
 
 @pytest.fixture(scope="module")
 def web_server():
-    """Start an ephemeral test instance of the BenchMaxxer ThreadingHTTPServer on a random free port."""
+    """Start an ephemeral test instance of the devbench ThreadingHTTPServer on a random free port."""
     import socket
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -393,7 +393,7 @@ def test_repo_inserter_skill_workflow_and_translation(tmp_path: Path) -> None:
         text=True,
         check=True,
     ).stdout
-    assert "benchmaxxer: insert argon_ticket_summarizer" in log
+    assert "devbench: insert argon_ticket_summarizer" in log
     assert "gemini-4-argon" in log
 
 
@@ -456,7 +456,7 @@ def test_static_files_and_spa(web_server: str) -> None:
     with urllib.request.urlopen(f"{web_server}/") as resp:
         assert resp.status == 200
         html = resp.read().decode("utf-8")
-        assert "BenchMaxxer Evaluation Studio" in html
+        assert "DevBench Evaluation Studio" in html
         assert "Select Frontier Models" in html
         assert 'id="model-cards-container"' in html
         assert 'id="enabled-models-dropdown"' in html

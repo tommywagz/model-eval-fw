@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from benchmaxxer.models.base import BaseModelClient, ModelResponse
-from benchmaxxer.models.factory import get_model_client, load_model_registry
-from benchmaxxer.models.providers import (
+from devbench.models.base import BaseModelClient, ModelResponse
+from devbench.models.factory import get_model_client, load_model_registry
+from devbench.models.providers import (
     OpenAICompatibleClient,
     VertexAnthropicClient,
     VertexEndpointClient,

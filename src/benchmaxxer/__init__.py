@@ -1,3 +1,9 @@
-"""BenchMaxxer: Frontier Model Evaluation & Multi-Perspective Actor-Critic Verification Framework."""
+"""Backward-compatibility shim redirecting benchmaxxer imports to devbench."""
 
-__version__ = "0.2.0"
+import sys
+import devbench
+
+sys.modules["benchmaxxer"] = devbench
+for attr in dir(devbench):
+    if not attr.startswith("__"):
+        globals()[attr] = getattr(devbench, attr)

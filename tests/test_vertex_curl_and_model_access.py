@@ -8,15 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from benchmaxxer.models.base import VertexModelAccessError
-from benchmaxxer.models.factory import get_model_client
-from benchmaxxer.models.providers.vertex_anthropic import VertexAnthropicClient
-from benchmaxxer.models.providers.vertex_genai import VertexGenAIClient
-from benchmaxxer.models.vertex_rest import (
+from devbench.models.base import VertexModelAccessError
+from devbench.models.factory import get_model_client
+from devbench.models.providers.vertex_anthropic import VertexAnthropicClient
+from devbench.models.providers.vertex_genai import VertexGenAIClient
+from devbench.models.vertex_rest import (
     build_vertex_curl_command,
     execute_vertex_rest_prompt,
 )
-from benchmaxxer.ui.web.server import (
+from devbench.ui.web.server import (
     get_gcp_config_Snapshot,
     link_gcp_project,
     update_gcp_config,
@@ -168,8 +168,8 @@ def test_execute_vertex_rest_prompt_permission_denied_raises_model_access_error(
 
 def test_vertex_genai_and_anthropic_clients_support_curl_auth_mode():
     """Verify clients invoke the REST/curl engine when auth_mode='vertex_rest' or 'curl'."""
-    with patch("benchmaxxer.models.vertex_rest.execute_vertex_rest_prompt") as mock_exec:
-        from benchmaxxer.models.base import ModelResponse
+    with patch("devbench.models.vertex_rest.execute_vertex_rest_prompt") as mock_exec:
+        from devbench.models.base import ModelResponse
 
         mock_exec.return_value = ModelResponse(
             text="Mocked REST output",
@@ -198,7 +198,7 @@ def test_vertex_genai_and_anthropic_clients_support_curl_auth_mode():
 def test_web_ui_model_verify_returns_model_access_denied_structure():
     """Verify /api/gcp/models/verify returns error_type: MODEL_ACCESS_DENIED when access fails."""
     import copy
-    import benchmaxxer.ui.web.server as srv
+    import devbench.ui.web.server as srv
 
     srv._ensure_gcp_runtime_state()
     with srv.GCP_STATE_LOCK:
@@ -217,8 +217,8 @@ def test_web_ui_model_verify_returns_model_access_denied_structure():
     ]
 
     try:
-        with patch("benchmaxxer.gcp.model_garden.get_access_token", return_value=("mock-token", "mock-src")):
-            with patch("benchmaxxer.gcp.model_garden.probe_model_access") as mock_probe:
+        with patch("devbench.gcp.model_garden.get_access_token", return_value=("mock-token", "mock-src")):
+            with patch("devbench.gcp.model_garden.probe_model_access") as mock_probe:
                 mock_probe.return_value = {
                     "enabled": False,
                     "enablement": "not_enabled",
@@ -242,7 +242,7 @@ def test_web_ui_static_contains_popup_modal_and_adc_instructions():
     """Verify index.html and app.js include the modal and gcloud auth application-default login instructions."""
     from pathlib import Path
 
-    static_dir = Path(__file__).resolve().parents[1] / "src" / "benchmaxxer" / "ui" / "web" / "static"
+    static_dir = Path(__file__).resolve().parents[1] / "src" / "devbench" / "ui" / "web" / "static"
     index_html = (static_dir / "index.html").read_text(encoding="utf-8")
     app_js = (static_dir / "app.js").read_text(encoding="utf-8")
     styles_css = (static_dir / "styles.css").read_text(encoding="utf-8")

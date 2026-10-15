@@ -1,1 +1,1 @@
-"""BenchMaxxer blackbox suite: Easy Deployment (Easy)."""
+"""devbench blackbox suite: Easy Deployment (Easy)."""

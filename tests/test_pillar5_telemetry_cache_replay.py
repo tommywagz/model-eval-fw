@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from benchmaxxer.critics.evaluator import CriticEvaluator
-from benchmaxxer.models.factory import get_model_client
-from benchmaxxer.telemetry.cache import (
+from devbench.critics.evaluator import CriticEvaluator
+from devbench.models.factory import get_model_client
+from devbench.telemetry.cache import (
     CriticCache,
     ReplayCacheMissError,
     ResponseCache,
     compute_candidate_cache_key,
     compute_critic_cache_key,
 )
-from benchmaxxer.telemetry.logger import RunRecord, TelemetryLogger
+from devbench.telemetry.logger import RunRecord, TelemetryLogger
 
 
 def test_deterministic_candidate_and_critic_cache_files_and_replay(tmp_path: Path) -> None:
