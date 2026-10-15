@@ -55,7 +55,9 @@ async function readJsonResponse(res) {
     data = {};
   }
   if (!res.ok) {
-    throw new Error(data.error || `HTTP ${res.status}`);
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -525,6 +527,90 @@ function renderGcpMiqToggles(models) {
   });
 }
 
+let currentModelForAccessVerify = null;
+
+function showModelAccessModal(info = {}) {
+  const modal = document.getElementById("model-access-modal");
+  if (!modal) return;
+
+  const modelId = info.model_id || state.selectedModelId || "unknown-model";
+  currentModelForAccessVerify = modelId;
+  const projectId = info.project_id || state.gcpProject || "not-specified";
+  const location = info.location || state.gcpLocation || "us-central1";
+  const errorMsg = info.message || info.detail || info.error || "Vertex AI Model Garden access denied or model terms not accepted.";
+  const statusBadge = info.error_status || "PERMISSION_DENIED";
+
+  const modelIdEl = document.getElementById("modal-model-id");
+  if (modelIdEl) modelIdEl.textContent = modelId;
+
+  const projIdEl = document.getElementById("modal-project-id");
+  if (projIdEl) projIdEl.textContent = projectId;
+
+  const locEl = document.getElementById("modal-location");
+  if (locEl) locEl.textContent = location;
+
+  const badgeEl = document.getElementById("modal-status-badge");
+  if (badgeEl) badgeEl.textContent = statusBadge;
+
+  const errorTextEl = document.getElementById("modal-error-text");
+  if (errorTextEl) errorTextEl.textContent = errorMsg;
+
+  const mgLink = document.getElementById("modal-model-garden-link");
+  if (mgLink) {
+    mgLink.href = info.model_garden_url || `https://console.cloud.google.com/vertex-ai/model-garden?project=${encodeURIComponent(projectId)}`;
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeModelAccessModal() {
+  const modal = document.getElementById("model-access-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function handleModalBackdropClick(e) {
+  if (e.target && e.target.id === "model-access-modal") {
+    closeModelAccessModal();
+  }
+}
+
+function copyAdcLoginCommand(btn) {
+  const cmd = "gcloud auth application-default login";
+  navigator.clipboard.writeText(cmd).then(() => {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    }
+  }).catch(() => {
+    prompt("Copy command:", cmd);
+  });
+}
+
+function copyModalAdcCommand(btn) {
+  copyAdcLoginCommand(btn);
+}
+
+async function retryModelVerificationFromModal() {
+  if (!currentModelForAccessVerify) {
+    closeModelAccessModal();
+    return;
+  }
+  const btn = document.getElementById("modal-reverify-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Checking…</span>";
+  }
+  try {
+    await verifyModelAccess(currentModelForAccessVerify);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>↻ Re-Verify Model Access</span>";
+    }
+  }
+}
+
 async function verifyModelAccess(modelId, btn) {
   if (btn) {
     btn.disabled = true;
@@ -539,9 +625,25 @@ async function verifyModelAccess(modelId, btn) {
     const data = await readJsonResponse(res);
     applyModelsSnapshot(data);
     const v = data.verification || {};
-    if (!v.enabled) alert(`${modelId}: ${v.detail || "not enabled"}`);
+    if (!v.enabled) {
+      showModelAccessModal({
+        model_id: modelId,
+        model_name: v.model_name || modelId,
+        project_id: data.project_id || v.project_id,
+        location: data.location || v.location,
+        message: v.detail || v.message || "Model is not enabled in this GCP project",
+        error_status: v.enablement || "NOT_ENABLED",
+        model_garden_url: v.model_garden_url,
+      });
+    } else {
+      closeModelAccessModal();
+    }
   } catch (err) {
-    alert("Verification failed: " + err.message);
+    if (err.data && (err.data.error_type === "MODEL_ACCESS_DENIED" || err.data.model_id)) {
+      showModelAccessModal(err.data);
+    } else {
+      alert("Verification failed: " + err.message);
+    }
     if (btn) {
       btn.disabled = false;
       btn.textContent = "Verify";
@@ -1191,7 +1293,11 @@ async function startEvaluation() {
     pollEvaluationStatus(initData.run_id);
   } catch (err) {
     stopEvaluationUI("Error");
-    alert("Evaluation could not start: " + err.message);
+    if (err.data && (err.data.error_type === "MODEL_ACCESS_DENIED" || err.data.model_id)) {
+      showModelAccessModal(err.data);
+    } else {
+      alert("Evaluation could not start: " + err.message);
+    }
   }
 }
 
@@ -1213,6 +1319,9 @@ function pollEvaluationStatus(runId) {
         stopEvaluationUI(data.status === "COMPLETED" ? "Complete" : "Failed");
         state.activeRunData = data;
         displayEvaluationResults(data);
+        if (data.model_access_error) {
+          showModelAccessModal(data.model_access_error);
+        }
         if (data.status === "COMPLETED") prepareRepositoryExport(data);
         fetchTokenTelemetry();
         const reportSection = document.getElementById("eval-report-section");

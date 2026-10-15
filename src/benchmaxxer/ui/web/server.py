@@ -604,7 +604,26 @@ def verify_model_access(model_id: str) -> Dict[str, Any]:
         snapshot_state = copy.deepcopy(state)
     if snapshot_state.get("link_status", {}).get("source") == "discovered":
         _persist_link(snapshot_state)
-    return {"model_id": model_id, **res}
+
+    result_payload: Dict[str, Any] = {"model_id": model_id, **res}
+    if not res.get("enabled"):
+        result_payload.update(
+            {
+                "error_type": "MODEL_ACCESS_DENIED",
+                "model_name": target.get("name", model_id),
+                "project_id": project_id,
+                "location": target.get("location") or location,
+                "message": res.get("detail", "Model access is not enabled in this GCP project"),
+                "remediation": (
+                    f"1. Run `gcloud auth application-default login` on your local terminal.\n"
+                    f"2. Open Vertex AI Model Garden to enable '{model_id}' in project '{project_id}':\n"
+                    f"   https://console.cloud.google.com/vertex-ai/model-garden?project={project_id}\n"
+                    f"3. Ensure your GCP identity has the 'roles/aiplatform.user' role on project '{project_id}'."
+                ),
+                "model_garden_url": f"https://console.cloud.google.com/vertex-ai/model-garden?project={project_id}",
+            }
+        )
+    return result_payload
 
 
 def update_gcp_config(
@@ -1022,7 +1041,11 @@ class BenchMaxxerRequestHandler(BaseHTTPRequestHandler):
             try:
                 req = resolve_eval_request(payload, gcp_snapshot)
             except EvalRequestError as e:
-                self._send_error(str(e), status=400)
+                err_payload: Dict[str, Any] = {"success": False, "error": str(e)}
+                if getattr(e, "error_type", None):
+                    err_payload["error_type"] = e.error_type
+                    err_payload.update(getattr(e, "details", {}))
+                self._send_json(err_payload, status=400)
                 return
 
             scenario_list = req["scenario_list"]

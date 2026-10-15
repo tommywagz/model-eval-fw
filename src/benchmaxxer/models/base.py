@@ -48,6 +48,51 @@ class ModelResponse:
         )
 
 
+class VertexModelAccessError(RuntimeError):
+    """Raised when a Vertex AI model is not accessible or not enabled in the linked GCP project."""
+
+    def __init__(
+        self,
+        model_id: str,
+        project_id: str,
+        location: str,
+        message: str,
+        status_code: int = 403,
+        error_status: str = "PERMISSION_DENIED",
+        remediation: Optional[str] = None,
+    ) -> None:
+        self.model_id = model_id
+        self.project_id = project_id
+        self.location = location
+        self.message = message
+        self.status_code = status_code
+        self.error_status = error_status
+        self.remediation = remediation or (
+            f"1. Run `gcloud auth application-default login` on your local terminal.\n"
+            f"2. Enable '{model_id}' in Vertex AI Model Garden for project '{project_id}': "
+            f"https://console.cloud.google.com/vertex-ai/model-garden?project={project_id}\n"
+            f"3. Ensure your GCP identity has the 'roles/aiplatform.user' IAM role."
+        )
+        super().__init__(
+            f"Model access denied for '{model_id}' in project '{project_id}' ({location}): {message}. "
+            f"Remediation:\n{self.remediation}"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ok": False,
+            "error_type": "MODEL_ACCESS_DENIED",
+            "model_id": self.model_id,
+            "project_id": self.project_id,
+            "location": self.location,
+            "status_code": self.status_code,
+            "error_status": self.error_status,
+            "message": self.message,
+            "remediation": self.remediation,
+            "model_garden_url": f"https://console.cloud.google.com/vertex-ai/model-garden?project={self.project_id}",
+        }
+
+
 class BaseModelClient(ABC):
     """Abstract base client for all Vertex AI, Anthropic, Endpoint, and OpenAI-compatible models."""
 

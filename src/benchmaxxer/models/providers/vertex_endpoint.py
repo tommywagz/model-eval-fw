@@ -58,6 +58,19 @@ class VertexEndpointClient(BaseModelClient):
             "seed": int(params.get("seed", 42)),
         }
 
+        if self.auth_mode in ("curl", "vertex_rest", "rest"):
+            from benchmaxxer.models.vertex_rest import execute_vertex_rest_prompt
+
+            return execute_vertex_rest_prompt(
+                model_name=self.model_name,
+                prompt=prompt,
+                project_id=self.project_id,
+                location=self.location,
+                system_instruction=system_instruction,
+                params=params,
+                endpoint_resource_name=self.endpoint_resource_name,
+            )
+
         if self.sdk_client is not None:
             prediction = self.sdk_client.predict(instances=[instance], parameters=params)
             preds = getattr(prediction, "predictions", [str(prediction)])
@@ -75,29 +88,74 @@ class VertexEndpointClient(BaseModelClient):
                 finish_reason="STOP",
             )
 
-        from google.cloud import aiplatform  # type: ignore
+        try:
+            from google.cloud import aiplatform  # type: ignore
 
-        aiplatform.init(project=self.project_id, location=self.location)
-        endpoint = aiplatform.Endpoint(self.endpoint_resource_name)
-        prediction = endpoint.predict(instances=[instance], parameters=params)
-        latency = (time.perf_counter() - start) * 1000.0
-        preds = getattr(prediction, "predictions", [])
-        if preds and isinstance(preds[0], dict):
-            text = str(preds[0].get("content") or preds[0].get("output") or preds[0].get("text") or preds[0])
-        elif preds:
-            text = str(preds[0])
-        else:
-            text = ""
-        return ModelResponse(
-            text=text,
-            raw_response={
-                "sdk": "vertex_endpoint",
-                "endpoint": self.endpoint_resource_name,
-            },
-            input_tokens=len(full_prompt.split()),
-            output_tokens=len(text.split()),
-            latency_ms=round(latency, 3),
-            finish_reason="STOP",
+            aiplatform.init(project=self.project_id, location=self.location)
+            endpoint = aiplatform.Endpoint(self.endpoint_resource_name)
+            prediction = endpoint.predict(instances=[instance], parameters=params)
+            latency = (time.perf_counter() - start) * 1000.0
+            preds = getattr(prediction, "predictions", [])
+            if preds and isinstance(preds[0], dict):
+                text = str(preds[0].get("content") or preds[0].get("output") or preds[0].get("text") or preds[0])
+            elif preds:
+                text = str(preds[0])
+            else:
+                text = ""
+            return ModelResponse(
+                text=text,
+                raw_response={
+                    "sdk": "vertex_endpoint",
+                    "endpoint": self.endpoint_resource_name,
+                },
+                input_tokens=len(full_prompt.split()),
+                output_tokens=len(text.split()),
+                latency_ms=round(latency, 3),
+                finish_reason="STOP",
+            )
+        except ImportError:
+            from benchmaxxer.models.vertex_rest import execute_vertex_rest_prompt
+
+            return execute_vertex_rest_prompt(
+                model_name=self.model_name,
+                prompt=prompt,
+                project_id=self.project_id,
+                location=self.location,
+                system_instruction=system_instruction,
+                params=params,
+                endpoint_resource_name=self.endpoint_resource_name,
+            )
+        except Exception as exc:
+            err_str = str(exc)
+            if any(k in err_str.lower() for k in ("permission", "denied", "not found", "403", "404")):
+                from benchmaxxer.models.base import VertexModelAccessError
+
+                raise VertexModelAccessError(
+                    model_id=self.model_name,
+                    project_id=self.project_id,
+                    location=self.location,
+                    message=err_str,
+                ) from exc
+            raise
+
+    def as_curl_command(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Return the equivalent shell curl command to prompt this endpoint via Vertex AI."""
+        from benchmaxxer.models.vertex_rest import build_vertex_curl_command
+
+        params = self._merge_params(kwargs)
+        return build_vertex_curl_command(
+            model_name=self.model_name,
+            prompt=prompt,
+            project_id=self.project_id,
+            location=self.location,
+            system_instruction=system_instruction,
+            params=params,
+            endpoint_resource_name=self.endpoint_resource_name,
         )
 
     def generate(

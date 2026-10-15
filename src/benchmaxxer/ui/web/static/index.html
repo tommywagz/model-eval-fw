@@ -120,6 +120,22 @@
           <span>Also verify partner-model access while linking (Anthropic/Gemini checks are free; other partners send a 1-token request)</span>
         </label>
 
+        <!-- ADC & Vertex Curl Authentication Instructions -->
+        <div class="gcp-adc-instructions-card">
+          <div class="gcp-adc-header-line">
+            <span class="gcp-adc-icon">⚡</span>
+            <strong>Vertex CLI &amp; Curl Authorization (Application Default Credentials):</strong>
+          </div>
+          <p class="gcp-adc-text">
+            BenchMaxxer prompts Vertex AI models via direct REST and CLI curl requests using local OAuth access tokens without requiring third-party API keys.
+            Run the following command in your terminal so Vertex requests can generate access tokens via <code>gcloud auth application-default print-access-token</code>:
+          </p>
+          <div class="gcp-adc-command-bar">
+            <code id="adc-cmd-text">gcloud auth application-default login</code>
+            <button type="button" class="btn-copy-small" onclick="copyAdcLoginCommand(this)" title="Copy CLI Command">Copy Command</button>
+          </div>
+        </div>
+
         <div class="gcp-link-status" id="gcp-link-status" data-state="offline">
           Offline demo catalog — link a GCP project to discover the models enabled in it.
         </div>
@@ -657,6 +673,91 @@
         </span>
       </div>
     </footer>
+  </div>
+
+  <!-- Dedicated Pop-up Modal for GCP Vertex AI Model Access & Enablement Errors -->
+  <div id="model-access-modal" class="modal-overlay" style="display: none;" onclick="handleModalBackdropClick(event)">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-access-title">
+      <div class="modal-header modal-header-error">
+        <div class="modal-title-row">
+          <div class="modal-icon-badge">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L1 21H23L12 2Z" fill="#fce8e6" stroke="#d93025" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M12 9V14M12 17H12.01" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title" id="modal-access-title">Vertex AI Model Access Required</h3>
+            <p class="modal-subtitle-text">This model is not enabled or accessible in the linked Google Cloud project.</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeModelAccessModal()" title="Close dialog">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-meta-grid">
+          <div class="modal-meta-item">
+            <span class="meta-label">Model in Question</span>
+            <span class="meta-value font-mono" id="modal-model-id">claude-3-5-sonnet</span>
+          </div>
+          <div class="modal-meta-item">
+            <span class="meta-label">GCP Project ID</span>
+            <span class="meta-value font-mono" id="modal-project-id">benchmaxxer-eval-sandbox</span>
+          </div>
+          <div class="modal-meta-item">
+            <span class="meta-label">Vertex Region</span>
+            <span class="meta-value font-mono" id="modal-location">us-east5</span>
+          </div>
+          <div class="modal-meta-item">
+            <span class="meta-label">Access State</span>
+            <span class="status-chip chip-denied" id="modal-status-badge">NOT ENABLED</span>
+          </div>
+        </div>
+
+        <div class="modal-error-box">
+          <div class="modal-error-box-header">
+            <span>Vertex AI Error Message:</span>
+          </div>
+          <div class="modal-error-text font-mono" id="modal-error-text">
+            Vertex AI Model Garden model 'publishers/anthropic/models/claude-3-5-sonnet-v2@20241022' has not been enabled for project or agreements have not been accepted.
+          </div>
+        </div>
+
+        <div class="modal-remediation-card">
+          <h4 class="modal-remediation-title">Follow these steps to enable model access:</h4>
+          <ol class="modal-steps-list">
+            <li>
+              <strong>1. Authenticate Application Default Credentials (ADC)</strong>
+              <p>BenchMaxxer prompts models via direct REST/curl requests. Ensure your local environment has authenticated ADC so the CLI can call <code>gcloud auth application-default print-access-token</code>:</p>
+              <div class="modal-command-box">
+                <code id="modal-adc-cmd">gcloud auth application-default login</code>
+                <button type="button" class="btn-copy-small" onclick="copyModalAdcCommand(this)">Copy</button>
+              </div>
+            </li>
+            <li>
+              <strong>2. Enable the Model in Vertex AI Model Garden</strong>
+              <p>Partner models (Anthropic, Mistral, Meta) require enabling agreements in your GCP project console before they can be called:</p>
+              <div class="modal-link-row">
+                <a id="modal-model-garden-link" href="https://console.cloud.google.com/vertex-ai/model-garden" target="_blank" rel="noopener noreferrer" class="primary-btn modal-action-btn">
+                  <span>Open Vertex AI Model Garden &nearr;</span>
+                </a>
+              </div>
+            </li>
+            <li>
+              <strong>3. Verify IAM Permissions</strong>
+              <p>Make sure your GCP user or service account has the <code>roles/aiplatform.user</code> (Vertex AI User) role on the project.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModelAccessModal()">Dismiss</button>
+        <button type="button" class="primary-btn" id="modal-reverify-btn" onclick="retryModelVerificationFromModal()">
+          <span>↻ Re-Verify Model Access</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="/app.js"></script>

@@ -41,6 +41,20 @@ class VertexGenAIClient(BaseModelClient):
         start = time.perf_counter()
         use_vertex = self.resolve_use_vertex()
 
+        # If curl or vertex_rest mode is requested, use the direct REST/curl engine
+        if use_vertex and self.auth_mode in ("curl", "vertex_rest", "rest"):
+            from benchmaxxer.models.vertex_rest import execute_vertex_rest_prompt
+
+            return execute_vertex_rest_prompt(
+                model_name=self.model_name,
+                prompt=prompt,
+                project_id=self.project_id,
+                location=self.location,
+                system_instruction=system_instruction,
+                params=params,
+                publisher="google",
+            )
+
         if self.sdk_client is not None:
             raw = self.sdk_client.generate_content(
                 model=self.model_name,
@@ -109,40 +123,102 @@ class VertexGenAIClient(BaseModelClient):
             )
         except ImportError:
             if use_vertex:
-                import vertexai  # type: ignore
-                from vertexai.generative_models import GenerationConfig, GenerativeModel  # type: ignore
+                try:
+                    import vertexai  # type: ignore
+                    from vertexai.generative_models import GenerationConfig, GenerativeModel  # type: ignore
 
-                vertexai.init(project=self.project_id, location=self.location)
-                model = GenerativeModel(self.model_name, system_instruction=system_instruction)
+                    vertexai.init(project=self.project_id, location=self.location)
+                    model = GenerativeModel(self.model_name, system_instruction=system_instruction)
+                    gen_cfg = GenerationConfig(
+                        temperature=float(params.get("temperature", 0.0)),
+                        max_output_tokens=int(params.get("max_output_tokens", 4096)),
+                    )
+                    resp = model.generate_content(prompt, generation_config=gen_cfg)
+                    latency = (time.perf_counter() - start) * 1000.0
+                    text = resp.text or ""
+                    return ModelResponse(
+                        text=text,
+                        raw_response={
+                            "sdk": "vertexai",
+                            "mode": "vertex",
+                            "model": self.model_name,
+                        },
+                        input_tokens=len(prompt.split()),
+                        output_tokens=len(text.split()),
+                        latency_ms=round(latency, 3),
+                        finish_reason="STOP",
+                    )
+                except ImportError:
+                    # If neither google-genai nor vertexai is installed, fallback cleanly to direct REST/curl
+                    from benchmaxxer.models.vertex_rest import execute_vertex_rest_prompt
+
+                    return execute_vertex_rest_prompt(
+                        model_name=self.model_name,
+                        prompt=prompt,
+                        project_id=self.project_id,
+                        location=self.location,
+                        system_instruction=system_instruction,
+                        params=params,
+                        publisher="google",
+                    )
             else:
                 import google.generativeai as gai  # type: ignore
 
                 api_key = self.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
                 gai.configure(api_key=api_key)
                 model = gai.GenerativeModel(self.model_name, system_instruction=system_instruction)
+                gen_cfg = {
+                    "temperature": float(params.get("temperature", 0.0)),
+                    "max_output_tokens": int(params.get("max_output_tokens", 4096)),
+                }
+                resp = model.generate_content(prompt, generation_config=gen_cfg)
+                latency = (time.perf_counter() - start) * 1000.0
+                text = resp.text or ""
+                return ModelResponse(
+                    text=text,
+                    raw_response={
+                        "sdk": "google-generativeai",
+                        "mode": "api_key",
+                        "model": self.model_name,
+                    },
+                    input_tokens=len(prompt.split()),
+                    output_tokens=len(text.split()),
+                    latency_ms=round(latency, 3),
+                    finish_reason="STOP",
+                )
+        except Exception as exc:
+            # Trap model permission and access denied errors
+            err_str = str(exc)
+            if use_vertex and any(k in err_str.lower() for k in ("permission", "denied", "not enabled", "403", "404")):
+                from benchmaxxer.models.base import VertexModelAccessError
 
-            gen_cfg = GenerationConfig(
-                temperature=float(params.get("temperature", 0.0)),
-                max_output_tokens=int(params.get("max_output_tokens", 4096)),
-            ) if use_vertex else {
-                "temperature": float(params.get("temperature", 0.0)),
-                "max_output_tokens": int(params.get("max_output_tokens", 4096)),
-            }
-            resp = model.generate_content(prompt, generation_config=gen_cfg)
-            latency = (time.perf_counter() - start) * 1000.0
-            text = resp.text or ""
-            return ModelResponse(
-                text=text,
-                raw_response={
-                    "sdk": "vertexai" if use_vertex else "google-generativeai",
-                    "mode": "vertex" if use_vertex else "api_key",
-                    "model": self.model_name,
-                },
-                input_tokens=len(prompt.split()),
-                output_tokens=len(text.split()),
-                latency_ms=round(latency, 3),
-                finish_reason="STOP",
-            )
+                raise VertexModelAccessError(
+                    model_id=self.model_name,
+                    project_id=self.project_id,
+                    location=self.location,
+                    message=err_str,
+                ) from exc
+            raise
+
+    def as_curl_command(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Return the equivalent shell curl command to prompt this model via Vertex AI."""
+        from benchmaxxer.models.vertex_rest import build_vertex_curl_command
+
+        params = self._merge_params(kwargs)
+        return build_vertex_curl_command(
+            model_name=self.model_name,
+            prompt=prompt,
+            project_id=self.project_id,
+            location=self.location,
+            system_instruction=system_instruction,
+            params=params,
+            publisher="google",
+        )
 
     def generate(
         self,

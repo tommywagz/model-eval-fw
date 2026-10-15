@@ -236,9 +236,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_parser.add_argument(
         "--auth-mode",
         type=str,
-        choices=["auto", "vertex", "api_key"],
+        choices=["auto", "vertex", "api_key", "vertex_rest", "curl"],
         default=None,
-        help="Authentication routing mode: 'vertex' (GCP), 'api_key', or 'auto'",
+        help="Authentication routing mode: 'vertex' (GCP), 'api_key', 'vertex_rest' (direct REST/curl), or 'auto'",
+    )
+    run_parser.add_argument(
+        "--via-curl",
+        "--curl",
+        dest="via_curl",
+        action="store_true",
+        help="Use direct CLI curl / Vertex REST method for prompting models without heavyweight SDKs",
     )
 
     # `benchmaxxer harbor` subcommand
@@ -580,7 +587,22 @@ def main(argv: Optional[List[str]] = None) -> int:
             os.environ["GOOGLE_CLOUD_LOCATION"] = location
 
         use_vertex: Optional[bool] = None
-        if getattr(args, "use_vertex", False):
+        auth_mode_val = getattr(args, "auth_mode", None)
+        if getattr(args, "via_curl", False):
+            use_vertex = True
+            auth_mode_val = "vertex_rest"
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+            os.environ["BENCHMAXXER_AUTH_MODE"] = "vertex_rest"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+        elif auth_mode_val in ("vertex_rest", "curl"):
+            use_vertex = True
+            auth_mode_val = "vertex_rest"
+            os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+            os.environ["BENCHMAXXER_AUTH_MODE"] = "vertex_rest"
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+            os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+        elif getattr(args, "use_vertex", False):
             use_vertex = True
             os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
             os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
@@ -602,8 +624,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
                 os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
                 os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
-
-        auth_mode_val = getattr(args, "auth_mode", None)
 
         if getattr(args, "harbor", False):
             from benchmaxxer.harbor import (
@@ -664,12 +684,57 @@ def main(argv: Optional[List[str]] = None) -> int:
         cache_dir = getattr(args, "cache_dir", None)
         telemetry_dir = getattr(args, "telemetry_dir", None)
 
-        if args.run_framework:
-            fw_res = execute_framework_run(
+        from benchmaxxer.models.base import VertexModelAccessError
+
+        try:
+            if args.run_framework:
+                fw_res = execute_framework_run(
+                    model_alias=args.model,
+                    mode=args.mode,
+                    no_cache=args.no_cache,
+                    replay=args.replay,
+                    fixtures_path=args.fixtures,
+                    cache_dir=cache_dir,
+                    telemetry_dir=telemetry_dir,
+                    dotenv_path=args.dotenv,
+                    critic_model=getattr(args, "critic_model", None),
+                    no_critics=getattr(args, "no_critics", False),
+                    project_id=project_id,
+                    location=location,
+                    use_vertex=use_vertex,
+                    auth_mode=auth_mode_val,
+                )
+                Console().print_json(data=fw_res)
+                return int(fw_res["exit_code"])
+
+            if args.suite:
+                suite_res = execute_suite_run(
+                    suite_id=args.suite,
+                    model_alias=args.model,
+                    mode=args.mode,
+                    no_cache=args.no_cache,
+                    replay=args.replay,
+                    fixtures_path=args.fixtures,
+                    cache_dir=cache_dir,
+                    telemetry_dir=telemetry_dir,
+                    dotenv_path=args.dotenv,
+                    critic_model=getattr(args, "critic_model", None),
+                    no_critics=getattr(args, "no_critics", False),
+                    project_id=project_id,
+                    location=location,
+                    use_vertex=use_vertex,
+                    auth_mode=auth_mode_val,
+                )
+                Console().print_json(data=suite_res)
+                return int(suite_res["exit_code"])
+
+            result = execute_scenario_run(
+                scenario_id=args.scenario,
                 model_alias=args.model,
                 mode=args.mode,
                 no_cache=args.no_cache,
                 replay=args.replay,
+                manual_eval=args.manual_eval,
                 fixtures_path=args.fixtures,
                 cache_dir=cache_dir,
                 telemetry_dir=telemetry_dir,
@@ -681,77 +746,45 @@ def main(argv: Optional[List[str]] = None) -> int:
                 use_vertex=use_vertex,
                 auth_mode=auth_mode_val,
             )
-            Console().print_json(data=fw_res)
-            return int(fw_res["exit_code"])
+            Console().print_json(
+                data={
+                    "run_id": result["run_id"],
+                    "scenario_id": result["scenario_id"],
+                    "suite_slug": result["suite_slug"],
+                    "model_alias": result["model_alias"],
+                    "execution_mode": result["execution_mode"],
+                    "passed": result["passed"],
+                    "duration_ms": result["duration_ms"],
+                    "duration_seconds": result["duration_seconds"],
+                    "total_tokens": result["total_tokens"],
+                    "estimated_cost_usd": result["token_usage"]["total_estimated_cost_usd"],
+                    "timing": result["timing"],
+                    "token_usage": result["token_usage"],
+                    "metrics_dict": result["metrics_dict"],
+                    "actor_critic_composite": (
+                        result["actor_critic_scores"]["composite_normalized_score"]
+                        if result.get("actor_critic_scores")
+                        else None
+                    ),
+                    "rubric_score": result.get("rubric_score"),
+                    "rubric_rating": result.get("rubric_rating"),
+                    "composite_score": result.get("composite_score"),
+                    "jev_evaluation": result.get("jev_evaluation"),
+                    "exit_code": result["exit_code"],
+                }
 
-        if args.suite:
-            suite_res = execute_suite_run(
-                suite_id=args.suite,
-                model_alias=args.model,
-                mode=args.mode,
-                no_cache=args.no_cache,
-                replay=args.replay,
-                fixtures_path=args.fixtures,
-                cache_dir=cache_dir,
-                telemetry_dir=telemetry_dir,
-                dotenv_path=args.dotenv,
-                critic_model=getattr(args, "critic_model", None),
-                no_critics=getattr(args, "no_critics", False),
-                project_id=project_id,
-                location=location,
-                use_vertex=use_vertex,
-                auth_mode=auth_mode_val,
             )
-            Console().print_json(data=suite_res)
-            return int(suite_res["exit_code"])
-
-        result = execute_scenario_run(
-            scenario_id=args.scenario,
-            model_alias=args.model,
-            mode=args.mode,
-            no_cache=args.no_cache,
-            replay=args.replay,
-            manual_eval=args.manual_eval,
-            fixtures_path=args.fixtures,
-            cache_dir=cache_dir,
-            telemetry_dir=telemetry_dir,
-            dotenv_path=args.dotenv,
-            critic_model=getattr(args, "critic_model", None),
-            no_critics=getattr(args, "no_critics", False),
-            project_id=project_id,
-            location=location,
-            use_vertex=use_vertex,
-            auth_mode=auth_mode_val,
-        )
-        Console().print_json(
-            data={
-                "run_id": result["run_id"],
-                "scenario_id": result["scenario_id"],
-                "suite_slug": result["suite_slug"],
-                "model_alias": result["model_alias"],
-                "execution_mode": result["execution_mode"],
-                "passed": result["passed"],
-                "duration_ms": result["duration_ms"],
-                "duration_seconds": result["duration_seconds"],
-                "total_tokens": result["total_tokens"],
-                "estimated_cost_usd": result["token_usage"]["total_estimated_cost_usd"],
-                "timing": result["timing"],
-                "token_usage": result["token_usage"],
-                "metrics_dict": result["metrics_dict"],
-                "actor_critic_composite": (
-                    result["actor_critic_scores"]["composite_normalized_score"]
-                    if result.get("actor_critic_scores")
-                    else None
-                ),
-                "rubric_score": result.get("rubric_score"),
-                "rubric_rating": result.get("rubric_rating"),
-                "composite_score": result.get("composite_score"),
-                "jev_evaluation": result.get("jev_evaluation"),
-                "exit_code": result["exit_code"],
-            }
-
-        )
-        return int(result["exit_code"])
+            return int(result["exit_code"])
+        except VertexModelAccessError as exc:
+            Console().print("\n[bold red]⚠️  GCP VERTEX AI MODEL ACCESS DENIED[/bold red]")
+            Console().print(f"[yellow]Model:[/yellow]     {exc.model_id}")
+            Console().print(f"[yellow]Project:[/yellow]   {exc.project_id}")
+            Console().print(f"[yellow]Location:[/yellow]  {exc.location}")
+            Console().print(f"[yellow]Status:[/yellow]    HTTP {exc.status_code} ({exc.error_status})")
+            Console().print(f"[yellow]Details:[/yellow]   {exc.message}")
+            Console().print("\n[bold cyan]Remediation Instructions:[/bold cyan]")
+            Console().print(exc.remediation + "\n")
+            return 1
 
     parser.print_help()
     return 0

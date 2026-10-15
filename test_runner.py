@@ -207,9 +207,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--auth-mode",
         type=str,
-        choices=["auto", "vertex", "api_key"],
+        choices=["auto", "vertex", "api_key", "vertex_rest", "curl"],
         default=None,
-        help="Authentication routing mode: 'vertex' (GCP), 'api_key', or 'auto'",
+        help="Authentication routing mode: 'vertex' (GCP), 'api_key', 'vertex_rest' (direct REST/curl), or 'auto'",
+    )
+    parser.add_argument(
+        "--via-curl",
+        "--curl",
+        dest="via_curl",
+        action="store_true",
+        help="Use direct CLI curl / Vertex REST method for prompting models without heavyweight SDKs",
     )
     return parser
 
@@ -227,7 +234,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         os.environ["GOOGLE_CLOUD_LOCATION"] = args.location
 
     use_vertex: Optional[bool] = None
-    if args.use_vertex:
+    auth_mode = args.auth_mode
+    if args.via_curl:
+        use_vertex = True
+        auth_mode = "vertex_rest"
+        os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+        os.environ["BENCHMAXXER_AUTH_MODE"] = "vertex_rest"
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+        os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+    elif auth_mode in ("vertex_rest", "curl"):
+        use_vertex = True
+        auth_mode = "vertex_rest"
+        os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
+        os.environ["BENCHMAXXER_AUTH_MODE"] = "vertex_rest"
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+        os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+    elif args.use_vertex:
         use_vertex = True
         os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
@@ -237,13 +259,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
         os.environ["CLAUDE_CODE_USE_VERTEX"] = "0"
-    elif args.auth_mode:
-        if args.auth_mode == "vertex":
+    elif auth_mode:
+        if auth_mode == "vertex":
             use_vertex = True
             os.environ["BENCHMAXXER_USE_VERTEX"] = "1"
             os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
             os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
-        elif args.auth_mode == "api_key":
+        elif auth_mode == "api_key":
             use_vertex = False
             os.environ["BENCHMAXXER_USE_VERTEX"] = "0"
             os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "false"
@@ -391,12 +413,59 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(sc_harbor, indent=2))
         return int(sc_harbor["exit_code"])
 
-    if args.run_framework:
-        fw_result = execute_framework_run(
+    from benchmaxxer.models.base import VertexModelAccessError
+
+    try:
+        if args.run_framework:
+            fw_result = execute_framework_run(
+                model_alias=args.model,
+                mode=args.mode,
+                no_cache=args.no_cache,
+                replay=args.replay,
+                fixtures_path=args.fixtures,
+                cache_dir=args.cache_dir,
+                telemetry_dir=args.telemetry_dir,
+                dotenv_path=args.dotenv,
+                tokens_script_path=args.tokens_script,
+                critic_model=args.critic_model,
+                no_critics=args.no_critics,
+                project_id=args.project_id,
+                location=args.location,
+                use_vertex=use_vertex,
+                auth_mode=auth_mode,
+            )
+            print(json.dumps(fw_result, indent=2))
+            return int(fw_result["exit_code"])
+
+        if args.suite:
+            suite_result = execute_suite_run(
+                suite_id=args.suite,
+                model_alias=args.model,
+                mode=args.mode,
+                no_cache=args.no_cache,
+                replay=args.replay,
+                fixtures_path=args.fixtures,
+                cache_dir=args.cache_dir,
+                telemetry_dir=args.telemetry_dir,
+                dotenv_path=args.dotenv,
+                tokens_script_path=args.tokens_script,
+                critic_model=args.critic_model,
+                no_critics=args.no_critics,
+                project_id=args.project_id,
+                location=args.location,
+                use_vertex=use_vertex,
+                auth_mode=auth_mode,
+            )
+            print(json.dumps(suite_result, indent=2))
+            return int(suite_result["exit_code"])
+
+        result = execute_scenario_run(
+            scenario_id=args.scenario,
             model_alias=args.model,
             mode=args.mode,
             no_cache=args.no_cache,
             replay=args.replay,
+            manual_eval=args.manual_eval,
             fixtures_path=args.fixtures,
             cache_dir=args.cache_dir,
             telemetry_dir=args.telemetry_dir,
@@ -407,83 +476,53 @@ def main(argv: Optional[List[str]] = None) -> int:
             project_id=args.project_id,
             location=args.location,
             use_vertex=use_vertex,
-            auth_mode=args.auth_mode,
+            auth_mode=auth_mode,
         )
-        print(json.dumps(fw_result, indent=2))
-        return int(fw_result["exit_code"])
 
-    if args.suite:
-        suite_result = execute_suite_run(
-            suite_id=args.suite,
-            model_alias=args.model,
-            mode=args.mode,
-            no_cache=args.no_cache,
-            replay=args.replay,
-            fixtures_path=args.fixtures,
-            cache_dir=args.cache_dir,
-            telemetry_dir=args.telemetry_dir,
-            dotenv_path=args.dotenv,
-            tokens_script_path=args.tokens_script,
-            critic_model=args.critic_model,
-            no_critics=args.no_critics,
-            project_id=args.project_id,
-            location=args.location,
-            use_vertex=use_vertex,
-            auth_mode=args.auth_mode,
-        )
-        print(json.dumps(suite_result, indent=2))
-        return int(suite_result["exit_code"])
-
-    result = execute_scenario_run(
-        scenario_id=args.scenario,
-        model_alias=args.model,
-        mode=args.mode,
-        no_cache=args.no_cache,
-        replay=args.replay,
-        manual_eval=args.manual_eval,
-        fixtures_path=args.fixtures,
-        cache_dir=args.cache_dir,
-        telemetry_dir=args.telemetry_dir,
-        dotenv_path=args.dotenv,
-        tokens_script_path=args.tokens_script,
-        critic_model=args.critic_model,
-        no_critics=args.no_critics,
-        project_id=args.project_id,
-        location=args.location,
-        use_vertex=use_vertex,
-        auth_mode=args.auth_mode,
-    )
-
-    summary = {
-        "run_id": result["run_id"],
-        "timestamp": result["timestamp"],
-        "scenario_id": result["scenario_id"],
-        "suite_slug": result["suite_slug"],
-        "model_alias": result["model_alias"],
-        "execution_mode": result["execution_mode"],
-        "passed": result["passed"],
-        "replayed": result["replayed"],
-        "cached": result["cached"],
-        "teardown_verified": result["teardown_verified"],
-        "latency_ms": result["latency_ms"],
-        "duration_ms": result["duration_ms"],
-        "duration_seconds": result["duration_seconds"],
-        "input_tokens": result["input_tokens"],
-        "output_tokens": result["output_tokens"],
-        "total_tokens": result["total_tokens"],
-        "estimated_cost_usd": result["estimated_cost_usd"],
-        "timing": result["timing"],
-        "token_usage": result["token_usage"],
-        "metrics_dict": result["metrics_dict"],
-        "actor_critic_scores": result["actor_critic_scores"],
-        "composite_score": result.get("composite_score", result.get("rubric_score", 3.0)),
-        "rubric_rating": result.get("rubric_rating", "Acceptable / Functional"),
-        "jev_evaluation": result.get("jev_evaluation"),
-        "exit_code": result["exit_code"],
-        "trace_path": result["trace_path"],
-    }
-    print(json.dumps(summary, indent=2))
-    return int(result["exit_code"])
+        summary = {
+            "run_id": result["run_id"],
+            "timestamp": result["timestamp"],
+            "scenario_id": result["scenario_id"],
+            "suite_slug": result["suite_slug"],
+            "model_alias": result["model_alias"],
+            "execution_mode": result["execution_mode"],
+            "passed": result["passed"],
+            "replayed": result["replayed"],
+            "cached": result["cached"],
+            "teardown_verified": result["teardown_verified"],
+            "latency_ms": result["latency_ms"],
+            "duration_ms": result["duration_ms"],
+            "duration_seconds": result["duration_seconds"],
+            "input_tokens": result["input_tokens"],
+            "output_tokens": result["output_tokens"],
+            "total_tokens": result["total_tokens"],
+            "estimated_cost_usd": result["estimated_cost_usd"],
+            "timing": result["timing"],
+            "token_usage": result["token_usage"],
+            "metrics_dict": result["metrics_dict"],
+            "actor_critic_scores": result["actor_critic_scores"],
+            "composite_score": result.get("composite_score", result.get("rubric_score", 3.0)),
+            "rubric_rating": result.get("rubric_rating", "Acceptable / Functional"),
+            "jev_evaluation": result.get("jev_evaluation"),
+            "exit_code": result["exit_code"],
+            "trace_path": result["trace_path"],
+        }
+        print(json.dumps(summary, indent=2))
+        return int(result["exit_code"])
+    except VertexModelAccessError as exc:
+        print("\n" + "=" * 76, file=sys.stderr)
+        print("⚠️  GCP VERTEX AI MODEL ACCESS DENIED", file=sys.stderr)
+        print("=" * 76, file=sys.stderr)
+        print(f"Model:     {exc.model_id}", file=sys.stderr)
+        print(f"Project:   {exc.project_id}", file=sys.stderr)
+        print(f"Location:  {exc.location}", file=sys.stderr)
+        print(f"Status:    HTTP {exc.status_code} ({exc.error_status})", file=sys.stderr)
+        print(f"Details:   {exc.message}", file=sys.stderr)
+        print("-" * 76, file=sys.stderr)
+        print("Remediation Instructions:", file=sys.stderr)
+        print(exc.remediation, file=sys.stderr)
+        print("=" * 76 + "\n", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

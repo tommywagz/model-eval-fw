@@ -26,6 +26,17 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 class EvalRequestError(ValueError):
     """Raised for invalid evaluation requests (mapped to HTTP 400)."""
 
+    def __init__(
+        self,
+        message: str,
+        error_type: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.error_type = error_type
+        self.details = details or {}
+
 
 def _is_custom(scenario_id: str) -> bool:
     return scenario_id.startswith("argon_") or bool(SCENARIO_CATALOG.get(scenario_id, {}).get("is_custom"))
@@ -77,9 +88,25 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
             )
         model_entry = {"id": model_alias, "name": model_alias, "brand": "vertex", "enabled": True}
     elif not model_entry.get("enabled"):
+        proj_id = gcp_snapshot.get("project_id", "")
+        loc = model_entry.get("location") or gcp_snapshot.get("location", "us-central1")
         raise EvalRequestError(
             f"Model '{model_entry.get('name', model_alias)}' is not enabled in linked project "
-            f"{gcp_snapshot.get('project_id')}: {model_entry.get('status_detail') or 'enable it in Vertex AI Model Garden'}."
+            f"{proj_id}: {model_entry.get('status_detail') or 'enable it in Vertex AI Model Garden'}.",
+            error_type="MODEL_ACCESS_DENIED",
+            details={
+                "model_id": model_alias,
+                "model_name": model_entry.get("name", model_alias),
+                "project_id": proj_id,
+                "location": loc,
+                "remediation": (
+                    f"1. Run `gcloud auth application-default login` on your local terminal.\n"
+                    f"2. Open Vertex AI Model Garden to enable '{model_alias}' in project '{proj_id}':\n"
+                    f"   https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}\n"
+                    f"3. Ensure your GCP identity has the 'roles/aiplatform.user' role on project '{proj_id}'."
+                ),
+                "model_garden_url": f"https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}",
+            },
         )
     if mode == "live":
         if link_status.get("source") != "discovered" or not model_entry.get("discovered"):
@@ -346,9 +373,17 @@ def run_evaluation(
                         mode=req["mode"],
                         candidate_override=candidate_override,
                         candidate_usage=candidate_usage,
+                        project_id=str(req["gcp_project_id"]),
+                        location=str(req["gcp_location"]),
+                        use_vertex=True,
                     )
             except Exception as ex:  # noqa: BLE001 - one failing test must not abort the suite
                 error = f"{type(ex).__name__}: {ex}"
+                from benchmaxxer.models.base import VertexModelAccessError
+
+                if isinstance(ex, VertexModelAccessError):
+                    with runs_lock:
+                        active_runs[run_id]["model_access_error"] = ex.to_dict()
 
             metrics = build_test_metrics(
                 scenario_id=sc_item,

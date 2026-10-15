@@ -109,17 +109,47 @@ class OpenAICompatibleClient(BaseModelClient):
             }
         ).encode("utf-8")
 
+        req_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        if use_vertex and self.project_id:
+            req_headers["x-goog-user-project"] = self.project_id
+
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
+            headers=req_headers,
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+        import urllib.error
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raw_err = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            try:
+                err_json = json.loads(raw_err) if raw_err else {}
+            except Exception:
+                err_json = {"error": {"message": raw_err or str(exc)}}
+            err_dict = err_json.get("error", {}) if isinstance(err_json.get("error"), dict) else err_json
+            err_msg = str(err_dict.get("message") or err_json)
+
+            if use_vertex or exc.code in (403, 404):
+                from benchmaxxer.models.base import VertexModelAccessError
+
+                loc = self.location if self.location else "us-central1"
+                proj = self.project_id if self.project_id else "gcp-project"
+                raise VertexModelAccessError(
+                    model_id=self.model_name,
+                    project_id=proj,
+                    location=loc,
+                    message=err_msg,
+                    status_code=exc.code,
+                ) from exc
+            raise RuntimeError(f"OpenAI-compatible request failed ({exc.code}): {err_msg}") from exc
+
         latency = (time.perf_counter() - start) * 1000.0
         choice = (body.get("choices") or [{}])[0]
         text = choice.get("message", {}).get("content", "")
@@ -132,6 +162,42 @@ class OpenAICompatibleClient(BaseModelClient):
             latency_ms=round(latency, 3),
             finish_reason=str(choice.get("finish_reason", "STOP")),
         )
+
+    def as_curl_command(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Return the equivalent shell curl command to prompt this model."""
+        import json
+        import shlex
+
+        params = self._merge_params(kwargs)
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+        body = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": float(params.get("temperature", 0.0)),
+            "max_tokens": int(params.get("max_output_tokens", 4096)),
+        }
+        body_json = json.dumps(body)
+        auth_hdr = (
+            '-H "Authorization: Bearer $(gcloud auth application-default print-access-token)"'
+            if self.resolve_use_vertex()
+            else f'-H "Authorization: Bearer {self.api_key}"'
+        )
+        parts = [
+            "curl -X POST",
+            shlex.quote(f"{self.base_url}/chat/completions"),
+            auth_hdr,
+            '-H "Content-Type: application/json"',
+            f"-d '{body_json}'",
+        ]
+        return " \\\n  ".join(parts)
 
     def generate(
         self,
