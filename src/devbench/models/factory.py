@@ -353,13 +353,24 @@ def get_model_client(
     cfg.update(overrides)
     cfg = {k: v for k, v in cfg.items() if v is not None}
 
+    if "endpoint_id_or_name" in cfg and "endpoint_resource_name" not in cfg:
+        cfg["endpoint_resource_name"] = cfg.pop("endpoint_id_or_name")
+
     # Dynamically rewrite endpoint resource name if custom project or location was provided
     if "endpoint_resource_name" in cfg and cfg.get("project_id"):
-        ep = str(cfg["endpoint_resource_name"])
-        if "devbench-eval-sandbox" in ep and cfg["project_id"] != "devbench-eval-sandbox":
-            ep = re.sub(r"projects/[^/]+/", f"projects/{cfg['project_id']}/", ep)
-        if cfg.get("location") and cfg["location"] != "us-central1":
-            ep = re.sub(r"locations/[^/]+/", f"locations/{cfg['location']}/", ep)
+        ep = str(cfg["endpoint_resource_name"]).strip()
+        proj = str(cfg["project_id"])
+        loc = str(cfg.get("location", "us-central1"))
+        if not ep.startswith("projects/"):
+            if ep.startswith("endpoints/"):
+                ep = f"projects/{proj}/locations/{loc}/{ep}"
+            else:
+                ep = f"projects/{proj}/locations/{loc}/endpoints/{ep}"
+        else:
+            if "devbench-eval-sandbox" in ep and proj != "devbench-eval-sandbox":
+                ep = re.sub(r"projects/[^/]+/", f"projects/{proj}/", ep)
+            if loc != "us-central1" and f"locations/{loc}" not in ep:
+                ep = re.sub(r"locations/[^/]+/", f"locations/{loc}/", ep)
         cfg["endpoint_resource_name"] = ep
 
     provider_key = str(cfg.pop("provider", "vertex_genai"))

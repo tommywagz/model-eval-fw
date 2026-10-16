@@ -12,6 +12,7 @@
    - [Mode A: Google Cloud Only (Zero 3rd-Party Keys)](#mode-a-google-cloud-only-zero-third-party-api-keys)
    - [Mode B: Vertex CLI Curl & Direct REST Prompting (`--via-curl`)](#mode-b-vertex-cli-curl--direct-rest-prompting---via-curl)
    - [Mode C: Direct Provider API Keys](#mode-c-direct-provider-api-keys)
+   - [GCP Project Model Setup & Endpoint Provisioning Guide](#gcp-project-model-setup--endpoint-provisioning-guide)
    - [Handling Model Access Denials & Enablement](#handling-model-access-denials--enablement)
 4. [CLI Command Reference](#4-cli-command-reference)
    - [`devbench run` & `test_runner.py`](#devbench-run--test_runnerpy)
@@ -206,6 +207,153 @@ If you prefer calling provider APIs directly rather than through Google Cloud Ve
    devbench run --scenario complex_skill_synthesis --model gemini-1.5-pro --use-api-key --mode live
    ```
    Or set `DEVBENCH_USE_VERTEX=0` in `.env`.
+
+---
+
+### GCP Project Model Setup & Endpoint Provisioning Guide
+
+Connecting user-configured LLM endpoints from Google Cloud Platform (GCP) into DevBench involves three main phases: **IAM Roles & API Prerequisites**, **Model Garden Endpoint Provisioning**, and **Authentication & Invocation Payload Configuration**.
+
+#### Phase 1: IAM Roles & API Prerequisites
+
+The service account or user principal making evaluation calls (or provisioning dedicated resources) must hold specific IAM permissions in their GCP project:
+
+1. **Enable Required GCP APIs**:
+   ```bash
+   gcloud services enable aiplatform.googleapis.com compute.googleapis.com serviceusage.googleapis.com --project=<USER_PROJECT_ID>
+   ```
+   * **`aiplatform.googleapis.com` (Vertex AI API)**: Required for model catalog discovery, token counting, and prediction endpoints.
+   * **`compute.googleapis.com` (Compute Engine API)**: Required for hardware resource allocation during self-deployed endpoint provisioning (GPUs / accelerators).
+   * **`serviceusage.googleapis.com`**: Required to make API calls using project quota and auth tokens.
+
+2. **Minimum IAM Roles Required**:
+   * **`roles/aiplatform.user` (Vertex AI User)**: Grants access to deploy endpoints, list models, and run predictions (`aiplatform.endpoints.predict`).
+   * **`roles/aiplatform.viewer` (Read-Only Evaluation SA)**: If the evaluation app only sends evaluation requests to pre-existing endpoints, this role permits sending prediction requests without administrative powers.
+   * **`roles/serviceusage.serviceUsageConsumer`**: Required to consume API quota and make requests with OAuth bearer tokens.
+
+---
+
+#### Phase 2: Deploying LLMs in Vertex AI Model Garden
+
+Model Garden offers two main classes of models: **First-party / Fully Managed Models** and **Self-Deployed Dedicated Endpoints**.
+
+##### Type A: Managed Models (Gemini API)
+No hardware endpoint deployment is necessary. Managed models are accessible via standard regional endpoints immediately after enabling the Vertex AI API.
+* **Target URL Structure**:
+  ```text
+  https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{REGION}/publishers/google/models/{MODEL_NAME}:generateContent
+  ```
+
+##### Type B: Self-Deployed Dedicated Endpoints (e.g., Llama 3, Gemma, Mistral, Qwen)
+For open or partner models requiring dedicated GPU accelerators:
+1. Navigate to **Vertex AI > Model Garden** in the Google Cloud Console.
+2. Select the desired model card (e.g., Llama 3.1 70B, Gemma 2) and click **Deploy**.
+3. Accept the EULA and licensing agreements for gated models.
+4. Configure hardware: choose the deployment region (e.g., `us-central1`), machine type, and GPU accelerator (e.g., `g2-standard-12` with NVIDIA L4, or `a16g` with A100s).
+5. Click **Deploy** and wait for deployment to complete (~10–20 minutes).
+6. Under **Vertex AI > Online Prediction / Endpoints**, copy:
+   * **Endpoint ID**: (e.g., `8371920481729019904` or `728193049102`)
+   * **Region**: (e.g., `us-central1`)
+* **Target URL Structure**:
+  ```text
+  https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{REGION}/endpoints/{ENDPOINT_ID}:predict
+  ```
+
+---
+
+#### Phase 3: Configuring the Model within DevBench
+
+In DevBench, models can be configured either via the **Evaluation Studio Web UI** or via CLI / Python:
+
+| Input Parameter | Description | Example Value |
+| --- | --- | --- |
+| `project_id` | GCP Project ID | `my-eval-project-123` |
+| `region` | GCP Region | `us-central1` |
+| `model_type` | Model Category | `managed` or `dedicated_endpoint` |
+| `endpoint_id_or_name` | Model Endpoint ID or Publisher Name | `8371920481729019904` or `publishers/google/models/gemini-1.5-pro` |
+| `display_name` | (Optional) Friendly Alias | `Llama 3.1 70B Prod` or `Custom Flash MIQ` |
+
+##### 1. Web Studio UI Configuration:
+1. Launch DevBench Studio: `devbench web`.
+2. Expand the **GCP Project Configuration Panel** at the top.
+3. Enter your **GCP Project ID** and **Region**, then click **Link & Discover Models**. All first-party Gemini models and active deployed endpoints are automatically discovered.
+4. To register a dedicated endpoint or managed model explicitly, use the **Connect Custom Model / Dedicated Endpoint** card:
+   - Select `model_type` (`managed` or `dedicated_endpoint`).
+   - Enter `endpoint_id_or_name` (e.g. `8371920481729019904` or `publishers/google/models/gemini-1.5-flash`).
+   - Click **+ Add Model**.
+   The model is immediately registered into the runtime model factory and becomes selectable for evaluations and agent harnesses.
+
+##### 2. Programmatic Python Configuration:
+```python
+from devbench.models.factory import get_model_client
+
+# Connect to a First-Party Managed Gemini Model
+gemini_client = get_model_client(
+    "gemini-1.5-pro",
+    mode="live",
+    project_id="my-eval-project-123",
+    location="us-central1",
+)
+
+# Connect to a Self-Deployed Dedicated Model Garden Endpoint
+llama_client = get_model_client(
+    "llama-3.1-70b",
+    mode="live",
+    provider="vertex_endpoint",
+    endpoint_resource_name="8371920481729019904",  # accepts raw ID or full resource path
+    project_id="my-eval-project-123",
+    location="us-central1",
+)
+```
+
+---
+
+#### Phase 4: Making Evaluation `curl` Requests
+
+DevBench executes evaluation requests using local OAuth access tokens provided in the `Authorization` header:
+
+1. **Generate Auth Token**:
+   ```bash
+   export ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+   ```
+   *(In production web applications, this token is typically obtained programmatically via GCP Client Libraries using `GoogleCredentials.getApplicationDefault().refreshAccessToken()` rather than shell execution).*
+
+2. **Request Payload Examples**:
+
+   **A. Google Managed Models (Gemini via Vertex API)**:
+   ```bash
+   curl -X POST \
+     -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+     -H "Content-Type: application/json" \
+     "https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/publishers/google/models/gemini-1.5-flash:generateContent" \
+     -d '{
+       "contents": [{
+         "role": "user",
+         "parts": [{ "text": "Evaluate this response for safety and accuracy." }]
+       }],
+       "generationConfig": {
+         "temperature": 0.2,
+         "maxOutputTokens": 1024
+       }
+     }'
+   ```
+
+   **B. Model Garden Dedicated Endpoints (Open Models / vLLM / HuggingFace)**:
+   ```bash
+   curl -X POST \
+     -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+     -H "Content-Type: application/json" \
+     "https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/endpoints/${ENDPOINT_ID}:predict" \
+     -d '{
+       "instances": [
+         {
+           "prompt": "<|user|>\nEvaluate this text for quality.<|end|>\n<|assistant|>",
+           "max_tokens": 512,
+           "temperature": 0.0
+         }
+       ]
+     }'
+   ```
 
 ---
 

@@ -709,6 +709,92 @@ async function saveGcpConfiguration() {
   }
 }
 
+function onCustomModelTypeChange(type) {
+  const label = document.getElementById("custom-endpoint-id-label");
+  const input = document.getElementById("custom-endpoint-id-input");
+  if (!label || !input) return;
+  if (type === "dedicated_endpoint") {
+    label.textContent = "Endpoint ID (or resource name)";
+    input.placeholder = "e.g. 728193049102 or projects/.../endpoints/728193049102";
+  } else {
+    label.textContent = "Publisher Name or Model ID";
+    input.placeholder = "e.g. publishers/google/models/gemini-1.5-pro or gemini-1.5-flash";
+  }
+}
+
+async function submitCustomGcpModel() {
+  const typeSelect = document.getElementById("custom-model-type-select");
+  const endpointInput = document.getElementById("custom-endpoint-id-input");
+  const nameInput = document.getElementById("custom-model-name-input");
+  const projInput = document.getElementById("gcp-project-input");
+  const locSelect = document.getElementById("gcp-location-select");
+  const feedback = document.getElementById("custom-model-feedback");
+  const btn = document.getElementById("add-custom-model-btn");
+
+  const modelType = typeSelect ? typeSelect.value : "managed";
+  const endpointIdOrName = endpointInput ? endpointInput.value.trim() : "";
+  const displayName = nameInput ? nameInput.value.trim() : "";
+  const projectId = projInput ? projInput.value.trim() : "";
+  const location = locSelect ? locSelect.value : "us-central1";
+
+  if (!endpointIdOrName) {
+    if (feedback) {
+      feedback.style.display = "block";
+      feedback.style.color = "var(--google-red, #ea4335)";
+      feedback.textContent = "Please enter an Endpoint ID or Publisher Model Name.";
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Adding...";
+  }
+
+  try {
+    const res = await fetch("/api/gcp/models/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model_type: modelType,
+        endpoint_id_or_name: endpointIdOrName,
+        display_name: displayName,
+        project_id: projectId,
+        region: location,
+      }),
+    });
+    const data = await readJsonResponse(res);
+    if (data.success) {
+      applyModelsSnapshot(data);
+      if (feedback) {
+        feedback.style.display = "block";
+        feedback.style.color = "var(--google-green, #34a853)";
+        feedback.textContent = `Successfully added and enabled "${data.model.name}"!`;
+        setTimeout(() => { feedback.style.display = "none"; }, 4000);
+      }
+      if (endpointInput) endpointInput.value = "";
+      if (nameInput) nameInput.value = "";
+    } else {
+      if (feedback) {
+        feedback.style.display = "block";
+        feedback.style.color = "var(--google-red, #ea4335)";
+        feedback.textContent = data.error || "Failed to register custom model.";
+      }
+    }
+  } catch (err) {
+    if (feedback) {
+      feedback.style.display = "block";
+      feedback.style.color = "var(--google-red, #ea4335)";
+      feedback.textContent = `Error: ${err.message}`;
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>+</span> Add Model";
+    }
+  }
+}
+
 
 // ============================================================================
 // Step 1: Frontier Model Cards (4 Defaults) & Enabled GCP Project Dropdown

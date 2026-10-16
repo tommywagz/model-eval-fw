@@ -5,7 +5,9 @@
 jobs
 jobs/
 .worktrees/
+# Local telemetry runs, caches, and execution traces
 artifacts/
+artifacts/**
 reports/
 __pycache__/
 **/__pycache__/**
