@@ -33,10 +33,15 @@ class VertexEndpointClient(BaseModelClient):
         )
         if endpoint_resource_name:
             import re
-            ep = str(endpoint_resource_name)
-            if project_id and "devbench-eval-sandbox" in ep and project_id != "devbench-eval-sandbox":
+            ep = str(endpoint_resource_name).strip()
+            if not ep.startswith("projects/"):
+                if ep.startswith("endpoints/"):
+                    ep = f"projects/{project_id}/locations/{location}/{ep}"
+                else:
+                    ep = f"projects/{project_id}/locations/{location}/endpoints/{ep}"
+            elif project_id and "devbench-eval-sandbox" in ep and project_id != "devbench-eval-sandbox":
                 ep = re.sub(r"projects/[^/]+/", f"projects/{project_id}/", ep)
-            if location and location != "us-central1":
+            if location and location != "us-central1" and f"locations/{location}" not in ep:
                 ep = re.sub(r"locations/[^/]+/", f"locations/{location}/", ep)
             self.endpoint_resource_name = ep
         else:

@@ -39,13 +39,34 @@ def _classify_publisher(model_name: str, publisher: Optional[str] = None) -> str
         return pub
 
     m = model_name.lower()
-    if m.startswith("gemini") or m.startswith("gemma"):
+    if m.startswith("gemini") or m.startswith("gemma") or "publishers/google" in m:
         return "google"
-    if m.startswith("claude"):
+    if m.startswith("claude") or "publishers/anthropic" in m:
         return "anthropic"
     if any(p in m for p in ("mistral", "llama", "deepseek", "qwen")):
         return "maas"
     return "google"
+
+
+def _normalize_endpoint_resource_name(endpoint_name_or_id: str, project_id: str, location: str) -> str:
+    """Normalize an endpoint ID or partial path to projects/{project}/locations/{location}/endpoints/{id}."""
+    ep = str(endpoint_name_or_id).strip("/")
+    if not ep.startswith("projects/"):
+        if ep.startswith("endpoints/"):
+            return f"projects/{project_id}/locations/{location}/{ep}"
+        return f"projects/{project_id}/locations/{location}/endpoints/{ep}"
+    return ep
+
+
+def _clean_model_name(model_name: str, publisher: str) -> str:
+    """Strip leading publisher path if full resource name was provided."""
+    m = model_name.strip()
+    prefix = f"publishers/{publisher}/models/"
+    if m.startswith(prefix):
+        return m[len(prefix):]
+    if m.startswith("publishers/google/models/"):
+        return m[len("publishers/google/models/"):]
+    return m
 
 
 def build_vertex_curl_command(
@@ -67,13 +88,21 @@ def build_vertex_curl_command(
     max_tokens = int(gen_params.get("max_output_tokens", 4096))
 
     if endpoint_resource_name:
-        url = f"{host}/v1/{endpoint_resource_name}:predict"
+        ep_name = _normalize_endpoint_resource_name(endpoint_resource_name, project_id, loc)
+        url = f"{host}/v1/{ep_name}:predict"
         body = {
-            "instances": [{"prompt": f"{system_instruction}\n\n{prompt}" if system_instruction else prompt}],
+            "instances": [
+                {
+                    "prompt": f"{system_instruction}\n\n{prompt}" if system_instruction else prompt,
+                    "max_tokens": max_tokens,
+                    "temperature": temp,
+                }
+            ],
             "parameters": {"temperature": temp, "maxOutputTokens": max_tokens},
         }
     elif pub == "google":
-        url = f"{host}/v1/projects/{project_id}/locations/{loc}/publishers/google/models/{model_name}:generateContent"
+        clean_model = _clean_model_name(model_name, "google")
+        url = f"{host}/v1/projects/{project_id}/locations/{loc}/publishers/google/models/{clean_model}:generateContent"
         contents: List[Dict[str, Any]] = [{"role": "user", "parts": [{"text": prompt}]}]
         body = {
             "contents": contents,
@@ -151,13 +180,21 @@ def execute_vertex_rest_prompt(
     start = time.perf_counter()
 
     if endpoint_resource_name:
-        url = f"{host}/v1/{endpoint_resource_name}:predict"
+        ep_name = _normalize_endpoint_resource_name(endpoint_resource_name, project_id, loc)
+        url = f"{host}/v1/{ep_name}:predict"
         body = {
-            "instances": [{"prompt": f"{system_instruction}\n\n{prompt}" if system_instruction else prompt}],
+            "instances": [
+                {
+                    "prompt": f"{system_instruction}\n\n{prompt}" if system_instruction else prompt,
+                    "max_tokens": max_tokens,
+                    "temperature": temp,
+                }
+            ],
             "parameters": {"temperature": temp, "maxOutputTokens": max_tokens},
         }
     elif pub == "google":
-        url = f"{host}/v1/projects/{project_id}/locations/{loc}/publishers/google/models/{model_name}:generateContent"
+        clean_model = _clean_model_name(model_name, "google")
+        url = f"{host}/v1/projects/{project_id}/locations/{loc}/publishers/google/models/{clean_model}:generateContent"
         contents = [{"role": "user", "parts": [{"text": prompt}]}]
         body = {
             "contents": contents,

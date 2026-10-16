@@ -9,6 +9,8 @@
   ],
   "required_apis": [
     "aiplatform.googleapis.com",
+    "compute.googleapis.com",
+    "serviceusage.googleapis.com",
     "run.googleapis.com",
     "bigquery.googleapis.com",
     "storage.googleapis.com",
@@ -19,6 +21,8 @@
   "iam_roles": {
     "least_privilege": [
       "roles/aiplatform.user",
+      "roles/aiplatform.viewer",
+      "roles/serviceusage.serviceUsageConsumer",
       "roles/run.admin",
       "roles/bigquery.dataEditor",
       "roles/storage.objectAdmin",

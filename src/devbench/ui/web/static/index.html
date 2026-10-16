@@ -152,6 +152,43 @@
             <!-- Populated dynamically with all MIQ models -->
           </div>
         </div>
+
+        <!-- GCP Model Garden Custom Model / Dedicated Endpoint Setup Form (GCP.md Step 3) -->
+        <div class="custom-endpoint-setup-card" id="custom-gcp-model-card" style="margin-top: 1.25rem; padding: 1.1rem; background: var(--bg-surface-elevated, #1c2128); border: 1px solid var(--border-color, #30363d); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div>
+              <h5 style="margin: 0; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span>➕</span> Connect Custom Model / Dedicated Endpoint (GCP Setup)
+              </h5>
+              <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
+                Directly configure a Vertex AI Managed Model (Gemini) or Self-Deployed Dedicated Endpoint (e.g. Llama 3, Gemma, Mistral) per Step 3 of the GCP setup specification.
+              </p>
+            </div>
+          </div>
+          <div class="gcp-config-grid" style="grid-template-columns: 180px 1.4fr 1.2fr auto; gap: 0.75rem; align-items: flex-end;">
+            <div class="input-group" style="margin-bottom: 0;">
+              <label for="custom-model-type-select">Model Category</label>
+              <select id="custom-model-type-select" onchange="onCustomModelTypeChange(this.value)">
+                <option value="managed">managed</option>
+                <option value="dedicated_endpoint">dedicated_endpoint</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom: 0;">
+              <label for="custom-endpoint-id-input" id="custom-endpoint-id-label">Publisher Name or Model ID</label>
+              <input type="text" id="custom-endpoint-id-input" placeholder="e.g. publishers/google/models/gemini-1.5-pro or 728193049102">
+            </div>
+            <div class="input-group" style="margin-bottom: 0;">
+              <label for="custom-model-name-input">Display Name / Alias (Optional)</label>
+              <input type="text" id="custom-model-name-input" placeholder="e.g. Llama 3.1 70B Prod or Gemini Custom">
+            </div>
+            <div>
+              <button type="button" class="secondary-btn" id="add-custom-model-btn" onclick="submitCustomGcpModel()" style="white-space: nowrap;">
+                <span>+</span> Add Model
+              </button>
+            </div>
+          </div>
+          <div id="custom-model-feedback" style="display: none; margin-top: 0.5rem; font-size: 0.8rem;"></div>
+        </div>
       </section>
 
       <!-- Step 1: Select Frontier Models -->

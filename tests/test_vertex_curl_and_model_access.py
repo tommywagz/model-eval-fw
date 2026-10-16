@@ -263,3 +263,127 @@ def test_web_ui_static_contains_popup_modal_and_adc_instructions():
     assert ".modal-overlay" in styles_css
     assert ".modal-card" in styles_css
     assert ".gcp-adc-instructions-card" in styles_css
+
+
+def test_build_vertex_curl_command_gcp_md_managed_and_dedicated_endpoint():
+    """Verify curl commands generated for managed and dedicated endpoints strictly follow GCP.md specifications."""
+    # Step 4.2.A: Google Managed Models (Gemini via Vertex API)
+    managed_cmd = build_vertex_curl_command(
+        model_name="publishers/google/models/gemini-1.5-flash",
+        prompt="Evaluate this response for safety and accuracy.",
+        project_id="my-eval-project-123",
+        location="us-central1",
+        params={"temperature": 0.2, "max_output_tokens": 1024},
+    )
+    assert "https://us-central1-aiplatform.googleapis.com/v1/projects/my-eval-project-123/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent" in managed_cmd
+    assert "Authorization: Bearer $(gcloud auth application-default print-access-token)" in managed_cmd
+    assert "Evaluate this response for safety and accuracy." in managed_cmd
+    assert '"temperature": 0.2' in managed_cmd
+    assert '"maxOutputTokens": 1024' in managed_cmd
+
+    # Step 4.2.B: Model Garden Dedicated Endpoints (Open Models / vLLM / HuggingFace)
+    # Using raw ENDPOINT_ID per Step 2.6 and Step 3
+    dedicated_cmd = build_vertex_curl_command(
+        model_name="meta/llama-3.1-70b-instruct",
+        prompt="Evaluate this text for quality.",
+        project_id="my-eval-project-123",
+        location="us-central1",
+        endpoint_resource_name="8371920481729019904",
+        params={"temperature": 0.0, "max_output_tokens": 512},
+    )
+    assert "https://us-central1-aiplatform.googleapis.com/v1/projects/my-eval-project-123/locations/us-central1/endpoints/8371920481729019904:predict" in dedicated_cmd
+    assert "Authorization: Bearer $(gcloud auth application-default print-access-token)" in dedicated_cmd
+    assert "Evaluate this text for quality." in dedicated_cmd
+    assert '"max_tokens": 512' in dedicated_cmd
+    assert '"temperature": 0.0' in dedicated_cmd
+
+
+def test_vertex_endpoint_client_normalizes_endpoint_id():
+    """Verify VertexEndpointClient accepts a raw endpoint ID and normalizes it to full GCP resource path."""
+    from devbench.models.providers.vertex_endpoint import VertexEndpointClient
+
+    client = VertexEndpointClient(
+        model_name="meta/llama-3.1-70b-instruct",
+        endpoint_resource_name="728193049102",
+        project_id="my-eval-project-123",
+        location="us-central1",
+    )
+    assert client.endpoint_resource_name == "projects/my-eval-project-123/locations/us-central1/endpoints/728193049102"
+    curl = client.as_curl_command("Test prompt")
+    assert "projects/my-eval-project-123/locations/us-central1/endpoints/728193049102:predict" in curl
+
+
+def test_register_custom_gcp_model_managed_and_dedicated():
+    """Verify register_custom_gcp_model supports both 'managed' and 'dedicated_endpoint' configurations."""
+    import copy
+    import devbench.ui.web.server as srv
+    from devbench.models.factory import get_model_client
+
+    srv._ensure_gcp_runtime_state()
+    with srv.GCP_STATE_LOCK:
+        saved_state = copy.deepcopy(srv.GCP_RUNTIME_STATE)
+
+    link_path = srv._link_state_path()
+    existed = link_path.exists()
+    saved_content = link_path.read_text(encoding="utf-8") if existed else None
+
+    try:
+        with patch.object(srv, "_persist_link"):
+            # 1. Register a managed model per Step 3
+            managed_entry = srv.register_custom_gcp_model(
+                model_type="managed",
+                endpoint_id_or_name="publishers/google/models/gemini-1.5-flash",
+                project_id="my-eval-project-123",
+                region="us-central1",
+                display_name="Custom Flash MIQ",
+            )
+            assert managed_entry["backend_provider"] == "vertex_genai"
+            assert managed_entry["model_name"] == "gemini-1.5-flash"
+            assert managed_entry["enabled"] is True
+
+            # Factory can instantiate it
+            managed_client = get_model_client(managed_entry["id"], mode="mock")
+            assert managed_client.model_name == "gemini-1.5-flash"
+            assert managed_client.project_id == "my-eval-project-123"
+
+            # 2. Register a dedicated endpoint per Step 3
+            dedicated_entry = srv.register_custom_gcp_model(
+                model_type="dedicated_endpoint",
+                endpoint_id_or_name="728193049102",
+                project_id="my-eval-project-123",
+                region="us-central1",
+                display_name="Dedicated Llama 3 Endpoint",
+            )
+            assert dedicated_entry["backend_provider"] == "vertex_endpoint"
+            assert dedicated_entry["endpoint_resource_name"] == "projects/my-eval-project-123/locations/us-central1/endpoints/728193049102"
+            assert dedicated_entry["enabled"] is True
+
+            # Factory can instantiate the dedicated endpoint client
+            dedicated_client = get_model_client(dedicated_entry["id"], mode="mock")
+            assert dedicated_client.provider == "vertex_endpoint"
+            assert getattr(dedicated_client, "endpoint_resource_name") == "projects/my-eval-project-123/locations/us-central1/endpoints/728193049102"
+    finally:
+        with srv.GCP_STATE_LOCK:
+            srv.GCP_RUNTIME_STATE = saved_state
+        if existed and saved_content:
+            link_path.write_text(saved_content, encoding="utf-8")
+        elif not existed and link_path.exists():
+            link_path.unlink()
+
+
+def test_web_ui_static_contains_custom_endpoint_setup_card():
+    """Verify index.html and app.js include the custom model/endpoint registration UI per GCP.md."""
+    from pathlib import Path
+
+    static_dir = Path(__file__).resolve().parents[1] / "src" / "devbench" / "ui" / "web" / "static"
+    index_html = (static_dir / "index.html").read_text(encoding="utf-8")
+    app_js = (static_dir / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="custom-gcp-model-card"' in index_html
+    assert 'id="custom-model-type-select"' in index_html
+    assert 'id="custom-endpoint-id-input"' in index_html
+    assert 'onclick="submitCustomGcpModel()"' in index_html
+
+    assert "onCustomModelTypeChange" in app_js
+    assert "submitCustomGcpModel" in app_js
+    assert "/api/gcp/models/register" in app_js

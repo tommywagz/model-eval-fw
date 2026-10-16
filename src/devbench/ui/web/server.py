@@ -435,8 +435,8 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
             if persisted:
                 GCP_RUNTIME_STATE.update(
                     {
-                        "project_id": persisted["project_id"],
-                        "location": persisted.get("location", GCP_RUNTIME_STATE["location"]),
+                        "project_id": env_proj or persisted["project_id"],
+                        "location": env_loc or persisted.get("location", GCP_RUNTIME_STATE["location"]),
                         "models": persisted["models"],
                         "link_status": persisted.get("link_status", {}),
                         "linked": True,
@@ -674,6 +674,116 @@ def update_gcp_config(
                             m["enabled"] = not bool(m.get("enabled", False))
 
     return get_gcp_config_Snapshot()
+
+
+def register_custom_gcp_model(
+    model_type: str,
+    endpoint_id_or_name: str,
+    project_id: Optional[str] = None,
+    region: Optional[str] = None,
+    display_name: Optional[str] = None,
+    cost_per_1k_input_usd: Optional[float] = None,
+    cost_per_1k_output_usd: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Register a user-configured GCP model or dedicated endpoint per the GCP setup specification."""
+    from devbench.gcp.model_garden import _humanize, _slug, lookup_price_per_1k
+
+    state = _ensure_gcp_runtime_state()
+    m_type = str(model_type or "managed").strip().lower()
+    if m_type not in ("managed", "dedicated_endpoint"):
+        raise ValueError(f"Invalid model_type '{model_type}'. Expected 'managed' or 'dedicated_endpoint'.")
+
+    target = str(endpoint_id_or_name or "").strip()
+    if not target:
+        raise ValueError("Field 'endpoint_id_or_name' is required.")
+
+    with GCP_STATE_LOCK:
+        proj = (str(project_id).strip() if project_id else None) or state["project_id"]
+        loc = (str(region).strip() if region else None) or state["location"]
+
+        if m_type == "dedicated_endpoint":
+            ep = target.strip("/")
+            if not ep.startswith("projects/"):
+                if ep.startswith("endpoints/"):
+                    full_ep = f"projects/{proj}/locations/{loc}/{ep}"
+                else:
+                    full_ep = f"projects/{proj}/locations/{loc}/endpoints/{ep}"
+            else:
+                full_ep = ep
+            ep_id = full_ep.rsplit("/", 1)[-1]
+            alias = _slug(display_name or f"endpoint-{ep_id}")
+            cin, cout, psrc = lookup_price_per_1k(alias)
+            entry: Dict[str, Any] = {
+                "id": alias,
+                "name": display_name or f"Vertex Endpoint ({ep_id})",
+                "brand": "vertex",
+                "provider": f"Dedicated Vertex AI Endpoint ({ep_id})",
+                "publisher": "endpoint",
+                "backend_provider": "vertex_endpoint",
+                "model_name": display_name or ep_id,
+                "endpoint_resource_name": full_ep,
+                "source": "user_configured_endpoint",
+                "badge": "Dedicated Endpoint",
+                "tags": ["Dedicated Endpoint", "Vertex AI", loc],
+                "description": f"Model deployed to endpoint {ep_id} in {proj}/{loc}.",
+                "cost_per_1k_input_usd": float(cost_per_1k_input_usd if cost_per_1k_input_usd is not None else cin),
+                "cost_per_1k_output_usd": float(cost_per_1k_output_usd if cost_per_1k_output_usd is not None else cout),
+                "pricing_source": "user_configured" if cost_per_1k_input_usd is not None else psrc,
+                "location": loc,
+                "project_id": proj,
+                "enabled": True,
+                "enablement": "enabled",
+                "status_detail": f"Dedicated Vertex AI Endpoint: {full_ep}",
+                "is_default": False,
+                "discovered": True,
+            }
+        else:
+            # Managed Model (e.g. publishers/google/models/gemini-1.5-pro or gemini-1.5-flash)
+            clean_name = target
+            for prefix in ("publishers/google/models/", "publishers/anthropic/models/", "publishers/"):
+                if clean_name.startswith(prefix):
+                    clean_name = clean_name[len(prefix):]
+                    break
+            alias = _slug(display_name or clean_name)
+            cin, cout, psrc = lookup_price_per_1k(clean_name)
+            entry = {
+                "id": alias,
+                "name": display_name or _humanize(clean_name),
+                "brand": "gemini" if "gemini" in clean_name.lower() else "vertex",
+                "provider": f"Google Managed Model ({clean_name})",
+                "publisher": "google",
+                "backend_provider": "vertex_genai",
+                "model_name": clean_name,
+                "source": "user_configured_managed",
+                "badge": "Managed Model (Gemini)",
+                "tags": ["Managed", "Vertex AI", "First-Party"],
+                "description": f"Managed model {clean_name} served via Vertex AI in {proj}/{loc}.",
+                "cost_per_1k_input_usd": float(cost_per_1k_input_usd if cost_per_1k_input_usd is not None else cin),
+                "cost_per_1k_output_usd": float(cost_per_1k_output_usd if cost_per_1k_output_usd is not None else cout),
+                "pricing_source": "user_configured" if cost_per_1k_input_usd is not None else psrc,
+                "location": loc,
+                "project_id": proj,
+                "enabled": True,
+                "enablement": "enabled",
+                "status_detail": "First-party managed model — available via Vertex AI API",
+                "is_default": False,
+                "discovered": True,
+            }
+
+        replaced = False
+        for idx, existing in enumerate(state["models"]):
+            if existing["id"] == entry["id"]:
+                state["models"][idx] = entry
+                replaced = True
+                break
+        if not replaced:
+            state["models"].append(entry)
+
+        snapshot_state = copy.deepcopy(state)
+
+    _register_models_with_factory(state["models"])
+    _persist_link(snapshot_state)
+    return entry
 
 
 class devbenchRequestHandler(BaseHTTPRequestHandler):
@@ -918,6 +1028,31 @@ class devbenchRequestHandler(BaseHTTPRequestHandler):
                 return
             detected = detect_harness(spec)
             self._send_json({"success": True, "harness": detected})
+            return
+
+        if path in ("/api/gcp/models/register", "/api/gcp/models/add"):
+            model_type = payload.get("model_type", "managed")
+            endpoint_id_or_name = payload.get("endpoint_id_or_name") or payload.get("target") or payload.get("endpoint_id")
+            if not endpoint_id_or_name:
+                self._send_error("Field 'endpoint_id_or_name' is required.", status=400)
+                return
+            try:
+                model_entry = register_custom_gcp_model(
+                    model_type=model_type,
+                    endpoint_id_or_name=endpoint_id_or_name,
+                    project_id=payload.get("project_id"),
+                    region=payload.get("region") or payload.get("location"),
+                    display_name=payload.get("display_name") or payload.get("name"),
+                    cost_per_1k_input_usd=payload.get("cost_per_1k_input_usd"),
+                    cost_per_1k_output_usd=payload.get("cost_per_1k_output_usd"),
+                )
+            except ValueError as e:
+                self._send_error(str(e), status=400)
+                return
+            except Exception as e:  # noqa: BLE001
+                self._send_error(f"Failed to register custom GCP model: {e}", status=500)
+                return
+            self._send_json({"success": True, "model": model_entry, **get_gcp_config_Snapshot()})
             return
 
         if path in ("/api/gcp/config", "/api/gcp/models/toggle"):
