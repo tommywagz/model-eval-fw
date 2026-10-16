@@ -21,19 +21,23 @@ from devbench.models.base import BaseModelClient
 from devbench.telemetry.cache import CriticCache
 
 
+# Current serverless frontier models on Vertex AI used as cross-family critics.
+CLAUDE_CRITIC = "claude-sonnet-5.5"
+GEMINI_CRITIC = "gemini-3.1-pro"
+
 FRONTIER_CRITIC_FALLBACKS: Dict[str, str] = {
-    "gemini": "claude-3-5-sonnet",
-    "claude": "gemini-1.5-pro",
-    "opus": "gemini-1.5-pro",
-    "sonnet": "gemini-1.5-pro",
-    "anthropic": "gemini-1.5-pro",
-    "fable": "claude-3-5-sonnet",
-    "llama": "claude-3-5-sonnet",
-    "qwen": "claude-3-5-sonnet",
-    "deepseek": "claude-3-5-sonnet",
-    "mistral": "claude-3-5-sonnet",
-    "gpt": "gemini-1.5-pro",
-    "openai": "gemini-1.5-pro",
+    "gemini": CLAUDE_CRITIC,
+    "claude": GEMINI_CRITIC,
+    "opus": GEMINI_CRITIC,
+    "sonnet": GEMINI_CRITIC,
+    "anthropic": GEMINI_CRITIC,
+    "fable": CLAUDE_CRITIC,
+    "llama": CLAUDE_CRITIC,
+    "qwen": CLAUDE_CRITIC,
+    "deepseek": CLAUDE_CRITIC,
+    "mistral": CLAUDE_CRITIC,
+    "gpt": GEMINI_CRITIC,
+    "openai": GEMINI_CRITIC,
 }
 
 
@@ -50,25 +54,25 @@ def resolve_frontier_critic_model(
         return preferred_critic
 
     if not candidate_model:
-        return "claude-3-5-sonnet"
+        return CLAUDE_CRITIC
 
     cand_lower = candidate_model.lower().strip()
 
-    # If the candidate being evaluated is a Gemini model, cross-evaluate with Claude 3.5 Sonnet on Vertex
+    # If the candidate being evaluated is a Gemini model, cross-evaluate with Claude on Vertex
     if "gemini" in cand_lower:
-        return "claude-3-5-sonnet"
+        return CLAUDE_CRITIC
 
-    # If the candidate being evaluated is a Claude/Opus/Sonnet model, cross-evaluate with Gemini 1.5 Pro on Vertex
+    # If the candidate being evaluated is a Claude/Opus/Sonnet model, cross-evaluate with Gemini on Vertex
     if "claude" in cand_lower or "opus" in cand_lower or "sonnet" in cand_lower or "anthropic" in cand_lower:
-        return "gemini-1.5-pro"
+        return GEMINI_CRITIC
 
     # For other models, check known fallbacks
     for prefix, target in FRONTIER_CRITIC_FALLBACKS.items():
         if prefix in cand_lower:
             return target
 
-    # Default fallback: Claude 3.5 Sonnet unless candidate is Claude, then Gemini 1.5 Pro
-    return "claude-3-5-sonnet" if "claude" not in cand_lower else "gemini-1.5-pro"
+    # Default fallback: Claude unless the candidate is Claude, then Gemini
+    return CLAUDE_CRITIC if "claude" not in cand_lower else GEMINI_CRITIC
 
 
 class BaseCritic:
@@ -94,7 +98,7 @@ class BaseCritic:
         use_vertex: Optional[bool] = None,
         auth_mode: Optional[str] = None,
     ) -> None:
-        active_alias = critic_alias or getattr(self, "critic_alias", "claude-3-5-sonnet")
+        active_alias = critic_alias or getattr(self, "critic_alias", CLAUDE_CRITIC)
         self.critic_alias = active_alias
         self.evaluator = CriticEvaluator(
             critic_name=self.critic_name,
@@ -137,7 +141,7 @@ class ArchitecturalCritic(BaseCritic):
     """
 
     critic_name = "qwen"
-    critic_alias = "claude-3-5-sonnet"
+    critic_alias = CLAUDE_CRITIC
     persona = "ArchitecturalCritic"
     rubric = DIMENSION_1_QWEN
 
@@ -149,7 +153,7 @@ class TestHarnessCritic(BaseCritic):
 
     __test__ = False
     critic_name = "minimax"
-    critic_alias = "claude-3-5-sonnet"
+    critic_alias = CLAUDE_CRITIC
     persona = "TestHarnessCritic"
     rubric = DIMENSION_2_MINIMAX
 
@@ -160,7 +164,7 @@ class PlatformComplianceCritic(BaseCritic):
     """
 
     critic_name = "kimi_k"
-    critic_alias = "claude-3-5-sonnet"
+    critic_alias = CLAUDE_CRITIC
     persona = "PlatformComplianceCritic"
     rubric = DIMENSION_3_KIMI_K
 

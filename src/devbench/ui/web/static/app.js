@@ -479,6 +479,7 @@ function enablementChip(m) {
     unverified: ["unverified", "Unverified"],
     not_enabled: ["missing", "Not enabled"],
     not_available: ["missing", "Not in region"],
+    quota_limited: ["unverified", "No quota"],
     error: ["missing", "Check failed"],
     catalog: ["unverified", "Demo catalog"],
   };

@@ -234,12 +234,15 @@ def _http_json(
         return 0, {"error": {"message": str(exc)}}
 
 
-def _error_message(payload: Dict[str, Any]) -> str:
+def _error_message(payload: Any) -> str:
+    # Vertex sometimes wraps the error object in a JSON list.
+    if isinstance(payload, list):
+        return _error_message(payload[0]) if payload else "empty error response"
+    if not isinstance(payload, dict):
+        return str(payload)[:300]
     err = payload.get("error")
     if isinstance(err, dict):
         return str(err.get("message") or err.get("status") or err)[:300]
-    if isinstance(payload, list) and payload:
-        return _error_message(payload[0])
     return str(err or payload.get("raw") or payload)[:300]
 
 
@@ -492,9 +495,16 @@ def probe_model_access(
         method_label = "1-token chat completion"
 
     status, payload = http_fn("POST", url, body, headers)
-    if status in (200, 429):
+    if status == 200:
         return {"enabled": True, "enablement": "enabled", "detail": f"Verified via {method_label}"}
     msg = _error_message(payload)
+    if status == 429:
+        # The model is enabled, but calls will fail until quota frees up (new projects often start at 0).
+        return {
+            "enabled": True,
+            "enablement": "quota_limited",
+            "detail": f"Enabled, but the project is out of quota for this model — request an increase in IAM & Admin > Quotas ({msg})",
+        }
     if status in (403, 400) and re.search(r"enable|terms|eula|marketplace|not been used|permission", msg, re.I):
         return {
             "enabled": False,

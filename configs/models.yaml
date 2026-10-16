@@ -15,9 +15,9 @@ models:
   # ============================================================================
   gemini-3.1-pro:
     provider: "vertex_genai"
-    model_name: "gemini-3.1-pro-001"
+    model_name: "gemini-3.1-pro-preview"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00150
     cost_per_1k_output_usd: 0.00600
@@ -29,9 +29,9 @@ models:
 
   gemini-3.8-flash:
     provider: "vertex_genai"
-    model_name: "gemini-3.8-flash-001"
+    model_name: "gemini-3.8-flash"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00015
     cost_per_1k_output_usd: 0.00060
@@ -55,9 +55,9 @@ models:
 
   claude-sonnet-5.5:
     provider: "vertex_anthropic"
-    model_name: "claude-sonnet-5-5@20260514"
+    model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -81,9 +81,9 @@ models:
 
   gemini-4-argon:
     provider: "vertex_genai"
-    model_name: "gemini-4-argon-001"
+    model_name: "gemini-4-argon"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
     cost_per_1k_output_usd: 0.00800
@@ -109,9 +109,9 @@ models:
 
   sonnet-5.5:
     provider: "vertex_anthropic"
-    model_name: "claude-sonnet-5-5@20260514"
+    model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -271,9 +271,9 @@ models:
   # ============================================================================
   critic-frontier-anthropic:
     provider: "vertex_anthropic"
-    model_name: "claude-3-5-sonnet-v2@20241022"
+    model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "critic"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -284,9 +284,9 @@ models:
 
   critic-frontier-gemini:
     provider: "vertex_genai"
-    model_name: "gemini-1.5-pro-002"
+    model_name: "gemini-3.1-pro-preview"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "critic"
     cost_per_1k_input_usd: 0.00125
     cost_per_1k_output_usd: 0.00500
