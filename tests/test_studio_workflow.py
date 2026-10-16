@@ -51,8 +51,8 @@ def _fake_http(method: str, url: str, body: Optional[Dict[str, Any]], headers: D
     if "/publishers/google/models?" in url:
         return 200, {
             "publisherModels": [
-                {"name": "publishers/google/models/gemini-2.5-pro", "launchStage": "GA"},
-                {"name": "publishers/google/models/gemini-2.5-flash", "launchStage": "GA"},
+                {"name": "publishers/google/models/gemini-3-pro", "launchStage": "GA"},
+                {"name": "publishers/google/models/gemini-3-flash", "launchStage": "GA"},
                 {"name": "publishers/google/models/text-embedding-005", "launchStage": "GA"},
                 {"name": "publishers/google/models/imagen-4.0-generate-001", "launchStage": "GA"},
             ]
@@ -61,7 +61,7 @@ def _fake_http(method: str, url: str, body: Optional[Dict[str, Any]], headers: D
         return 200, {
             "publisherModels": [
                 {"name": "publishers/anthropic/models/claude-sonnet-4-5", "launchStage": "GA"},
-                {"name": "publishers/anthropic/models/claude-opus-4-1", "launchStage": "GA"},
+                {"name": "publishers/anthropic/models/claude-opus-4-5", "launchStage": "GA"},
             ]
         }
     if "/publishers/" in url and "/models?" in url:
@@ -108,12 +108,12 @@ def test_verify_project_and_discover_models_enabled_in_linked_project() -> None:
     assert "imagen-4.0-generate-001" not in by_id
 
     # First-party Gemini usable; partner enablement verified per project; endpoint usable.
-    assert by_id["gemini-2.5-pro"]["enabled"] is True
-    assert by_id["gemini-2.5-pro"]["backend_provider"] == "vertex_genai"
+    assert by_id["gemini-3-pro"]["enabled"] is True
+    assert by_id["gemini-3-pro"]["backend_provider"] == "vertex_genai"
     assert by_id["claude-sonnet-4-5"]["enabled"] is True
     assert by_id["claude-sonnet-4-5"]["backend_provider"] == "vertex_anthropic"
-    assert by_id["claude-opus-4-1"]["enabled"] is False
-    assert by_id["claude-opus-4-1"]["enablement"] == "not_enabled"
+    assert by_id["claude-opus-4-5"]["enabled"] is False
+    assert by_id["claude-opus-4-5"]["enablement"] == "not_enabled"
     endpoint = next(m for m in disc["models"] if m["source"] == "vertex_endpoint")
     assert endpoint["enabled"] is True
     assert endpoint["endpoint_resource_name"].endswith("/endpoints/987654321")
@@ -122,7 +122,7 @@ def test_verify_project_and_discover_models_enabled_in_linked_project() -> None:
     for m in disc["models"]:
         assert m["project_id"] == PROJECT
         assert m["cost_per_1k_input_usd"] > 0
-    assert by_id["gemini-2.5-pro"]["pricing_source"] == "list_price"
+    assert by_id["gemini-3-pro"]["pricing_source"] == "list_price"
 
     # Only enabled models are featured.
     assert all(m["enabled"] for m in disc["models"] if m["is_default"])
@@ -133,9 +133,9 @@ def test_discovered_models_resolve_to_linked_project_clients() -> None:
     disc = model_garden.discover_model_garden(PROJECT, LOCATION, token="tok", verify_access=False, http=_fake_http)
     try:
         register_runtime_models({m["id"]: model_garden.registry_entry_for(m) for m in disc["models"]})
-        client = get_model_client("gemini-2.5-pro", mode="mock", no_cache=True)
+        client = get_model_client("gemini-3-pro", mode="mock", no_cache=True)
         assert client.project_id == PROJECT
-        assert client.model_name == "gemini-2.5-pro"
+        assert client.model_name == "gemini-3-pro"
         claude = get_model_client("claude-sonnet-4-5", mode="mock", no_cache=True)
         assert claude.provider == "vertex_anthropic"
         assert claude.project_id == PROJECT
@@ -181,7 +181,7 @@ def test_run_custom_harness_headless_reports_tokens(tmp_path: Path) -> None:
     out = run_harness_headless(
         harness_id=spec["id"],
         prompt="Write solve()",
-        model={"id": "gemini-2.5-pro", "model_name": "gemini-2.5-pro", "brand": "gemini", "publisher": "google"},
+        model={"id": "gemini-3-pro", "model_name": "gemini-3-pro", "brand": "gemini", "publisher": "google"},
         project_id=PROJECT,
         location=LOCATION,
         workdir=tmp_path / "work",
@@ -191,7 +191,7 @@ def test_run_custom_harness_headless_reports_tokens(tmp_path: Path) -> None:
     assert out["output_tokens"] == 123
     assert out["reported_cost_usd"] == pytest.approx(0.0042)
     assert out["token_source"] == "harness_reported"
-    assert "--model" in out["argv"] and "gemini-2.5-pro" in out["argv"]
+    assert "--model" in out["argv"] and "gemini-3-pro" in out["argv"]
 
 
 def test_parse_harness_output_variants() -> None:
@@ -274,20 +274,20 @@ def test_full_studio_workflow_link_select_run_and_report(linked_server: str) -> 
     assert data["project_id"] == PROJECT
     assert data["link_status"]["source"] == "discovered"
     ids = {m["id"] for m in data["models"]}
-    assert "gemini-2.5-pro" in ids and "gemini-3.1-pro" not in ids  # demo catalog gone
+    assert "gemini-3-pro" in ids and "gemini-3.1-pro" not in ids  # demo catalog gone
     enabled_ids = {m["id"] for m in data["enabled_models"]}
-    assert "claude-opus-4-1" not in enabled_ids
+    assert "claude-opus-4-5" not in enabled_ids
 
     # Persisted for the next server start (isolated state dir from conftest).
     persisted = Path(os.environ["DEVBENCH_STATE_DIR"]) / "gcp_link.json"
     assert json.loads(persisted.read_text())["project_id"] == PROJECT
 
     # 2. A model that is not enabled in the linked project cannot be the MIQ.
-    status, err = _post(base, "/api/eval/run", {"scenario_ids": ["oauth_api_enablement"], "model_alias": "claude-opus-4-1", "async": False})
+    status, err = _post(base, "/api/eval/run", {"scenario_ids": ["oauth_api_enablement"], "model_alias": "claude-opus-4-5", "async": False})
     assert status == 400 and "not enabled" in err["error"]
 
     # 4. "None" of the tests -> rejected; custom-only and mixed suites are accepted.
-    status, err = _post(base, "/api/eval/run", {"scenario_ids": [], "model_alias": "gemini-2.5-pro", "async": False})
+    status, err = _post(base, "/api/eval/run", {"scenario_ids": [], "model_alias": "gemini-3-pro", "async": False})
     assert status == 400 and "empty" in err["error"]
 
     status, gen = _post(base, "/api/scenarios/generate", {"prompt": "Create an agent skill that validates JSON records and alerts Pub/Sub", "title": "Workflow Custom Test"})
@@ -301,7 +301,7 @@ def test_full_studio_workflow_link_select_run_and_report(linked_server: str) -> 
         "/api/eval/run",
         {
             "scenario_ids": suite,
-            "model_alias": "gemini-2.5-pro",
+            "model_alias": "gemini-3-pro",
             "agent_type": "agy",
             "harbor": True,
             "environment_type": "podman",
@@ -311,7 +311,7 @@ def test_full_studio_workflow_link_select_run_and_report(linked_server: str) -> 
     )
     assert status == 200, run
     assert run["status"] == "COMPLETED"
-    assert run["model_alias"] == "gemini-2.5-pro"
+    assert run["model_alias"] == "gemini-3-pro"
     assert run["agent_harness"] == "agy"
     assert run["gcp_project_id"] == PROJECT
 
@@ -349,7 +349,7 @@ def test_live_runs_require_installed_harness_and_compatible_model(linked_server:
     status, err = _post(
         base,
         "/api/eval/run",
-        {"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-2.5-pro", "agent_type": "missing-agent", "mode": "live", "async": False},
+        {"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-3-pro", "agent_type": "missing-agent", "mode": "live", "async": False},
     )
     assert status == 400 and "not installed" in err["error"]
 
@@ -357,7 +357,7 @@ def test_live_runs_require_installed_harness_and_compatible_model(linked_server:
     status, err = _post(
         base,
         "/api/eval/run",
-        {"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-2.5-pro", "agent_type": "claude-code", "mode": "live", "async": False},
+        {"scenario_ids": ["oauth_api_enablement"], "model_alias": "gemini-3-pro", "agent_type": "claude-code", "mode": "live", "async": False},
     )
     assert status == 400
     assert ("only host" in err["error"]) or ("not installed" in err["error"])

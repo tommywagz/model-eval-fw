@@ -1,4 +1,4 @@
-"""Vertex AI GenAI provider for first-party Gemini models (gemini-1.5-pro, gemini-1.5-flash)."""
+"""Vertex AI GenAI provider for first-party Gemini models (gemini-3.1-pro, gemini-3.8-flash, gemini-3-pro)."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ class VertexGenAIClient(BaseModelClient):
 
     def __init__(
         self,
-        alias: str = "gemini-1.5-pro",
-        model_name: str = "gemini-1.5-pro-002",
+        alias: str = "gemini-3.5-flash",
+        model_name: str = "gemini-3.5-flash-001",
         mode: str = "mock",
         project_id: str = "devbench-eval-sandbox",
         location: str = "us-central1",

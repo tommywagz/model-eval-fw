@@ -36,13 +36,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
 # Publishers whose generative models we surface from the Model Garden catalog.
-PUBLISHERS: Tuple[str, ...] = ("google", "anthropic", "mistralai", "meta", "deepseek-ai", "qwen", "ai21")
+PUBLISHERS: Tuple[str, ...] = ("google", "anthropic", "xai", "meta", "mistralai", "elevenlabs", "deepseek-ai", "qwen", "ai21")
 
 PUBLISHER_BRANDS: Dict[str, str] = {
     "google": "gemini",
     "anthropic": "anthropic",
+    "xai": "xai",
     "mistralai": "mistral",
     "meta": "meta",
+    "elevenlabs": "elevenlabs",
     "deepseek-ai": "deepseek",
     "qwen": "qwen",
     "ai21": "vertex",
@@ -51,8 +53,10 @@ PUBLISHER_BRANDS: Dict[str, str] = {
 PUBLISHER_LABELS: Dict[str, str] = {
     "google": "Google (Vertex AI Model Garden)",
     "anthropic": "Anthropic (Vertex AI Partner Model)",
+    "xai": "xAI (Vertex AI Model Garden MaaS)",
     "mistralai": "Mistral AI (Vertex AI Partner Model)",
     "meta": "Meta (Vertex AI Model Garden MaaS)",
+    "elevenlabs": "ElevenLabs (Vertex AI Partner Model)",
     "deepseek-ai": "DeepSeek (Vertex AI Model Garden MaaS)",
     "qwen": "Qwen (Vertex AI Model Garden MaaS)",
     "ai21": "AI21 Labs (Vertex AI Partner Model)",
@@ -60,33 +64,27 @@ PUBLISHER_LABELS: Dict[str, str] = {
 
 # Approximate public list prices (USD per 1K tokens: input, output). Longest prefix wins.
 PRICE_TABLE_PER_1K: Dict[str, Tuple[float, float]] = {
+    "gemini-3.5-flash": (0.00010, 0.00040),
     "gemini-3-pro": (0.00200, 0.01200),
     "gemini-3-flash": (0.00050, 0.00300),
-    "gemini-2.5-pro": (0.00125, 0.01000),
-    "gemini-2.5-flash-lite": (0.00010, 0.00040),
-    "gemini-2.5-flash": (0.00030, 0.00250),
-    "gemini-2.0-flash-lite": (0.000075, 0.00030),
-    "gemini-2.0-flash": (0.00015, 0.00060),
-    "gemini-1.5-pro": (0.00125, 0.00500),
-    "gemini-1.5-flash": (0.000075, 0.00030),
+    "claude-opus-5": (0.00500, 0.02500),
+    "claude-sonnet-5": (0.00300, 0.01500),
     "claude-opus-4-5": (0.00500, 0.02500),
-    "claude-opus-4-1": (0.01500, 0.07500),
-    "claude-opus-4": (0.01500, 0.07500),
-    "claude-sonnet-4": (0.00300, 0.01500),
-    "claude-3-7-sonnet": (0.00300, 0.01500),
-    "claude-3-5-sonnet": (0.00300, 0.01500),
+    "claude-sonnet-4-6": (0.00300, 0.01500),
+    "claude-sonnet-4-5": (0.00300, 0.01500),
     "claude-haiku-4-5": (0.00100, 0.00500),
-    "claude-3-5-haiku": (0.00080, 0.00400),
-    "claude-3-haiku": (0.00025, 0.00125),
+    "grok-2-mini": (0.00020, 0.00100),
+    "grok": (0.00020, 0.00100),
+    "llama-3.1-8b": (0.00015, 0.00060),
+    "llama-3.2": (0.00010, 0.00040),
+    "llama": (0.00015, 0.00060),
+    "muse": (0.00010, 0.00030),
+    "mistral-small": (0.00010, 0.00030),
     "mistral-large": (0.00200, 0.00600),
     "mistral-medium": (0.00040, 0.00200),
-    "mistral-small": (0.00010, 0.00030),
+    "elevenlabs": (0.00015, 0.00050),
+    "eleven": (0.00015, 0.00050),
     "codestral": (0.00030, 0.00090),
-    "llama-4-maverick": (0.00035, 0.00115),
-    "llama-4-scout": (0.00025, 0.00070),
-    "llama-3.3": (0.00072, 0.00072),
-    "llama-3.1-405b": (0.00500, 0.01600),
-    "llama": (0.00072, 0.00072),
     "deepseek-r1": (0.00135, 0.00540),
     "deepseek-v3": (0.00060, 0.00170),
     "qwen3": (0.00025, 0.00100),
@@ -355,12 +353,46 @@ def _humanize(model_id: str) -> str:
     return " ".join(out)
 
 
+def is_model_configurable(publisher: str, model_id: str) -> bool:
+    """Ensure the oldest models that can be configured are Claude 4.5 and Gemini 3."""
+    mid = model_id.lower()
+    pub = publisher.lower()
+
+    # Reject Gemini versions older than Gemini 3 (e.g. 1.0, 1.5, 2.0, 2.5)
+    if pub == "google" or "gemini" in mid:
+        if re.search(r"gemini[-_]?[12](\.|$)", mid) or any(
+            v in mid for v in ("gemini-1.5", "gemini-1.0", "gemini-2.0", "gemini-2.5")
+        ):
+            return False
+
+    # Reject Claude versions older than Claude 4.5 (e.g. Claude 3, 3.5, 3.7, 4.0, 4.1)
+    if pub == "anthropic" or "claude" in mid:
+        m = re.search(r"claude[-_]?(?:opus[-_]|sonnet[-_]|haiku[-_])?([0-9]+(?:\.[0-9]+|-?[0-9]+)?)", mid)
+        if m:
+            ver_str = m.group(1).replace("-", ".")
+            try:
+                ver_parts = [int(p) for p in ver_str.split(".") if p.isdigit()]
+                if ver_parts:
+                    major = ver_parts[0]
+                    minor = ver_parts[1] if len(ver_parts) > 1 else 0
+                    if major < 4 or (major == 4 and minor < 5):
+                        return False
+            except Exception:
+                pass
+        elif any(v in mid for v in ("claude-3", "claude-3-5", "claude-3.5", "claude-3-7", "claude-4-0", "claude-4-1")):
+            return False
+
+    return True
+
+
 def _is_generative(publisher: str, model_id: str) -> bool:
     mid = model_id.lower()
-    if any(marker in mid for marker in _NON_GENERATIVE_MARKERS):
+    if publisher != "elevenlabs" and any(marker in mid for marker in _NON_GENERATIVE_MARKERS):
+        return False
+    if not is_model_configurable(publisher, model_id):
         return False
     if publisher == "google":
-        return mid.startswith("gemini") or mid.startswith("gemma")
+        return mid.startswith("gemini") or mid.startswith("gemma") or mid.startswith("muse")
     return True
 
 
@@ -597,6 +629,9 @@ def discover_model_garden(
         )
 
     for ep in endpoints:
+        disp_name = str(ep["deployed_model_display_name"])
+        if not is_model_configurable("", disp_name):
+            continue
         ep_id = str(ep["endpoint_resource_name"]).rsplit("/", 1)[-1]
         alias = _slug(f"endpoint-{ep['deployed_model_display_name']}-{ep_id[-6:]}")
         if alias in seen:

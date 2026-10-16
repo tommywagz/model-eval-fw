@@ -483,7 +483,7 @@ def summarize_logged_token_costs(
             or spec.get("suite_name")
             or r.get("pillar", "devbench Core Evaluation")
         )
-        model_alias = str(r.get("model_alias", "gemini-1.5-pro"))
+        model_alias = str(r.get("model_alias", "gemini-3.5-flash"))
 
         token_usage = r.get("token_usage")
         if not isinstance(token_usage, dict) or not token_usage:
@@ -542,7 +542,7 @@ def summarize_logged_token_costs(
         }
 
     framework_tok = build_framework_token_result(
-        model_alias=test_summaries[-1]["model_alias"] if test_summaries else "gemini-1.5-pro",
+        model_alias=test_summaries[-1]["model_alias"] if test_summaries else "gemini-3.5-flash",
         suite_token_results=suite_token_results,
         tokens_script_telemetry={"providers": provider_readings},
     )

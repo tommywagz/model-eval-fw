@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Type
@@ -47,6 +48,15 @@ def get_runtime_models() -> Dict[str, Dict[str, Any]]:
 
 
 DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
+    "gemini-3.5-flash": {
+        "provider": "vertex_genai",
+        "model_name": "gemini-3.5-flash-001",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00010,
+        "cost_per_1k_output_usd": 0.00040,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
     "gemini-3.1-pro": {
         "provider": "vertex_genai",
         "model_name": "gemini-3.1-pro-001",
@@ -130,91 +140,158 @@ DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "cost_per_1k_output_usd": 0.00500,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "gemini-1.5-pro": {
+    "gemini-3-pro": {
         "provider": "vertex_genai",
-        "model_name": "gemini-1.5-pro-002",
+        "model_name": "gemini-3-pro-001",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00125,
-        "cost_per_1k_output_usd": 0.00500,
+        "cost_per_1k_input_usd": 0.00200,
+        "cost_per_1k_output_usd": 0.01200,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "gemini-1.5-flash": {
+    "gemini-3-flash": {
         "provider": "vertex_genai",
-        "model_name": "gemini-1.5-flash-002",
+        "model_name": "gemini-3-flash-001",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.000075,
-        "cost_per_1k_output_usd": 0.00030,
+        "cost_per_1k_input_usd": 0.00050,
+        "cost_per_1k_output_usd": 0.00300,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "claude-3-5-sonnet": {
+    "claude-sonnet-4.6": {
         "provider": "vertex_anthropic",
-        "model_name": "claude-3-5-sonnet-v2@20241022",
+        "model_name": "claude-sonnet-4-6",
         "project_id": "devbench-eval-sandbox",
         "location": "us-east5",
         "cost_per_1k_input_usd": 0.00300,
         "cost_per_1k_output_usd": 0.01500,
-        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096},
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
     },
-    "claude-3-5-haiku": {
+    "claude-sonnet-4-6": {
         "provider": "vertex_anthropic",
-        "model_name": "claude-3-5-haiku@20241022",
+        "model_name": "claude-sonnet-4-6",
         "project_id": "devbench-eval-sandbox",
         "location": "us-east5",
-        "cost_per_1k_input_usd": 0.00080,
-        "cost_per_1k_output_usd": 0.00400,
+        "cost_per_1k_input_usd": 0.00300,
+        "cost_per_1k_output_usd": 0.01500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
+    },
+    "claude-sonnet-4.5": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-sonnet-4-5",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00300,
+        "cost_per_1k_output_usd": 0.01500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
+    },
+    "claude-sonnet-4-5": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-sonnet-4-5",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00300,
+        "cost_per_1k_output_usd": 0.01500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192},
+    },
+    "claude-haiku-4.5": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-haiku-4-5",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00100,
+        "cost_per_1k_output_usd": 0.00500,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096},
     },
-    "llama-4-405b": {
-        "provider": "vertex_endpoint",
-        "model_name": "meta/llama-4-405b-instruct",
-        "endpoint_resource_name": "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-4-405b-instruct-ep",
+    "claude-haiku-4-5": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-haiku-4-5",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-east5",
+        "cost_per_1k_input_usd": 0.00100,
+        "cost_per_1k_output_usd": 0.00500,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096},
+    },
+    "grok-2-mini": {
+        "provider": "vertex_maas",
+        "model_name": "xai/grok-2-mini",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00150,
-        "cost_per_1k_output_usd": 0.00450,
+        "cost_per_1k_input_usd": 0.00020,
+        "cost_per_1k_output_usd": 0.00100,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "llama-3.1-70b": {
-        "provider": "vertex_endpoint",
-        "model_name": "meta/llama-3.1-70b-instruct",
-        "endpoint_resource_name": "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-31-70b-instruct-ep",
+    "grok": {
+        "provider": "vertex_maas",
+        "model_name": "xai/grok-2-mini",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00080,
-        "cost_per_1k_output_usd": 0.00080,
-        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096, "seed": 42},
+        "cost_per_1k_input_usd": 0.00020,
+        "cost_per_1k_output_usd": 0.00100,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "deepseek-r2": {
-        "provider": "vertex_endpoint",
-        "model_name": "deepseek-ai/deepseek-r2-reasoning",
-        "endpoint_resource_name": "projects/devbench-eval-sandbox/locations/us-central1/endpoints/deepseek-r2-ep",
+    "llama-3.1-8b": {
+        "provider": "vertex_maas",
+        "model_name": "meta/llama-3.1-8b-instruct",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00055,
-        "cost_per_1k_output_usd": 0.00220,
+        "cost_per_1k_input_usd": 0.00015,
+        "cost_per_1k_output_usd": 0.00060,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
+    "llama": {
+        "provider": "vertex_maas",
+        "model_name": "meta/llama-3.1-8b-instruct",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00015,
+        "cost_per_1k_output_usd": 0.00060,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
+    "muse": {
+        "provider": "vertex_maas",
+        "model_name": "google/muse",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00010,
+        "cost_per_1k_output_usd": 0.00030,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
+    "mistral-small": {
+        "provider": "vertex_maas",
+        "model_name": "mistralai/mistral-small-latest",
+        "project_id": "devbench-eval-sandbox",
+        "location": "europe-west4",
+        "cost_per_1k_input_usd": 0.00010,
+        "cost_per_1k_output_usd": 0.00030,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
     "mistral-large-3": {
-        "provider": "vertex_endpoint",
+        "provider": "vertex_maas",
         "model_name": "mistralai/mistral-large-3",
-        "endpoint_resource_name": "projects/devbench-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep",
         "project_id": "devbench-eval-sandbox",
         "location": "europe-west4",
         "cost_per_1k_input_usd": 0.00200,
         "cost_per_1k_output_usd": 0.00600,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
-    "qwen-3-72b": {
-        "provider": "vertex_endpoint",
-        "model_name": "Qwen/Qwen3-72B-Instruct",
-        "endpoint_resource_name": "projects/devbench-eval-sandbox/locations/us-central1/endpoints/qwen3-72b-ep",
+    "eleven-labs": {
+        "provider": "vertex_maas",
+        "model_name": "elevenlabs/eleven-turbo-v2",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
-        "cost_per_1k_input_usd": 0.00080,
-        "cost_per_1k_output_usd": 0.00160,
-        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+        "cost_per_1k_input_usd": 0.00015,
+        "cost_per_1k_output_usd": 0.00050,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096, "seed": 42},
+    },
+    "eleven-turbo-v2": {
+        "provider": "vertex_maas",
+        "model_name": "elevenlabs/eleven-turbo-v2",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00015,
+        "cost_per_1k_output_usd": 0.00050,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 4096, "seed": 42},
     },
     "critic-qwen": {
         "provider": "vertex_endpoint",
@@ -288,8 +365,48 @@ def load_model_registry(config_path: Optional[str | Path] = None) -> Dict[str, D
     return registry
 
 
+def validate_model_version(alias: str, model_name: str = "") -> None:
+    """Enforce that the oldest configurable Gemini model is Gemini 3 and Claude is Claude 4.5."""
+    check_str = f"{alias} {model_name}".lower()
+
+    # Check Gemini: reject versions older than Gemini 3 (e.g. 1.0, 1.5, 2.0, 2.5)
+    if "gemini" in check_str:
+        if re.search(r"gemini[-_]?[12](\.|$)", check_str) or any(
+            v in check_str for v in ("gemini-1.5", "gemini-1.0", "gemini-2.0", "gemini-2.5")
+        ):
+            raise ValueError(
+                f"Model '{alias}' cannot be configured: the oldest configurable Gemini model is Gemini 3 "
+                "(e.g. gemini-3.1-pro, gemini-3.8-flash, gemini-3-pro)."
+            )
+
+    # Check Claude: reject versions older than Claude 4.5 (e.g. Claude 3, 3.5, 3.7, 4.0, 4.1)
+    if "claude" in check_str:
+        m = re.search(r"claude[-_]?(?:opus[-_]|sonnet[-_]|haiku[-_])?([0-9]+(?:\.[0-9]+|-?[0-9]+)?)", check_str)
+        if m:
+            ver_str = m.group(1).replace("-", ".")
+            try:
+                ver_parts = [int(p) for p in ver_str.split(".") if p.isdigit()]
+                if ver_parts:
+                    major = ver_parts[0]
+                    minor = ver_parts[1] if len(ver_parts) > 1 else 0
+                    if major < 4 or (major == 4 and minor < 5):
+                        raise ValueError(
+                            f"Model '{alias}' cannot be configured: the oldest configurable Claude model is Claude 4.5 "
+                            "(e.g. claude-sonnet-4.5, claude-haiku-4.5, claude-opus-5.1)."
+                        )
+            except ValueError:
+                raise
+            except Exception:
+                pass
+        elif any(v in check_str for v in ("claude-3", "claude-3-5", "claude-3.5", "claude-3-7", "claude-4-0", "claude-4-1")):
+            raise ValueError(
+                f"Model '{alias}' cannot be configured: the oldest configurable Claude model is Claude 4.5 "
+                "(e.g. claude-sonnet-4.5, claude-haiku-4.5, claude-opus-5.1)."
+            )
+
+
 def get_model_client(
-    alias: str = "gemini-1.5-pro",
+    alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     config_path: Optional[str | Path] = None,
     no_cache: bool = False,
@@ -307,6 +424,7 @@ def get_model_client(
     import re
     from devbench.telemetry.tokens import load_project_dotenv
 
+    validate_model_version(alias, overrides.get("model_name", ""))
     load_project_dotenv(dotenv_path=dotenv_path)
     registry = load_model_registry(config_path=config_path)
     if alias not in registry:

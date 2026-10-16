@@ -13,14 +13,14 @@ def test_end_to_end_runner_and_replay_and_inspector(tmp_path: Path) -> None:
     cache_dir = tmp_path / "cache"
     telemetry_dir = tmp_path / "telemetry"
 
-    # 1. Execute test_runner.py in mock mode
+    # 1. Execute test_runner.py in mock mode (using default model gemini-3.5-flash)
     cmd_run = [
         sys.executable,
         str(repo_root / "test_runner.py"),
         "--scenario",
         "complex_skill_synthesis",
         "--model",
-        "gemini-1.5-pro",
+        "gemini-3.5-flash",
         "--mode",
         "mock",
         "--cache-dir",
@@ -31,7 +31,7 @@ def test_end_to_end_runner_and_replay_and_inspector(tmp_path: Path) -> None:
     proc1 = subprocess.run(cmd_run, capture_output=True, text=True, check=True)
     out1 = json.loads(proc1.stdout)
     assert out1["scenario_id"] == "complex_skill_synthesis"
-    assert out1["model_alias"] == "gemini-1.5-pro"
+    assert out1["model_alias"] == "gemini-3.5-flash"
     assert out1["passed"] is True
     assert out1["exit_code"] == 0
     assert out1["actor_critic_scores"]["composite_score"] == 5.0
@@ -52,7 +52,7 @@ def test_end_to_end_runner_and_replay_and_inspector(tmp_path: Path) -> None:
         "--scenario",
         "complex_skill_synthesis",
         "--model",
-        "gemini-1.5-pro",
+        "gemini-3.5-flash",
         "--mode",
         "mock",
         "--fixtures",

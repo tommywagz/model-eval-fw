@@ -280,7 +280,7 @@ class TelemetryLogger:
                     str(suite_payload.get("timestamp", "")),
                     str(suite_payload.get("suite_slug", "")),
                     str(suite_payload.get("suite_name", "")),
-                    str(suite_payload.get("model_alias", "gemini-1.5-pro")),
+                    str(suite_payload.get("model_alias", "gemini-3.5-flash")),
                     str(suite_payload.get("execution_mode", "mock")),
                     int(suite_payload.get("test_count", 0)),
                     int(suite_payload.get("passed_count", 0)),
@@ -342,7 +342,7 @@ class TelemetryLogger:
                 (
                     fw_run_id,
                     str(framework_payload.get("timestamp", "")),
-                    str(framework_payload.get("model_alias", "gemini-1.5-pro")),
+                    str(framework_payload.get("model_alias", "gemini-3.5-flash")),
                     str(framework_payload.get("execution_mode", "mock")),
                     int(framework_payload.get("suite_count", 0)),
                     int(framework_payload.get("test_count", 0)),

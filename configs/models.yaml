@@ -13,6 +13,20 @@ models:
   # ============================================================================
   # Default Frontier Models (MIQs on Vertex AI Model Garden)
   # ============================================================================
+  gemini-3.5-flash:
+    provider: "vertex_genai"
+    model_name: "gemini-3.5-flash-001"
+    project_id: "devbench-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00010
+    cost_per_1k_output_usd: 0.00040
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      top_p: 0.95
+      seed: 42
+
   gemini-3.1-pro:
     provider: "vertex_genai"
     model_name: "gemini-3.1-pro-001"
@@ -69,6 +83,19 @@ models:
     provider: "vertex_endpoint"
     model_name: "mistralai/mistral-large-3-latest"
     endpoint_resource_name: "projects/devbench-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
+    project_id: "devbench-eval-sandbox"
+    location: "europe-west4"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.00600
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  mistral-large-3:
+    provider: "vertex_maas"
+    model_name: "mistralai/mistral-large-3"
     project_id: "devbench-eval-sandbox"
     location: "europe-west4"
     role: "candidate"
@@ -136,28 +163,28 @@ models:
       top_p: 0.95
       seed: 42
 
-  gemini-1.5-pro:
+  gemini-3-pro:
     provider: "vertex_genai"
-    model_name: "gemini-1.5-pro-002"
+    model_name: "gemini-3-pro-001"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00125
-    cost_per_1k_output_usd: 0.00500
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.01200
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 8192
       top_p: 0.95
       seed: 42
 
-  gemini-1.5-flash:
+  gemini-3-flash:
     provider: "vertex_genai"
-    model_name: "gemini-1.5-flash-002"
+    model_name: "gemini-3-flash-001"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
-    cost_per_1k_input_usd: 0.000075
-    cost_per_1k_output_usd: 0.00030
+    cost_per_1k_input_usd: 0.00050
+    cost_per_1k_output_usd: 0.00300
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 8192
@@ -165,11 +192,11 @@ models:
       seed: 42
 
   # ============================================================================
-  # Vertex AI Partner Models (Anthropic Claude & Open-Weight MaaS)
+  # Vertex AI Partner Models (Anthropic Claude 4.5+ & Open-Weight Serverless MaaS)
   # ============================================================================
-  claude-3-5-sonnet:
+  claude-sonnet-4.6:
     provider: "vertex_anthropic"
-    model_name: "claude-3-5-sonnet-v2@20241022"
+    model_name: "claude-sonnet-4-6"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
@@ -177,88 +204,173 @@ models:
     cost_per_1k_output_usd: 0.01500
     generation_defaults:
       temperature: 0.0
-      max_output_tokens: 4096
+      max_output_tokens: 8192
 
-  claude-3-5-haiku:
+  claude-sonnet-4-6:
     provider: "vertex_anthropic"
-    model_name: "claude-3-5-haiku@20241022"
+    model_name: "claude-sonnet-4-6"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00080
-    cost_per_1k_output_usd: 0.00400
+    cost_per_1k_input_usd: 0.00300
+    cost_per_1k_output_usd: 0.01500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+
+  claude-sonnet-4.5:
+    provider: "vertex_anthropic"
+    model_name: "claude-sonnet-4-5"
+    project_id: "devbench-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00300
+    cost_per_1k_output_usd: 0.01500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+
+  claude-sonnet-4-5:
+    provider: "vertex_anthropic"
+    model_name: "claude-sonnet-4-5"
+    project_id: "devbench-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00300
+    cost_per_1k_output_usd: 0.01500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+
+  claude-haiku-4.5:
+    provider: "vertex_anthropic"
+    model_name: "claude-haiku-4-5"
+    project_id: "devbench-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00100
+    cost_per_1k_output_usd: 0.00500
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 4096
 
-  llama-4-405b:
-    provider: "vertex_endpoint"
-    model_name: "meta/llama-4-405b-instruct"
-    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-4-405b-instruct-ep"
+  claude-haiku-4-5:
+    provider: "vertex_anthropic"
+    model_name: "claude-haiku-4-5"
+    project_id: "devbench-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00100
+    cost_per_1k_output_usd: 0.00500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 4096
+
+  # ============================================================================
+  # GCP Model Garden Open Weight Partner Models (Cheap Serverless MaaS)
+  # ============================================================================
+  grok-2-mini:
+    provider: "vertex_maas"
+    model_name: "xai/grok-2-mini"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00150
-    cost_per_1k_output_usd: 0.00450
+    cost_per_1k_input_usd: 0.00020
+    cost_per_1k_output_usd: 0.00100
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 8192
       seed: 42
 
-  llama-3.1-70b:
-    provider: "vertex_endpoint"
-    model_name: "meta/llama-3.1-70b-instruct"
-    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/llama-31-70b-instruct-ep"
+  grok:
+    provider: "vertex_maas"
+    model_name: "xai/grok-2-mini"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00080
-    cost_per_1k_output_usd: 0.00080
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 4096
-      seed: 42
-
-  deepseek-r2:
-    provider: "vertex_endpoint"
-    model_name: "deepseek-ai/deepseek-r2-reasoning"
-    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/deepseek-r2-ep"
-    project_id: "devbench-eval-sandbox"
-    location: "us-central1"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00055
-    cost_per_1k_output_usd: 0.00220
+    cost_per_1k_input_usd: 0.00020
+    cost_per_1k_output_usd: 0.00100
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 8192
       seed: 42
 
-  mistral-large-3:
-    provider: "vertex_endpoint"
-    model_name: "mistralai/mistral-large-3"
-    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/europe-west4/endpoints/mistral-large-3-ep"
+  llama-3.1-8b:
+    provider: "vertex_maas"
+    model_name: "meta/llama-3.1-8b-instruct"
+    project_id: "devbench-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00015
+    cost_per_1k_output_usd: 0.00060
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  llama:
+    provider: "vertex_maas"
+    model_name: "meta/llama-3.1-8b-instruct"
+    project_id: "devbench-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00015
+    cost_per_1k_output_usd: 0.00060
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  muse:
+    provider: "vertex_maas"
+    model_name: "google/muse"
+    project_id: "devbench-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00010
+    cost_per_1k_output_usd: 0.00030
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  mistral-small:
+    provider: "vertex_maas"
+    model_name: "mistralai/mistral-small-latest"
     project_id: "devbench-eval-sandbox"
     location: "europe-west4"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00200
-    cost_per_1k_output_usd: 0.00600
+    cost_per_1k_input_usd: 0.00010
+    cost_per_1k_output_usd: 0.00030
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 8192
       seed: 42
 
-  qwen-3-72b:
-    provider: "vertex_endpoint"
-    model_name: "Qwen/Qwen3-72B-Instruct"
-    endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/qwen3-72b-ep"
+  eleven-labs:
+    provider: "vertex_maas"
+    model_name: "elevenlabs/eleven-turbo-v2"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
-    cost_per_1k_input_usd: 0.00080
-    cost_per_1k_output_usd: 0.00160
+    cost_per_1k_input_usd: 0.00015
+    cost_per_1k_output_usd: 0.00050
     generation_defaults:
       temperature: 0.0
-      max_output_tokens: 8192
+      max_output_tokens: 4096
+      seed: 42
+
+  eleven-turbo-v2:
+    provider: "vertex_maas"
+    model_name: "elevenlabs/eleven-turbo-v2"
+    project_id: "devbench-eval-sandbox"
+    location: "us-central1"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00015
+    cost_per_1k_output_usd: 0.00050
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 4096
       seed: 42
 
   # Non-Assessed Actor-Critic Panel Models
@@ -266,12 +378,12 @@ models:
   # (Qwen 2.5 72B, MiniMax, Kimi K) have been superseded by:
   # 1. Deterministic Jev Evaluation (Jev-Noul, Jev-Classification, Jev-Confidence Vector)
   # 2. Dynamic Serverless Frontier Cross-Evaluation: evaluates candidate models against a frontier model
-  #    strictly DIFFERENT from the candidate under test (e.g. Claude 3.5 Sonnet reviews Gemini,
-  #    Gemini 1.5 Pro reviews Claude) using serverless pay-per-token APIs without provisioned throughput.
+  #    strictly DIFFERENT from the candidate under test (e.g. Claude 4.6 Sonnet reviews Gemini,
+  #    Gemini 3.5 Flash reviews Claude) using serverless pay-per-token APIs without provisioned throughput.
   # ============================================================================
   critic-frontier-anthropic:
     provider: "vertex_anthropic"
-    model_name: "claude-3-5-sonnet-v2@20241022"
+    model_name: "claude-sonnet-4-6"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "critic"
@@ -284,12 +396,12 @@ models:
 
   critic-frontier-gemini:
     provider: "vertex_genai"
-    model_name: "gemini-1.5-pro-002"
+    model_name: "gemini-3.5-flash-001"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"
-    cost_per_1k_input_usd: 0.00125
-    cost_per_1k_output_usd: 0.00500
+    cost_per_1k_input_usd: 0.00010
+    cost_per_1k_output_usd: 0.00040
     generation_defaults:
       temperature: 0.0
       max_output_tokens: 2048

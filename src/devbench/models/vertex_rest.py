@@ -43,7 +43,7 @@ def _classify_publisher(model_name: str, publisher: Optional[str] = None) -> str
         return "google"
     if m.startswith("claude") or "publishers/anthropic" in m:
         return "anthropic"
-    if any(p in m for p in ("mistral", "llama", "deepseek", "qwen")):
+    if any(p in m for p in ("mistral", "llama", "deepseek", "qwen", "grok", "muse", "eleven", "xai")):
         return "maas"
     return "google"
 

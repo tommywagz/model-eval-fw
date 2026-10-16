@@ -13,7 +13,7 @@ const state = {
   defaultModels: [],
   dropdownModels: [],
   models: [],
-  selectedModelId: "gemini-3.1-pro",
+  selectedModelId: "gemini-3.5-flash",
   allHarnesses: [],
   defaultHarnesses: [],
   dropdownHarnesses: [],
@@ -718,7 +718,7 @@ function onCustomModelTypeChange(type) {
     input.placeholder = "e.g. 728193049102 or projects/.../endpoints/728193049102";
   } else {
     label.textContent = "Publisher Name or Model ID";
-    input.placeholder = "e.g. publishers/google/models/gemini-1.5-pro or gemini-1.5-flash";
+    input.placeholder = "e.g. publishers/google/models/gemini-3.1-pro or gemini-3-flash";
   }
 }
 

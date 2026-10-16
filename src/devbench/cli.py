@@ -101,7 +101,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_parser.add_argument(
         "--model",
         type=str,
-        default="gemini-1.5-pro",
+        default="gemini-3.5-flash",
         help="Candidate model alias from configs/models.yaml",
     )
     run_parser.add_argument(
@@ -288,8 +288,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     harbor_parser.add_argument(
         "--model",
         type=str,
-        default="gemini-1.5-pro",
-        help="Candidate model alias from configs/models.yaml (e.g. gemini-3.1-pro, claude-sonnet-5.5, mistral-large-3)",
+        default="gemini-3.5-flash",
+        help="Candidate model alias from configs/models.yaml (e.g. gemini-3.5-flash, claude-sonnet-5.5, mistral-large-3)",
     )
     harbor_parser.add_argument(
         "--mode",

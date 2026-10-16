@@ -139,7 +139,7 @@ You can run the **entire evaluation framework**—including candidate models, th
    ```
    Or pass CLI flags on any command:
    ```bash
-   devbench run --scenario complex_skill_synthesis --project my-gcp-project-id --location us-central1 --use-vertex --mode live
+   devbench run --scenario complex_skill_synthesis --project <my-gcp-project-id> --location <my-gcp-location> --use-vertex --mode live
    ```
 
 **How Models Route via Vertex AI:**

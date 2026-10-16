@@ -65,16 +65,23 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
     assert len(models) >= 8
 
     model_ids = {m["id"] for m in models}
-    # Verify the 5 default frontier models
+    # Verify frontier models including default Gemini 3.5 Flash and Claude 4.6 Sonnet
+    assert "gemini-3.5-flash" in model_ids
     assert "gemini-3.1-pro" in model_ids
     assert "gemini-3.8-flash" in model_ids
     assert "claude-opus-5.1" in model_ids
     assert "claude-sonnet-5.5" in model_ids
+    assert "claude-sonnet-4-6" in model_ids
     assert "mistral-large-3" in model_ids
-    # Verify additional GCP models
-    assert "gemini-1.5-pro" in model_ids
-    assert "gemini-1.5-flash" in model_ids
-    assert "claude-3-5-sonnet" in model_ids
+    # Verify additional GCP models (Gemini 3+, Claude 4.5+, cheap serverless partner models)
+    assert "gemini-3-pro" in model_ids
+    assert "gemini-3-flash" in model_ids
+    assert "claude-sonnet-4-5" in model_ids
+    assert "grok-2-mini" in model_ids
+    assert "llama-3.1-8b" in model_ids
+    assert "muse" in model_ids
+    assert "mistral-small" in model_ids
+    assert "eleven-labs" in model_ids
 
     # Test REST API endpoint /api/models
     req = urllib.request.Request(f"{web_server}/api/models")
@@ -86,13 +93,13 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
         assert "dropdown_models" in data
 
         default_ids = [m["id"] for m in data["default_models"]]
-        assert default_ids == [
-            "gemini-3.1-pro",
-            "gemini-3.8-flash",
-            "claude-opus-5.1",
-            "claude-sonnet-5.5",
-            "mistral-large-3",
-        ]
+        assert "gemini-3.5-flash" in default_ids
+        assert "gemini-3.1-pro" in default_ids
+        assert "gemini-3.8-flash" in default_ids
+        assert "claude-opus-5.1" in default_ids
+        assert "claude-sonnet-5.5" in default_ids
+        assert "claude-sonnet-4-6" in default_ids
+        assert "mistral-large-3" in default_ids
         assert len(data["dropdown_models"]) >= 3
 
         # Validate pricing and brand attributes exist

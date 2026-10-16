@@ -369,7 +369,7 @@ class JevOrchestrator:
         self,
         evaluations: List[JevScenarioEvaluation],
         level: str = "suite",
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
     ) -> JevAggregateEvaluation:
         """Calculate the difficulty-weighted Composite Score: sum(Rubric_i * Weight_i) / sum(Weight_i)."""
         if not evaluations:

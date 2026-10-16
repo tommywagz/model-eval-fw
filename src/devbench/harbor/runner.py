@@ -442,7 +442,7 @@ class HarborPodmanRunner:
     def run_scenario_job(
         self,
         scenario_id: str = "oauth_api_enablement",
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
         no_cache: bool = False,
@@ -631,7 +631,7 @@ class HarborPodmanRunner:
     def run_suite_jobs(
         self,
         suite_id: str = "cloud_tool_writing",
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
         no_cache: bool = False,
@@ -706,7 +706,7 @@ class HarborPodmanRunner:
 
     def run_framework_jobs(
         self,
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
         no_cache: bool = False,
@@ -895,7 +895,7 @@ class HarborPodmanRunner:
         self,
         task_dir_or_id: str | Path,
         scenario_id: Optional[str] = None,
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
     ) -> Dict[str, Any]:
@@ -1168,7 +1168,7 @@ HarborRunner = HarborPodmanRunner
 def run_harbor_task(
     task_dir: str | Path,
     scenario_id: Optional[str] = None,
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",
@@ -1195,7 +1195,7 @@ def run_harbor_task(
 
 def run_harbor_scenario_job(
     scenario_id: str = "oauth_api_enablement",
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",
@@ -1239,7 +1239,7 @@ def run_harbor_scenario_job(
 
 def run_harbor_suite_jobs(
     suite_id: str = "cloud_tool_writing",
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",
@@ -1276,7 +1276,7 @@ def run_harbor_suite_jobs(
 
 
 def run_harbor_framework_jobs(
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",

@@ -256,7 +256,7 @@ def test_end_to_end_suite_and_framework_jev_metrics(tmp_path: Path) -> None:
     # Execute suite
     suite_res = execute_suite_run(
         suite_id="cloud_tool_writing",
-        model_alias="gemini-1.5-pro",
+        model_alias="gemini-3.1-pro",
         mode="mock",
         cache_dir=cache_dir,
         telemetry_dir=telemetry_dir,
@@ -270,7 +270,7 @@ def test_end_to_end_suite_and_framework_jev_metrics(tmp_path: Path) -> None:
 
     # Execute full framework
     fw_res = execute_framework_run(
-        model_alias="gemini-1.5-pro",
+        model_alias="gemini-3.1-pro",
         mode="mock",
         cache_dir=cache_dir,
         telemetry_dir=telemetry_dir,

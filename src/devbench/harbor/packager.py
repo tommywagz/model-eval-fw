@@ -855,7 +855,7 @@ class HarborScenarioPackager:
     def package_scenario_job(
         self,
         scenario_id: str,
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
         n_concurrent_trials: int = 4,
@@ -1027,7 +1027,7 @@ class HarborScenarioPackager:
     def package_suite_jobs(
         self,
         suite_id: str,
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
     ) -> List[HarborScenarioJobPackage]:
@@ -1047,7 +1047,7 @@ class HarborScenarioPackager:
 
     def package_all_jobs(
         self,
-        model_alias: str = "gemini-1.5-pro",
+        model_alias: str = "gemini-3.5-flash",
         mode: str = "mock",
         agent_type: str = "oracle",
     ) -> List[HarborScenarioJobPackage]:
@@ -1661,7 +1661,7 @@ def package_scenario_as_harbor_job(
     scenario_id: str,
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",
@@ -1686,7 +1686,7 @@ def package_suite_as_harbor_jobs(
     suite_id: str,
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",
@@ -1708,7 +1708,7 @@ def package_suite_as_harbor_jobs(
 def package_all_scenarios_as_harbor_jobs(
     output_dir: Optional[str | Path] = None,
     runs_dir: Optional[str | Path] = None,
-    model_alias: str = "gemini-1.5-pro",
+    model_alias: str = "gemini-3.5-flash",
     mode: str = "mock",
     agent_type: str = "oracle",
     environment_type: str = "podman",

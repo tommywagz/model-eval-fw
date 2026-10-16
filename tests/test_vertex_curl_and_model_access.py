@@ -28,7 +28,7 @@ def test_build_vertex_curl_commands():
     """Verify equivalent shell curl commands are generated with gcloud auth application-default print-access-token."""
     # 1. Gemini
     gemini_cmd = build_vertex_curl_command(
-        model_name="gemini-1.5-pro",
+        model_name="gemini-3.1-pro",
         prompt="Explain cloud architecture",
         project_id="test-proj-123",
         location="us-central1",
@@ -37,20 +37,20 @@ def test_build_vertex_curl_commands():
     )
     assert "curl -X POST" in gemini_cmd
     assert "us-central1-aiplatform.googleapis.com" in gemini_cmd
-    assert "projects/test-proj-123/locations/us-central1/publishers/google/models/gemini-1.5-pro:generateContent" in gemini_cmd
+    assert "projects/test-proj-123/locations/us-central1/publishers/google/models/gemini-3.1-pro:generateContent" in gemini_cmd
     assert 'Authorization: Bearer $(gcloud auth application-default print-access-token)' in gemini_cmd
     assert "Explain cloud architecture" in gemini_cmd
     assert "You are a cloud architect." in gemini_cmd
 
     # 2. Anthropic Claude
     claude_cmd = build_vertex_curl_command(
-        model_name="claude-3-5-sonnet-v2@20241022",
+        model_name="claude-sonnet-4-5",
         prompt="Synthesize an agent skill",
         project_id="test-proj-123",
         location="us-east5",
         publisher="anthropic",
     )
-    assert "publishers/anthropic/models/claude-3-5-sonnet-v2@20241022:rawPredict" in claude_cmd
+    assert "publishers/anthropic/models/claude-sonnet-4-5:rawPredict" in claude_cmd
     assert 'Authorization: Bearer $(gcloud auth application-default print-access-token)' in claude_cmd
     assert "vertex-2023-10-16" in claude_cmd
 
@@ -69,22 +69,22 @@ def test_build_vertex_curl_commands():
 def test_client_as_curl_command_method():
     """Test that model clients expose `as_curl_command` for easy CLI execution."""
     gemini_client = VertexGenAIClient(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-3.8-flash",
         project_id="my-gcp-project",
         location="us-central1",
     )
     cmd = gemini_client.as_curl_command("Hello Gemini", system_instruction="Be concise")
-    assert "gemini-1.5-flash:generateContent" in cmd
+    assert "gemini-3.8-flash:generateContent" in cmd
     assert "gcloud auth application-default print-access-token" in cmd
     assert "Be concise" in cmd
 
     claude_client = VertexAnthropicClient(
-        model_name="claude-3-5-sonnet-v2@20241022",
+        model_name="claude-sonnet-4-5",
         project_id="my-gcp-project",
         location="us-east5",
     )
     claude_cmd = claude_client.as_curl_command("Hello Claude")
-    assert "claude-3-5-sonnet-v2@20241022:rawPredict" in claude_cmd
+    assert "claude-sonnet-4-5:rawPredict" in claude_cmd
 
 
 def test_execute_vertex_rest_prompt_success():
@@ -108,7 +108,7 @@ def test_execute_vertex_rest_prompt_success():
 
     with patch("urllib.request.urlopen", return_value=mock_resp_obj):
         resp = execute_vertex_rest_prompt(
-            model_name="gemini-1.5-pro",
+            model_name="gemini-3.1-pro",
             prompt="How does Cloud Run scale?",
             project_id="my-proj",
             location="us-central1",
@@ -128,7 +128,7 @@ def test_execute_vertex_rest_prompt_permission_denied_raises_model_access_error(
         {
             "error": {
                 "code": 403,
-                "message": "Vertex AI Model Garden model 'publishers/anthropic/models/claude-3-5-sonnet' has not been enabled for project '123456'.",
+                "message": "Vertex AI Model Garden model 'publishers/anthropic/models/claude-sonnet-4-5' has not been enabled for project '123456'.",
                 "status": "PERMISSION_DENIED",
             }
         }
@@ -145,7 +145,7 @@ def test_execute_vertex_rest_prompt_permission_denied_raises_model_access_error(
     with patch("urllib.request.urlopen", side_effect=mock_http_err):
         with pytest.raises(VertexModelAccessError) as exc_info:
             execute_vertex_rest_prompt(
-                model_name="claude-3-5-sonnet",
+                model_name="claude-sonnet-4-5",
                 prompt="Ping",
                 project_id="test-proj-403",
                 location="us-east5",
@@ -162,7 +162,7 @@ def test_execute_vertex_rest_prompt_permission_denied_raises_model_access_error(
 
     d = err.to_dict()
     assert d["error_type"] == "MODEL_ACCESS_DENIED"
-    assert d["model_id"] == "claude-3-5-sonnet"
+    assert d["model_id"] == "claude-sonnet-4-5"
     assert d["project_id"] == "test-proj-403"
 
 
@@ -180,7 +180,7 @@ def test_vertex_genai_and_anthropic_clients_support_curl_auth_mode():
         )
 
         client = get_model_client(
-            alias="gemini-1.5-pro",
+            alias="gemini-3.1-pro",
             mode="live",
             no_cache=True,
             auth_mode="vertex_rest",
@@ -206,9 +206,9 @@ def test_web_ui_model_verify_returns_model_access_denied_structure():
 
     fake_catalog = [
         {
-            "id": "claude-3-5-sonnet",
-            "name": "Claude 3.5 Sonnet",
-            "model_name": "claude-3-5-sonnet-v2@20241022",
+            "id": "claude-sonnet-4-5",
+            "name": "Claude Sonnet 4.5",
+            "model_name": "claude-sonnet-4-5",
             "publisher": "anthropic",
             "discovered": True,
             "enabled": True,
@@ -228,7 +228,7 @@ def test_web_ui_model_verify_returns_model_access_denied_structure():
                 with srv.GCP_STATE_LOCK:
                     srv.GCP_RUNTIME_STATE["models"] = fake_catalog
 
-                result = verify_model_access("claude-3-5-sonnet")
+                result = verify_model_access("claude-sonnet-4-5")
                 assert result["enabled"] is False
                 assert result["error_type"] == "MODEL_ACCESS_DENIED"
                 assert "gcloud auth application-default login" in result["remediation"]
@@ -269,13 +269,13 @@ def test_build_vertex_curl_command_gcp_md_managed_and_dedicated_endpoint():
     """Verify curl commands generated for managed and dedicated endpoints strictly follow GCP.md specifications."""
     # Step 4.2.A: Google Managed Models (Gemini via Vertex API)
     managed_cmd = build_vertex_curl_command(
-        model_name="publishers/google/models/gemini-1.5-flash",
+        model_name="publishers/google/models/gemini-3.8-flash",
         prompt="Evaluate this response for safety and accuracy.",
         project_id="my-eval-project-123",
         location="us-central1",
         params={"temperature": 0.2, "max_output_tokens": 1024},
     )
-    assert "https://us-central1-aiplatform.googleapis.com/v1/projects/my-eval-project-123/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent" in managed_cmd
+    assert "https://us-central1-aiplatform.googleapis.com/v1/projects/my-eval-project-123/locations/us-central1/publishers/google/models/gemini-3.8-flash:generateContent" in managed_cmd
     assert "Authorization: Bearer $(gcloud auth application-default print-access-token)" in managed_cmd
     assert "Evaluate this response for safety and accuracy." in managed_cmd
     assert '"temperature": 0.2' in managed_cmd
@@ -332,18 +332,18 @@ def test_register_custom_gcp_model_managed_and_dedicated():
             # 1. Register a managed model per Step 3
             managed_entry = srv.register_custom_gcp_model(
                 model_type="managed",
-                endpoint_id_or_name="publishers/google/models/gemini-1.5-flash",
+                endpoint_id_or_name="publishers/google/models/gemini-3.8-flash",
                 project_id="my-eval-project-123",
                 region="us-central1",
                 display_name="Custom Flash MIQ",
             )
             assert managed_entry["backend_provider"] == "vertex_genai"
-            assert managed_entry["model_name"] == "gemini-1.5-flash"
+            assert managed_entry["model_name"] == "gemini-3.8-flash"
             assert managed_entry["enabled"] is True
 
             # Factory can instantiate it
             managed_client = get_model_client(managed_entry["id"], mode="mock")
-            assert managed_client.model_name == "gemini-1.5-flash"
+            assert managed_client.model_name == "gemini-3.8-flash"
             assert managed_client.project_id == "my-eval-project-123"
 
             # 2. Register a dedicated endpoint per Step 3

@@ -14,6 +14,7 @@ from devbench.models.providers import (
     VertexAnthropicClient,
     VertexEndpointClient,
     VertexGenAIClient,
+    VertexMaaSClient,
 )
 
 
@@ -42,12 +43,19 @@ def test_base_model_client_is_abstract() -> None:
 def test_model_registry_contains_candidates_and_critics() -> None:
     registry = load_model_registry()
     expected_aliases = [
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "claude-3-5-sonnet",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro",
+        "gemini-3.8-flash",
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         "critic-qwen",
         "critic-minimax",
         "critic-kimi-k",
+        "grok-2-mini",
+        "llama-3.1-8b",
+        "muse",
+        "mistral-small",
+        "eleven-labs",
     ]
     for alias in expected_aliases:
         assert alias in registry, f"Missing model alias '{alias}' in configs/models.yaml"
@@ -57,8 +65,15 @@ def test_model_registry_contains_candidates_and_critics() -> None:
 @pytest.mark.parametrize(
     "alias,expected_cls",
     [
-        ("gemini-1.5-pro", VertexGenAIClient),
-        ("claude-3-5-sonnet", VertexAnthropicClient),
+        ("gemini-3.5-flash", VertexGenAIClient),
+        ("gemini-3.1-pro", VertexGenAIClient),
+        ("claude-sonnet-4-6", VertexAnthropicClient),
+        ("claude-sonnet-4-5", VertexAnthropicClient),
+        ("grok-2-mini", VertexMaaSClient),
+        ("llama-3.1-8b", VertexMaaSClient),
+        ("muse", VertexMaaSClient),
+        ("mistral-small", VertexMaaSClient),
+        ("eleven-labs", VertexMaaSClient),
         ("critic-qwen", VertexEndpointClient),
         ("critic-minimax", OpenAICompatibleClient),
         ("critic-kimi-k", OpenAICompatibleClient),
@@ -89,6 +104,20 @@ def test_factory_get_model_client_instantiates_correct_provider(
     )
     assert isinstance(chat_resp, ModelResponse)
     assert len(chat_resp.text) > 0
+
+
+@pytest.mark.parametrize(
+    "older_alias",
+    [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "claude-3-5-sonnet",
+        "claude-3-5-haiku",
+    ],
+)
+def test_older_models_cannot_be_configured(older_alias: str, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="cannot be configured"):
+        get_model_client(alias=older_alias, mode="mock", cache_dir=tmp_path)
 
 
 def test_providers_live_mode_with_injected_sdk_mocks(tmp_path: Path) -> None:

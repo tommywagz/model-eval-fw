@@ -77,7 +77,7 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
         raise EvalRequestError("Field 'mode' must be 'mock' or 'live'.")
 
     # ---- Model in Question (must be enabled in the linked project) ----
-    model_alias = str(payload.get("model_alias") or "gemini-3.1-pro")
+    model_alias = str(payload.get("model_alias") or "gemini-3.5-flash")
     models_by_id = {m["id"]: m for m in gcp_snapshot.get("models", [])}
     model_entry = models_by_id.get(model_alias)
     link_status = gcp_snapshot.get("link_status") or {}

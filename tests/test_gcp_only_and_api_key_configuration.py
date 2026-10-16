@@ -50,14 +50,14 @@ def test_only_gcp_project_and_location_resolves_all_models_to_vertex(monkeypatch
     monkeypatch.setenv("VERTEX_LOCATION", "global")
 
     # 1. Gemini candidate
-    gemini_client = get_model_client("gemini-1.5-pro", mode="mock", cache_dir=tmp_path)
+    gemini_client = get_model_client("gemini-3.1-pro", mode="mock", cache_dir=tmp_path)
     assert isinstance(gemini_client, VertexGenAIClient)
     assert gemini_client.project_id == "gemini-api-505408"
     assert gemini_client.location == "global"
     assert gemini_client.resolve_use_vertex() is True
 
     # 2. Claude candidate / critic
-    claude_client = get_model_client("claude-3-5-sonnet", mode="mock", cache_dir=tmp_path)
+    claude_client = get_model_client("claude-sonnet-4-5", mode="mock", cache_dir=tmp_path)
     assert isinstance(claude_client, VertexAnthropicClient)
     assert claude_client.project_id == "gemini-api-505408"
     assert claude_client.resolve_use_vertex() is True
@@ -83,32 +83,32 @@ def test_configurable_routing_vertex_vs_api_key(monkeypatch: pytest.MonkeyPatch,
 
     # A. Gemini routing configuration
     # Default with both GCP and API key -> defaults to Vertex
-    gemini_default = get_model_client("gemini-1.5-pro", mode="mock", cache_dir=tmp_path)
+    gemini_default = get_model_client("gemini-3.1-pro", mode="mock", cache_dir=tmp_path)
     assert gemini_default.resolve_use_vertex() is True
 
     # Explicitly configure Vertex via use_vertex=True
-    gemini_vertex = get_model_client("gemini-1.5-pro", mode="mock", use_vertex=True, cache_dir=tmp_path)
+    gemini_vertex = get_model_client("gemini-3.1-pro", mode="mock", use_vertex=True, cache_dir=tmp_path)
     assert gemini_vertex.resolve_use_vertex() is True
 
     # Explicitly configure API key via use_vertex=False
-    gemini_key = get_model_client("gemini-1.5-pro", mode="mock", use_vertex=False, cache_dir=tmp_path)
+    gemini_key = get_model_client("gemini-3.1-pro", mode="mock", use_vertex=False, cache_dir=tmp_path)
     assert gemini_key.resolve_use_vertex() is False
 
     # Explicitly configure via auth_mode="api_key" vs "vertex"
-    gemini_auth_key = get_model_client("gemini-1.5-pro", mode="mock", auth_mode="api_key", cache_dir=tmp_path)
+    gemini_auth_key = get_model_client("gemini-3.1-pro", mode="mock", auth_mode="api_key", cache_dir=tmp_path)
     assert gemini_auth_key.resolve_use_vertex() is False
 
-    gemini_auth_vertex = get_model_client("gemini-1.5-pro", mode="mock", auth_mode="vertex", cache_dir=tmp_path)
+    gemini_auth_vertex = get_model_client("gemini-3.1-pro", mode="mock", auth_mode="vertex", cache_dir=tmp_path)
     assert gemini_auth_vertex.resolve_use_vertex() is True
 
     # B. Claude routing configuration
-    claude_vertex = get_model_client("claude-3-5-sonnet", mode="mock", use_vertex=True, cache_dir=tmp_path)
+    claude_vertex = get_model_client("claude-sonnet-4-5", mode="mock", use_vertex=True, cache_dir=tmp_path)
     assert claude_vertex.resolve_use_vertex() is True
 
-    claude_key = get_model_client("claude-3-5-sonnet", mode="mock", use_vertex=False, cache_dir=tmp_path)
+    claude_key = get_model_client("claude-sonnet-4-5", mode="mock", use_vertex=False, cache_dir=tmp_path)
     assert claude_key.resolve_use_vertex() is False
 
-    claude_auth_key = get_model_client("claude-3-5-sonnet", mode="mock", auth_mode="api_key", cache_dir=tmp_path)
+    claude_auth_key = get_model_client("claude-sonnet-4-5", mode="mock", auth_mode="api_key", cache_dir=tmp_path)
     assert claude_auth_key.resolve_use_vertex() is False
 
 
@@ -193,7 +193,7 @@ def test_actor_critic_panel_and_scenario_with_only_gcp_project_and_location(tmp_
 
     res = execute_scenario_run(
         scenario_id="oauth_api_enablement",
-        model_alias="gemini-1.5-pro",
+        model_alias="gemini-3.1-pro",
         mode="mock",
         cache_dir=cache_dir,
         critic_cache_dir=critic_cache_dir,
@@ -232,7 +232,7 @@ def test_cli_flags_for_project_location_and_routing(tmp_path: Path) -> None:
     # Test top-level runner execution with CLI project and location flags
     rc = top_level_runner_main([
         "--scenario", "oauth_api_enablement",
-        "--model", "gemini-1.5-pro",
+        "--model", "gemini-3.1-pro",
         "--mode", "mock",
         "--project", "gemini-api-505408",
         "--location", "global",
@@ -249,7 +249,7 @@ def test_devbench_cli_dispatcher_with_project_and_location(tmp_path: Path) -> No
     rc = cli_main([
         "run",
         "--scenario", "oauth_api_enablement",
-        "--model", "gemini-1.5-pro",
+        "--model", "gemini-3.1-pro",
         "--mode", "mock",
         "--project", "gemini-api-505408",
         "--location", "global",

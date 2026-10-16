@@ -13,8 +13,8 @@ class VertexAnthropicClient(BaseModelClient):
 
     def __init__(
         self,
-        alias: str = "claude-3-5-sonnet",
-        model_name: str = "claude-3-5-sonnet-v2@20241022",
+        alias: str = "claude-sonnet-4-6",
+        model_name: str = "claude-sonnet-4-6",
         mode: str = "mock",
         project_id: str = "devbench-eval-sandbox",
         location: str = "us-east5",

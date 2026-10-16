@@ -25,24 +25,24 @@ def test_deterministic_candidate_and_critic_cache_files_and_replay(tmp_path: Pat
     critic_cache_dir = tmp_path / "cache" / "critics"
 
     # 1. Initial candidate call writes to artifacts/cache/{model_alias}/{cache_key}.json
-    client = get_model_client(alias="gemini-1.5-pro", mode="mock", cache_dir=cache_dir)
+    client = get_model_client(alias="gemini-3.1-pro", mode="mock", cache_dir=cache_dir)
     prompt = "Generate a modular skill for BigQuery synthesis."
     sys_inst = "Act as an ADK architect."
     resp1 = client.generate(prompt=prompt, system_instruction=sys_inst)
     assert client.call_count == 1
 
     expected_key = compute_candidate_cache_key(
-        model_alias="gemini-1.5-pro",
+        model_alias="gemini-3.1-pro",
         prompt=prompt,
         system_instruction=sys_inst,
         generation_params=client.last_generation_params,
     )
-    expected_file = cache_dir / "gemini-1.5-pro" / f"{expected_key}.json"
+    expected_file = cache_dir / "gemini-3.1-pro" / f"{expected_key}.json"
     assert expected_file.exists()
 
     # 2. Replay client reads strictly from cache without calling model inference (call_count == 0)
     replay_client = get_model_client(
-        alias="gemini-1.5-pro",
+        alias="gemini-3.1-pro",
         mode="mock",
         replay=True,
         cache_dir=cache_dir,
@@ -102,7 +102,7 @@ def test_structured_run_logging_sqlite_and_jsonl(tmp_path: Path) -> None:
     record = RunRecord(
         run_id="test-run-001",
         timestamp="2026-09-24T18:00:00Z",
-        model_alias="gemini-1.5-pro",
+        model_alias="gemini-3.1-pro",
         scenario_id="complex_skill_synthesis",
         execution_mode="mock",
         latency_ms=42.5,
@@ -128,7 +128,7 @@ def test_structured_run_logging_sqlite_and_jsonl(tmp_path: Path) -> None:
     assert logger.db_path.exists()
     with sqlite3.connect(logger.db_path) as conn:
         row = conn.execute("SELECT run_id, model_alias, scenario_id, exit_code FROM runs").fetchone()
-    assert row == ("test-run-001", "gemini-1.5-pro", "complex_skill_synthesis", 0)
+    assert row == ("test-run-001", "gemini-3.1-pro", "complex_skill_synthesis", 0)
 
     # Verify JSONL file
     assert logger.jsonl_path.exists()
