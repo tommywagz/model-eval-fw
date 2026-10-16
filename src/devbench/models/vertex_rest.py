@@ -111,8 +111,8 @@ def build_vertex_curl_command(
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
     elif pub == "anthropic":
-        # Anthropic Vertex endpoints are regional (e.g. us-east5 or europe-west1)
-        anthropic_loc = loc if loc and loc != "global" else "us-east5"
+        # Anthropic is served on the global endpoint and on regions such as us-east5
+        anthropic_loc = loc or "us-east5"
         anthropic_host = vertex_host(anthropic_loc)
         url = f"{anthropic_host}/v1/projects/{project_id}/locations/{anthropic_loc}/publishers/anthropic/models/{model_name}:rawPredict"
         body = {
@@ -158,7 +158,7 @@ def execute_vertex_rest_prompt(
     publisher: Optional[str] = None,
     access_token: Optional[str] = None,
     endpoint_resource_name: Optional[str] = None,
-    timeout: float = 60.0,
+    timeout: float = 300.0,
 ) -> ModelResponse:
     """Prompt a Vertex AI model directly via HTTP REST using Google Cloud OAuth credentials.
 
@@ -203,7 +203,7 @@ def execute_vertex_rest_prompt(
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
     elif pub == "anthropic":
-        anthropic_loc = loc if loc and loc != "global" else "us-east5"
+        anthropic_loc = loc or "us-east5"
         anthropic_host = vertex_host(anthropic_loc)
         url = f"{anthropic_host}/v1/projects/{project_id}/locations/{anthropic_loc}/publishers/anthropic/models/{model_name}:rawPredict"
         body = {
@@ -239,22 +239,31 @@ def execute_vertex_rest_prompt(
         method="POST",
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            resp_body = json.loads(resp.read().decode("utf-8") or "{}")
-    except urllib.error.HTTPError as exc:
-        raw_err = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+    # Retry rate limits and transient unavailability with backoff before surfacing the error.
+    max_attempts = 4
+    for attempt in range(1, max_attempts + 1):
         try:
-            err_json = json.loads(raw_err) if raw_err else {}
-        except json.JSONDecodeError:
-            err_json = {"error": {"message": raw_err or str(exc)}}
-        _raise_vertex_rest_error(
-            status_code=exc.code,
-            payload=err_json,
-            model_name=model_name,
-            project_id=project_id,
-            location=loc,
-        )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                resp_body = json.loads(resp.read().decode("utf-8") or "{}")
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in (429, 503) and attempt < max_attempts:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                delay = float(retry_after) if retry_after and retry_after.isdigit() else 2.0 ** attempt
+                time.sleep(min(delay, 30.0))
+                continue
+            raw_err = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            try:
+                err_json = json.loads(raw_err) if raw_err else {}
+            except json.JSONDecodeError:
+                err_json = {"error": {"message": raw_err or str(exc)}}
+            _raise_vertex_rest_error(
+                status_code=exc.code,
+                payload=err_json,
+                model_name=model_name,
+                project_id=project_id,
+                location=loc,
+            )
 
     latency_ms = (time.perf_counter() - start) * 1000.0
 
