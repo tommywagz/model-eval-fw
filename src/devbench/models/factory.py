@@ -50,7 +50,7 @@ def get_runtime_models() -> Dict[str, Dict[str, Any]]:
 DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
     "gemini-3.5-flash": {
         "provider": "vertex_genai",
-        "model_name": "gemini-3.5-flash-001",
+        "model_name": "gemini-3.5-flash",
         "project_id": "devbench-eval-sandbox",
         "location": "us-central1",
         "cost_per_1k_input_usd": 0.00010,

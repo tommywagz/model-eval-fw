@@ -15,7 +15,7 @@ models:
   # ============================================================================
   gemini-3.5-flash:
     provider: "vertex_genai"
-    model_name: "gemini-3.5-flash-001"
+    model_name: "gemini-3.5-flash"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -29,7 +29,7 @@ models:
 
   gemini-3.1-pro:
     provider: "vertex_genai"
-    model_name: "gemini-3.1-pro-001"
+    model_name: "gemini-3.1-pro-preview"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -43,7 +43,7 @@ models:
 
   gemini-3.8-flash:
     provider: "vertex_genai"
-    model_name: "gemini-3.8-flash-001"
+    model_name: "gemini-3.8-flash"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -55,9 +55,9 @@ models:
       top_p: 0.95
       seed: 42
 
-  claude-opus-5.1:
+  claude-opus-5.5:
     provider: "vertex_anthropic"
-    model_name: "claude-opus-5-1@20260601"
+    model_name: "claude-opus-5-5"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
@@ -69,7 +69,7 @@ models:
 
   claude-sonnet-5.5:
     provider: "vertex_anthropic"
-    model_name: "claude-sonnet-5-5@20260514"
+    model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
@@ -108,7 +108,7 @@ models:
 
   gemini-4-argon:
     provider: "vertex_genai"
-    model_name: "gemini-4-argon-001"
+    model_name: "gemini-4-argon"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -122,7 +122,7 @@ models:
 
   fable-5.1:
     provider: "vertex_endpoint"
-    model_name: "fable-ai/fable-5.1-frontier"
+    model_name: "claude-fable-5-1"
     endpoint_resource_name: "projects/devbench-eval-sandbox/locations/us-central1/endpoints/fable-5-1-ep"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
@@ -136,7 +136,7 @@ models:
 
   sonnet-5.5:
     provider: "vertex_anthropic"
-    model_name: "claude-sonnet-5-5@20260514"
+    model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
     location: "us-east5"
     role: "candidate"
@@ -151,7 +151,7 @@ models:
   # ============================================================================
   gemini-3.5-pro:
     provider: "vertex_genai"
-    model_name: "gemini-3.5-pro-002"
+    model_name: "gemini-3.5-pro"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -163,9 +163,9 @@ models:
       top_p: 0.95
       seed: 42
 
-  gemini-3-pro:
+  gemini-3.1-pro:
     provider: "vertex_genai"
-    model_name: "gemini-3-pro-001"
+    model_name: "gemini-3.1-pro-preview"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "candidate"
@@ -206,31 +206,7 @@ models:
       temperature: 0.0
       max_output_tokens: 8192
 
-  claude-sonnet-4-6:
-    provider: "vertex_anthropic"
-    model_name: "claude-sonnet-4-6"
-    project_id: "devbench-eval-sandbox"
-    location: "us-east5"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00300
-    cost_per_1k_output_usd: 0.01500
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 8192
-
   claude-sonnet-4.5:
-    provider: "vertex_anthropic"
-    model_name: "claude-sonnet-4-5"
-    project_id: "devbench-eval-sandbox"
-    location: "us-east5"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00300
-    cost_per_1k_output_usd: 0.01500
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 8192
-
-  claude-sonnet-4-5:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-4-5"
     project_id: "devbench-eval-sandbox"
@@ -254,17 +230,6 @@ models:
       temperature: 0.0
       max_output_tokens: 4096
 
-  claude-haiku-4-5:
-    provider: "vertex_anthropic"
-    model_name: "claude-haiku-4-5"
-    project_id: "devbench-eval-sandbox"
-    location: "us-east5"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00100
-    cost_per_1k_output_usd: 0.00500
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 4096
 
   # ============================================================================
   # GCP Model Garden Open Weight Partner Models (Cheap Serverless MaaS)
@@ -396,7 +361,7 @@ models:
 
   critic-frontier-gemini:
     provider: "vertex_genai"
-    model_name: "gemini-3.5-flash-001"
+    model_name: "gemini-3.5-flash"
     project_id: "devbench-eval-sandbox"
     location: "us-central1"
     role: "critic"

@@ -14,7 +14,7 @@ class VertexGenAIClient(BaseModelClient):
     def __init__(
         self,
         alias: str = "gemini-3.5-flash",
-        model_name: str = "gemini-3.5-flash-001",
+        model_name: str = "gemini-3.5-flash",
         mode: str = "mock",
         project_id: str = "devbench-eval-sandbox",
         location: str = "us-central1",
