@@ -220,6 +220,34 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Vertex AI endpoint location/region (e.g. us-central1, global, us-east5)",
     )
     run_parser.add_argument(
+        "--actor-project",
+        dest="actor_project_id",
+        type=str,
+        default=None,
+        help="GCP project ID specifically for candidate actor model",
+    )
+    run_parser.add_argument(
+        "--actor-location",
+        dest="actor_location",
+        type=str,
+        default=None,
+        help="Vertex AI location specifically for candidate actor model (e.g. global, us-central1)",
+    )
+    run_parser.add_argument(
+        "--critic-project",
+        dest="critic_project_id",
+        type=str,
+        default=None,
+        help="GCP project ID specifically for frontier critic models",
+    )
+    run_parser.add_argument(
+        "--critic-location",
+        dest="critic_location",
+        type=str,
+        default=None,
+        help="Vertex AI location specifically for frontier critic models (e.g. us-east5, global)",
+    )
+    run_parser.add_argument(
         "--use-vertex",
         dest="use_vertex",
         action="store_true",
@@ -579,6 +607,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         import os
         project_id = getattr(args, "project_id", None)
         location = getattr(args, "location", None)
+        actor_project_id = getattr(args, "actor_project_id", None) or project_id
+        actor_location = getattr(args, "actor_location", None) or location
+        critic_project_id = getattr(args, "critic_project_id", None)
+        critic_location = getattr(args, "critic_location", None)
+        if actor_project_id:
+            os.environ["ACTOR_PROJECT_ID"] = actor_project_id
+        if actor_location:
+            os.environ["ACTOR_LOCATION"] = actor_location
+        if critic_project_id:
+            os.environ["CRITIC_PROJECT_ID"] = critic_project_id
+        if critic_location:
+            os.environ["CRITIC_LOCATION"] = critic_location
+
         if project_id:
             os.environ["GOOGLE_CLOUD_PROJECT"] = project_id
             os.environ["VERTEX_PROJECT_ID"] = project_id
@@ -701,6 +742,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     no_critics=getattr(args, "no_critics", False),
                     project_id=project_id,
                     location=location,
+                    actor_project_id=actor_project_id,
+                    actor_location=actor_location,
+                    critic_project_id=critic_project_id,
+                    critic_location=critic_location,
                     use_vertex=use_vertex,
                     auth_mode=auth_mode_val,
                 )
@@ -722,6 +767,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     no_critics=getattr(args, "no_critics", False),
                     project_id=project_id,
                     location=location,
+                    actor_project_id=actor_project_id,
+                    actor_location=actor_location,
+                    critic_project_id=critic_project_id,
+                    critic_location=critic_location,
                     use_vertex=use_vertex,
                     auth_mode=auth_mode_val,
                 )
@@ -743,6 +792,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_critics=getattr(args, "no_critics", False),
                 project_id=project_id,
                 location=location,
+                actor_project_id=actor_project_id,
+                actor_location=actor_location,
+                critic_project_id=critic_project_id,
+                critic_location=critic_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode_val,
             )

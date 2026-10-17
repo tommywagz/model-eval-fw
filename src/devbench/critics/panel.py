@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -188,6 +189,10 @@ class ActorCriticPanel:
         kimi_k_critic: Optional[PlatformComplianceCritic] = None,
         project_id: Optional[str] = None,
         location: Optional[str] = None,
+        critic_project_id: Optional[str] = None,
+        critic_location: Optional[str] = None,
+        actor_project_id: Optional[str] = None,
+        actor_location: Optional[str] = None,
         use_vertex: Optional[bool] = None,
         auth_mode: Optional[str] = None,
     ) -> None:
@@ -197,8 +202,24 @@ class ActorCriticPanel:
         self.replay = replay
         self.critic_cache = critic_cache or CriticCache(no_cache=no_cache, replay=replay)
         self.candidate_model = candidate_model
-        self.project_id = project_id
-        self.location = location
+        self.actor_project_id = actor_project_id or project_id or os.environ.get("ACTOR_PROJECT_ID")
+        self.actor_location = actor_location or location or os.environ.get("ACTOR_LOCATION")
+
+        self.critic_project_id = (
+            critic_project_id
+            or os.environ.get("CRITIC_PROJECT_ID")
+            or project_id
+            or self.actor_project_id
+        )
+        # If an explicit critic_location is passed (e.g. 'global' or 'us-east5') or CRITIC_LOCATION env is set,
+        # use it. Otherwise, let each critic resolve its own configured model location.
+        self.critic_location = (
+            critic_location
+            or os.environ.get("CRITIC_LOCATION")
+            or (location if critic_location is not None else None)
+        )
+        self.project_id = self.critic_project_id
+        self.location = self.critic_location
         self.use_vertex = use_vertex
         self.auth_mode = auth_mode
 
@@ -219,8 +240,8 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
-            project_id=project_id,
-            location=location,
+            project_id=self.critic_project_id,
+            location=self.critic_location,
             use_vertex=use_vertex,
             auth_mode=auth_mode,
         )
@@ -232,8 +253,8 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
-            project_id=project_id,
-            location=location,
+            project_id=self.critic_project_id,
+            location=self.critic_location,
             use_vertex=use_vertex,
             auth_mode=auth_mode,
         )
@@ -245,8 +266,8 @@ class ActorCriticPanel:
             critic_cache=self.critic_cache,
             configs_dir=configs_dir,
             critic_alias=active_alias,
-            project_id=project_id,
-            location=location,
+            project_id=self.critic_project_id,
+            location=self.critic_location,
             use_vertex=use_vertex,
             auth_mode=auth_mode,
         )
