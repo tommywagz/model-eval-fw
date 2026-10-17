@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -374,6 +375,10 @@ def execute_scenario_run(
     candidate_usage: Optional[Dict[str, Any]] = None,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
+    actor_project_id: Optional[str] = None,
+    actor_location: Optional[str] = None,
+    critic_project_id: Optional[str] = None,
+    critic_location: Optional[str] = None,
     use_vertex: Optional[bool] = None,
     auth_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -383,6 +388,35 @@ def execute_scenario_run(
     latency and cost reported by the agent harness that produced the candidate.
     """
     load_project_dotenv(dotenv_path=dotenv_path)
+
+    effective_actor_project = (
+        actor_project_id
+        or project_id
+        or os.environ.get("ACTOR_PROJECT_ID")
+        or os.environ.get("CANDIDATE_PROJECT_ID")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("VERTEX_PROJECT_ID")
+    )
+    effective_actor_location = (
+        actor_location
+        or location
+        or os.environ.get("ACTOR_LOCATION")
+        or os.environ.get("CANDIDATE_LOCATION")
+        or os.environ.get("GOOGLE_CLOUD_LOCATION")
+        or os.environ.get("VERTEX_LOCATION")
+    )
+    effective_critic_project = (
+        critic_project_id
+        or os.environ.get("CRITIC_PROJECT_ID")
+        or project_id
+        or effective_actor_project
+    )
+    effective_critic_location = (
+        critic_location
+        or os.environ.get("CRITIC_LOCATION")
+        or (location if critic_location is not None else None)
+    )
+
     spec = get_scenario_spec(scenario_id)
     prompt = spec["prompt"]
     baseline_code = spec["baseline_code"]
@@ -413,8 +447,8 @@ def execute_scenario_run(
         replay=replay,
         cache_dir=cache_dir,
         dotenv_path=dotenv_path,
-        project_id=project_id,
-        location=location,
+        project_id=effective_actor_project,
+        location=effective_actor_location,
         use_vertex=use_vertex,
         auth_mode=auth_mode,
     )
@@ -549,8 +583,12 @@ def execute_scenario_run(
                 critic_cache=critic_cache,
                 candidate_model=model_alias,
                 critic_model=critic_model,
-                project_id=project_id,
-                location=location,
+                project_id=effective_critic_project,
+                location=effective_critic_location,
+                critic_project_id=effective_critic_project,
+                critic_location=effective_critic_location,
+                actor_project_id=effective_actor_project,
+                actor_location=effective_actor_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode,
             )
@@ -720,6 +758,10 @@ def execute_suite_run(
     no_critics: bool = False,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
+    actor_project_id: Optional[str] = None,
+    actor_location: Optional[str] = None,
+    critic_project_id: Optional[str] = None,
+    critic_location: Optional[str] = None,
     use_vertex: Optional[bool] = None,
     auth_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -759,6 +801,10 @@ def execute_suite_run(
                 no_critics=no_critics,
                 project_id=project_id,
                 location=location,
+                actor_project_id=actor_project_id,
+                actor_location=actor_location,
+                critic_project_id=critic_project_id,
+                critic_location=critic_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode,
             )
@@ -892,6 +938,10 @@ def execute_framework_run(
     no_critics: bool = False,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
+    actor_project_id: Optional[str] = None,
+    actor_location: Optional[str] = None,
+    critic_project_id: Optional[str] = None,
+    critic_location: Optional[str] = None,
     use_vertex: Optional[bool] = None,
     auth_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -928,6 +978,10 @@ def execute_framework_run(
                 no_critics=no_critics,
                 project_id=project_id,
                 location=location,
+                actor_project_id=actor_project_id,
+                actor_location=actor_location,
+                critic_project_id=critic_project_id,
+                critic_location=critic_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode,
             )

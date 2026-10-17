@@ -213,3 +213,81 @@ def test_scenario_execution_with_frontier_critics_and_no_critics_mode(tmp_path: 
     assert res_no_critics["token_usage"]["critic_cost_usd"] == 0.0
     assert res_no_critics["jev_evaluation"]["passed"] is True
     assert res_no_critics["rubric_score"] == 5
+
+
+def test_actor_and_critic_independent_locations_and_projects(tmp_path: Path, monkeypatch) -> None:
+    """Verify that actor and critic support different or identical locations (including 'global') and projects."""
+    from devbench.scenarios.runner import execute_scenario_run
+
+    critic_cache = CriticCache(base_dir=tmp_path / "cache")
+
+    # 1. Distinct locations: Actor in 'global', Critic in 'us-east5'
+    panel_diff = ActorCriticPanel(
+        mode="mock",
+        critic_cache=critic_cache,
+        candidate_model="gemini-3.5-flash",
+        actor_project_id="proj-actor-1",
+        actor_location="global",
+        critic_project_id="proj-critic-1",
+        critic_location="us-east5",
+    )
+    assert panel_diff.actor_project_id == "proj-actor-1"
+    assert panel_diff.actor_location == "global"
+    assert panel_diff.critic_project_id == "proj-critic-1"
+    assert panel_diff.critic_location == "us-east5"
+    for critic in panel_diff.critics:
+        assert critic.evaluator.client.project_id == "proj-critic-1"
+        assert critic.evaluator.client.location == "us-east5"
+
+    # 2. Both hosted at 'global': Actor in 'global' and Critic in 'global'
+    panel_global = ActorCriticPanel(
+        mode="mock",
+        critic_cache=critic_cache,
+        candidate_model="gemini-3.5-flash",
+        critic_model="gemini-3.8-flash",
+        actor_project_id="proj-global-actor",
+        actor_location="global",
+        critic_project_id="proj-global-critic",
+        critic_location="global",
+    )
+    assert panel_global.actor_location == "global"
+    assert panel_global.critic_location == "global"
+    for critic in panel_global.critics:
+        assert critic.evaluator.client.project_id == "proj-global-critic"
+        assert critic.evaluator.client.location == "global"
+
+    # 3. Environment variables: ACTOR_LOCATION and CRITIC_LOCATION
+    monkeypatch.setenv("ACTOR_PROJECT_ID", "env-actor-proj")
+    monkeypatch.setenv("ACTOR_LOCATION", "global")
+    monkeypatch.setenv("CRITIC_PROJECT_ID", "env-critic-proj")
+    monkeypatch.setenv("CRITIC_LOCATION", "us-east5")
+
+    panel_env = ActorCriticPanel(
+        mode="mock",
+        critic_cache=critic_cache,
+        candidate_model="gemini-3.5-flash",
+    )
+    assert panel_env.actor_project_id == "env-actor-proj"
+    assert panel_env.actor_location == "global"
+    assert panel_env.critic_project_id == "env-critic-proj"
+    assert panel_env.critic_location == "us-east5"
+    for critic in panel_env.critics:
+        assert critic.evaluator.client.project_id == "env-critic-proj"
+        assert critic.evaluator.client.location == "us-east5"
+
+    # 4. execute_scenario_run with explicit actor and critic projects and locations
+    res = execute_scenario_run(
+        scenario_id="storage_operations",
+        model_alias="gemini-3.5-flash",
+        mode="mock",
+        actor_project_id="actor-test-proj",
+        actor_location="global",
+        critic_project_id="critic-test-proj",
+        critic_location="us-east5",
+        cache_dir=tmp_path / "cache_run",
+        critic_cache_dir=tmp_path / "ccache_run",
+        telemetry_dir=tmp_path / "telemetry_run",
+    )
+    assert res["passed"] is True
+    assert res["token_usage"]["candidate"]["total_tokens"] > 0
+    assert res["token_usage"]["critics"]["total_tokens"] > 0
