@@ -13,7 +13,11 @@
 - [1. User Guide & Getting Started](#1-user-guide--getting-started)
   - [1. Environment Setup](#1-environment-setup)
   - [2. Generate Evaluation Datasets & Orchestrator Backlog](#2-generate-evaluation-datasets--orchestrator-backlog)
+  - [2. Generate Evaluation Datasets & Orchestrator Backlog](#2-generate-evaluation-datasets--orchestrator-backlog)
   - [3. Execute Model Evaluation](#3-execute-model-evaluation)
+  - [4. Package & Run Suites in Harbor Podman Sandboxes (Job = Scenario, Task = Individual Test)](#4-package--run-suites-in-harbor-podman-sandboxes-job--scenario-task--individual-test)
+  - [5. Inspect Evaluation Metrics & Logs](#5-inspect-evaluation-metrics--logs)
+  - [6. Launch & Use the Web Evaluation Studio (Frontend for Non-Technical Users)](#6-launch--use-the-web-evaluation-studio-frontend-for-non-technical-users)
   - [4. Package & Run Suites in Harbor Podman Sandboxes (Job = Scenario, Task = Individual Test)](#4-package--run-suites-in-harbor-podman-sandboxes-job--scenario-task--individual-test)
   - [5. Inspect Evaluation Metrics & Logs](#5-inspect-evaluation-metrics--logs)
   - [6. Launch & Use the Web Evaluation Studio (Frontend for Non-Technical Users)](#6-launch--use-the-web-evaluation-studio-frontend-for-non-technical-users)
@@ -43,6 +47,7 @@
 ## 1. User Guide & Getting Started
 
 ### 1. Environment Setup
+Configure active GCP credentials, local dependencies, and optional Harbor/Podman sandbox tooling:
 Configure active GCP credentials, local dependencies, and optional Harbor/Podman sandbox tooling:
 ```bash
 # Clone the repository and install dependencies
@@ -192,6 +197,7 @@ harbor run --config harbor/jobs/oauth_api_enablement/job.yaml -e podman
 ```
 
 ### 5. Inspect Evaluation Metrics & Logs
+### 5. Inspect Evaluation Metrics & Logs
 Review benchmark runs, confusion matrices, and rubric scores in the terminal UI:
 ```bash
 # Inspect the most recent evaluation run
@@ -204,6 +210,7 @@ devbench inspect --latest --manual-eval
 devbench tokens
 ```
 
+### 6. Launch & Use the Web Evaluation Studio (Frontend for Non-Technical Users)
 ### 6. Launch & Use the Web Evaluation Studio (Frontend for Non-Technical Users)
 
 DevBench includes a standalone, zero-dependency, Google Cloud Console / Vertex AI Studio–styled browser **Evaluation Studio** (`Powered by: Harbor & Jev`) tailored for non-technical users, product managers, and evaluation engineers who want to configure their GCP project, pick Frontier Models and Agent Harnesses, build custom multi-test suites, and run evaluations inside Harbor sandboxes.
@@ -330,12 +337,15 @@ flowchart TD
     subgraph CGP["1. Collaborative Generation Pipeline"]
         direction LR
         Opus["<b>Opus 5.5 Engine</b><br/>Individual Test & Fixture Generation"]
+        Opus["<b>Opus 5.5 Engine</b><br/>Individual Test & Fixture Generation"]
         Argon["<b>Argon Engine</b><br/>Pos/Neg Scenario Verification"]
+        Barium["<b>Barium Engine</b><br/>Jev & Harbor Manifest Integration"]
         Barium["<b>Barium Engine</b><br/>Jev & Harbor Manifest Integration"]
         
         Opus --> Argon --> Barium
     end
 
+    subgraph EEE["2. Harbor Packaging & Podman Execution Engine"]
     subgraph EEE["2. Harbor Packaging & Podman Execution Engine"]
         direction TB
         HarborMCP["<b>Harbor MCP & Packager (devbench.harbor)</b><br/>Harbor Job = Test Scenario (job.yaml)<br/>Harbor Task = Individual Test (task.toml, Dockerfile, solve.sh, test.sh)"]
@@ -343,18 +353,24 @@ flowchart TD
         Sandbox["<b>Podman Sandbox & GCP Execution Harness</b><br/>Podman Containers (-e podman), Hermetic Mocks (--mode mock) & Live GCP APIs (--mode live)"]
         
         subgraph JevCritic["3. Jev Evaluation Critic Suite & Telemetry"]
+        subgraph JevCritic["3. Jev Evaluation Critic Suite & Telemetry"]
             direction LR
             JN["<b>Jev-Noul</b><br/>State & Blackbox Verification"]
             JC["<b>Jev-Classification</b><br/>Confusion Matrix & Dispatch"]
             JCV["<b>Jev-Confidence Vector</b><br/>Compliance & Parameter Grounding"]
+            Telemetry["<b>Timers & Token Bridge</b><br/>ExecutionTimer & TokensScriptBridge"]
             Telemetry["<b>Timers & Token Bridge</b><br/>ExecutionTimer & TokensScriptBridge"]
         end
         
         HarborMCP -->|"Dispatches Scenario Job & Individual Test Tasks"| MIQ
         MIQ -->|"Generates Code & Stages Artifacts in /app/workspace"| Sandbox
         Sandbox -->|"Verifier Rewards (reward.json), Reports & State Snapshots"| JevCritic
+        HarborMCP -->|"Dispatches Scenario Job & Individual Test Tasks"| MIQ
+        MIQ -->|"Generates Code & Stages Artifacts in /app/workspace"| Sandbox
+        Sandbox -->|"Verifier Rewards (reward.json), Reports & State Snapshots"| JevCritic
     end
 
+    CGP -->|"Verified Test Suites, Fixtures & Coverage Matrices"| HarborMCP
     CGP -->|"Verified Test Suites, Fixtures & Coverage Matrices"| HarborMCP
 ```
 
@@ -722,6 +738,7 @@ These regression tests act as essential execution guardrails to ensure that cand
 | [`test_timers_and_token_cost.py`](file:///Users/wagnerthomas/Documents/model-eval-fw/tests/test_timers_and_token_cost.py) | **Hierarchical Timers & Token Costs** | Enforces hierarchical execution timing (test $\rightarrow$ suite $\rightarrow$ framework), verifies project [`.env`](file:///Users/wagnerthomas/Documents/model-eval-fw/.env) credential resolution, and bridges live token credit and usage metrics via `@.agents/scripts/tokens`. |
 | [`test_harbor_integration.py`](file:///Users/wagnerthomas/Documents/model-eval-fw/tests/test_harbor_integration.py) | **Harbor Podman Job & Task Packaging** | Verifies packaging of Test Scenarios as **Harbor Jobs** (`job.yaml`, `dataset.toml`) and Individual Tests as **Harbor Tasks** (`task.toml`, `instruction.md`, `environment/Dockerfile`, `solution/solve.sh`, `tests/test.sh`) targeting Podman sandboxes (`environment.type = "podman"`), plus Harbor MCP (`https://docs.harborframework.com/mcp`) configuration. |
 | [`test_web_frontend.py`](file:///Users/wagnerthomas/Documents/model-eval-fw/tests/test_web_frontend.py) | **Web Evaluation Studio & Repo Inserter** | Exercises the browser-based Evaluation Studio API, Argon dynamic scenario synthesis (`ArgonScenarioCreator`), and automated Git deliverable insertion (`RepoInserter`). |
+| [`test_web_frontend.py`](file:///Users/wagnerthomas/Documents/model-eval-fw/tests/test_web_frontend.py) | **Web Evaluation Studio & Repo Inserter** | Exercises the browser-based Evaluation Studio API, Argon dynamic scenario synthesis (`ArgonScenarioCreator`), and automated Git deliverable insertion (`RepoInserter`). |
 
 ### Running Framework Regression Tests
 
@@ -770,6 +787,8 @@ devbench/
 │   ├── suites/                        # Standardized blackbox evaluation suites
 │   │   ├── cloud_tool_writing/        # Implemented suites: oauth_api_enablement, storage_operations,
 │   │   │                              # easy_deployment, model_training (+ agent_swarm)
+│   │   ├── cloud_tool_writing/        # Implemented suites: oauth_api_enablement, storage_operations,
+│   │   │                              # easy_deployment, model_training (+ agent_swarm)
 │   │   ├── code_translation/          # Backend, Frontend, Monolith, Stream Processors
 │   │   └── skill_creation/            # Scaffolding, Dispatching, Execution, Synthesis
 │   ├── conftest.py                    # Pytest hierarchical timing & reporting plugin
@@ -803,13 +822,25 @@ devbench/
 │   ├── orchestrator/                  # SCENARIOS.MD parser (`parser.py`) & symlink backlog dispatcher (`backlog.py`)
 │   ├── scenarios/                     # Scenario, suite, & framework runners (`runner.py`)
 │   ├── telemetry/                     # Token usage (`tokens.py`), timers (`timer.py`), cache (`cache.py`), & SQLite logger (`logger.py`)
+│   ├── orchestrator/                  # SCENARIOS.MD parser (`parser.py`) & symlink backlog dispatcher (`backlog.py`)
+│   ├── scenarios/                     # Scenario, suite, & framework runners (`runner.py`)
+│   ├── telemetry/                     # Token usage (`tokens.py`), timers (`timer.py`), cache (`cache.py`), & SQLite logger (`logger.py`)
 │   └── ui/                            # Rich terminal inspector & Web Studio frontend:
 │       ├── inspector.py               # Terminal inspector & manual calibration UI
+│       └── web/                       # Web Studio SPA (`server.py`), Argon creator (`argon_creator.py`), & `repo_inserter.py`
 │       └── web/                       # Web Studio SPA (`server.py`), Argon creator (`argon_creator.py`), & `repo_inserter.py`
 ├── artifacts/
 │   ├── cache/                         # Deterministic Model Under Test (MIQ) & critic response caches
 │   └── telemetry/                     # Trace logs, timing summaries, `runs.jsonl`, & SQLite `runs.db`
+│   ├── cache/                         # Deterministic Model Under Test (MIQ) & critic response caches
+│   └── telemetry/                     # Trace logs, timing summaries, `runs.jsonl`, & SQLite `runs.db`
 └── jobs/
+    ├── BACKLOG.md                     # Human/agent-readable scenario backlog
+    ├── backlog.json                   # Machine-readable pipeline backlog queue
+    ├── manifests/                     # Canonical scenario job definitions (13 scenarios)
+    ├── pending/                       # Unscheduled scenario symlinks
+    ├── active/                        # Currently active creator/tester scenario symlinks
+    └── completed/                     # Successfully verified scenario symlinks
     ├── BACKLOG.md                     # Human/agent-readable scenario backlog
     ├── backlog.json                   # Machine-readable pipeline backlog queue
     ├── manifests/                     # Canonical scenario job definitions (13 scenarios)
