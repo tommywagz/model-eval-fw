@@ -438,6 +438,8 @@ def get_model_client(
     env_project = (
         project_id
         or overrides.get("project_id")
+        or (os.environ.get("CRITIC_PROJECT_ID") if cfg.get("provider") == "vertex_anthropic" or cfg.get("role") == "critic" else None)
+        or (os.environ.get("ACTOR_PROJECT_ID") or os.environ.get("CANDIDATE_PROJECT_ID") if cfg.get("role") == "candidate" else None)
         or os.environ.get("GOOGLE_CLOUD_PROJECT")
         or os.environ.get("VERTEX_PROJECT_ID")
         or os.environ.get("GCP_PROJECT")
@@ -447,16 +449,33 @@ def get_model_client(
     if env_project and "project_id" not in overrides and not (is_runtime and cfg.get("project_id") and not project_id):
         cfg["project_id"] = env_project
 
-    env_location = (
-        location
-        or overrides.get("location")
-        or os.environ.get("VERTEX_LOCATION")
-        or os.environ.get("GOOGLE_CLOUD_LOCATION")
-        or os.environ.get("GCP_LOCATION")
-        or os.environ.get("CLOUD_ML_REGION")
-    )
-    if env_location and "location" not in overrides and not (is_runtime and cfg.get("location") and not location):
-        cfg["location"] = env_location
+    role_location = None
+    if cfg.get("provider") == "vertex_anthropic" or cfg.get("role") == "critic":
+        role_location = os.environ.get("CRITIC_LOCATION") or os.environ.get("VERTEX_LOCATION_ANTHROPIC")
+    elif cfg.get("role") == "candidate":
+        role_location = os.environ.get("ACTOR_LOCATION") or os.environ.get("CANDIDATE_LOCATION")
+
+    if is_runtime and cfg.get("location") and not location:
+        # Runtime-registered models preserve their explicitly registered location unless location is passed directly
+        pass
+    elif location is not None or "location" in overrides or role_location is not None:
+        cfg["location"] = location if location is not None else (overrides.get("location") or role_location)
+    else:
+        generic_env_loc = (
+            os.environ.get("VERTEX_LOCATION")
+            or os.environ.get("GOOGLE_CLOUD_LOCATION")
+            or os.environ.get("GCP_LOCATION")
+            or os.environ.get("CLOUD_ML_REGION")
+        )
+        if generic_env_loc:
+            # If the model specifies a dedicated partner region in registry (e.g. us-east5 for Anthropic,
+            # europe-west4 for Mistral), preserve it unless generic location is explicitly matched or targeted.
+            is_dedicated_partner = (
+                (cfg.get("provider") == "vertex_anthropic" and cfg.get("location") in ("us-east5", "europe-west1"))
+                or ("mistral" in str(alias).lower() and cfg.get("location") in ("europe-west4", "europe-west1"))
+            )
+            if not is_dedicated_partner:
+                cfg["location"] = generic_env_loc
 
     if use_vertex is not None:
         cfg["use_vertex"] = use_vertex

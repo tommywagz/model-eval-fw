@@ -158,6 +158,10 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
         "warnings": warnings,
         "gcp_project_id": gcp_snapshot.get("project_id"),
         "gcp_location": gcp_snapshot.get("location"),
+        "actor_project_id": payload.get("actor_project_id") or gcp_snapshot.get("project_id"),
+        "actor_location": payload.get("actor_location") or gcp_snapshot.get("location"),
+        "critic_project_id": payload.get("critic_project_id") or os.environ.get("CRITIC_PROJECT_ID"),
+        "critic_location": payload.get("critic_location") or os.environ.get("CRITIC_LOCATION"),
         "internal_google_permissions": get_internal_google_default_permissions(
             project_id=gcp_snapshot.get("project_id"),
             location=gcp_snapshot.get("location"),
@@ -384,8 +388,11 @@ def run_evaluation(
                         candidate_usage=candidate_usage,
                         project_id=str(req["gcp_project_id"]),
                         location=str(req["gcp_location"]),
-                        use_vertex=(req.get("auth_mode") != "api_key"),
-                        auth_mode=str(req.get("auth_mode") or "auto"),
+                        actor_project_id=req.get("actor_project_id"),
+                        actor_location=req.get("actor_location"),
+                        critic_project_id=req.get("critic_project_id"),
+                        critic_location=req.get("critic_location"),
+                        use_vertex=True,
                     )
             except Exception as ex:  # noqa: BLE001 - one failing test must not abort the suite
                 error = f"{type(ex).__name__}: {ex}"

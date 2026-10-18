@@ -191,6 +191,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Vertex AI endpoint location/region (e.g. us-central1, global, us-east5)",
     )
     parser.add_argument(
+        "--actor-project",
+        dest="actor_project_id",
+        type=str,
+        default=None,
+        help="Google Cloud project ID specifically for candidate actor model",
+    )
+    parser.add_argument(
+        "--actor-location",
+        dest="actor_location",
+        type=str,
+        default=None,
+        help="Vertex AI location specifically for candidate actor model (e.g. global, us-central1)",
+    )
+    parser.add_argument(
+        "--critic-project",
+        dest="critic_project_id",
+        type=str,
+        default=None,
+        help="Google Cloud project ID specifically for frontier critic models",
+    )
+    parser.add_argument(
+        "--critic-location",
+        dest="critic_location",
+        type=str,
+        default=None,
+        help="Vertex AI location specifically for frontier critic models (e.g. us-east5, global)",
+    )
+    parser.add_argument(
         "--use-vertex",
         dest="use_vertex",
         action="store_true",
@@ -431,6 +459,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_critics=args.no_critics,
                 project_id=args.project_id,
                 location=args.location,
+                actor_project_id=args.actor_project_id,
+                actor_location=args.actor_location,
+                critic_project_id=args.critic_project_id,
+                critic_location=args.critic_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode,
             )
@@ -453,6 +485,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_critics=args.no_critics,
                 project_id=args.project_id,
                 location=args.location,
+                actor_project_id=args.actor_project_id,
+                actor_location=args.actor_location,
+                critic_project_id=args.critic_project_id,
+                critic_location=args.critic_location,
                 use_vertex=use_vertex,
                 auth_mode=auth_mode,
             )
@@ -475,6 +511,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             no_critics=args.no_critics,
             project_id=args.project_id,
             location=args.location,
+            actor_project_id=args.actor_project_id,
+            actor_location=args.actor_location,
+            critic_project_id=args.critic_project_id,
+            critic_location=args.critic_location,
             use_vertex=use_vertex,
             auth_mode=auth_mode,
         )
