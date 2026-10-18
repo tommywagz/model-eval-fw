@@ -907,6 +907,23 @@ class devbenchRequestHandler(BaseHTTPRequestHandler):
             self._send_json(cfg)
             return
 
+        if path == "/api/auth/status":
+            import os
+            self._send_json(
+                {
+                    "mode": getattr(self.server, "assessment_mode", "gcp"),
+                    "gcp_project": os.environ.get("GOOGLE_CLOUD_PROJECT", "gemini-api-505408"),
+                    "gcp_location": os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+                    "keys_configured": {
+                        "gemini": bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")),
+                        "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                        "openai": bool(os.environ.get("OPENAI_API_KEY")),
+                    },
+                    "adc_authenticated": True,
+                }
+            )
+            return
+
         if path == "/api/models":
             snapshot = get_gcp_config_Snapshot()
             self._send_json(
@@ -1048,6 +1065,41 @@ class devbenchRequestHandler(BaseHTTPRequestHandler):
             payload = json.loads(body) if body else {}
         except json.JSONDecodeError:
             self._send_error("Invalid JSON payload", status=400)
+            return
+
+        if path == "/api/auth/mode":
+            mode = str(payload.get("mode") or "gcp").lower().strip()
+            if mode not in ("gcp", "curl", "api"):
+                self._send_error("Invalid mode. Expected 'gcp', 'curl', or 'api'.", status=400)
+                return
+            setattr(self.server, "assessment_mode", mode)
+            self._send_json({"success": True, "mode": mode})
+            return
+
+        if path == "/api/auth/keys":
+            import os
+            key_map = {
+                "gemini_api_key": "GEMINI_API_KEY",
+                "anthropic_api_key": "ANTHROPIC_API_KEY",
+                "openai_api_key": "OPENAI_API_KEY",
+            }
+            for param, env_var in key_map.items():
+                if param in payload:
+                    val = str(payload[param] or "").strip()
+                    if val:
+                        os.environ[env_var] = val
+                    elif env_var in os.environ:
+                        del os.environ[env_var]
+            self._send_json(
+                {
+                    "success": True,
+                    "keys_configured": {
+                        "gemini": bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")),
+                        "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                        "openai": bool(os.environ.get("OPENAI_API_KEY")),
+                    },
+                }
+            )
             return
 
         if path == "/api/gcp/link":

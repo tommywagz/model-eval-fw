@@ -8,6 +8,11 @@
 const state = {
   gcpProject: "",
   gcpLocation: "us-central1",
+  assessmentMode: "gcp", // "gcp" | "curl" | "api"
+  miqPage: 1,
+  miqPageSize: 12,
+  miqCollapsed: false,
+  apiKeysConfigured: {},
   linkStatus: {},
   allModels: [],
   defaultModels: [],
@@ -21,13 +26,29 @@ const state = {
   internalGooglePermissions: null,
   allScenarios: [],
   customSuiteItems: [],
-  activeScenarioId: "complex_skill_synthesis",
+  activeScenarioId: "storage_operations",
   activeSuiteSpec: null,
   activeRunData: null,
   isEvaluating: false,
   pollTimer: null,
   localTimer: null,
   localStartTime: null,
+};
+
+const ICONS = {
+  spinner: '<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-linecap="round" fill="none"/></svg>',
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/></svg>',
+  play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>',
+  sparkle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M12 2L13.8 8.2L20 10L13.8 11.8L12 18L10.2 11.8L4 10L10.2 8.2L12 2Z" fill="currentColor"/></svg>',
+  package: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M21 16.5C21 16.88 20.79 17.21 20.47 17.38L12.57 21.82C12.41 21.91 12.21 21.96 12.01 21.96C11.81 21.96 11.61 21.91 11.45 21.82L3.55 17.38C3.21 17.21 3 16.88 3 16.5V7.5C3 7.12 3.21 6.79 3.55 6.62L11.45 2.18C11.79 2 12.21 2 12.55 2.18L20.45 6.62C20.79 6.79 21 7.12 21 7.5V16.5ZM12 4.15L5.04 8.05L12 11.96L18.96 8.05L12 4.15ZM5 9.91V15.59L11 18.96V13.27L5 9.91ZM13 18.96L19 15.59V9.91L13 13.27V18.96Z" fill="currentColor"/></svg>',
+  commit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M16.9 11C16.43 8.72 14.42 7 12 7C9.58 7 7.57 8.72 7.1 11H2V13H7.1C7.57 15.28 9.58 17 12 17C14.42 17 16.43 15.28 16.9 13H22V11H16.9ZM12 15C10.34 15 9 13.66 9 12C9 10.34 10.34 9 12 9C13.66 9 15 10.34 15 12C15 13.66 13.66 15 12 15Z" fill="currentColor"/></svg>',
+  refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>',
+  visibility: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/></svg>',
+  visibilityOff: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" fill="currentColor"/></svg>',
+  warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" fill="#f9ab00"/></svg>',
+  cloud: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04Z" fill="#1a73e8"/></svg>',
+  brain: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#1a73e8"/></svg>',
+  codeTransform: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="#1e8e3e"/></svg>'
 };
 
 function escapeHtml(value) {
@@ -199,6 +220,7 @@ async function initStudio() {
     fetchHarnesses(),
     fetchScenarios(),
     fetchTokenTelemetry(),
+    loadAuthStatus(),
   ]);
 }
 
@@ -341,7 +363,7 @@ function updateHarnessWarning() {
     );
   }
   box.style.display = messages.length ? "block" : "none";
-  box.innerHTML = messages.map((m) => `<div>⚠ ${m}</div>`).join("");
+  box.innerHTML = messages.map((m) => `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">${ICONS.warning} <span>${m}</span></div>`).join("");
 }
 
 async function registerCustomHarness() {
@@ -443,6 +465,14 @@ function updateGcpHeaderUI() {
   }
   if (dropdownProjLabel) dropdownProjLabel.textContent = `${state.gcpProject} • ${state.gcpLocation}`;
 
+  const sidebarProj = document.getElementById("sidebar-gcp-project");
+  const sidebarLoc = document.getElementById("sidebar-gcp-location");
+  if (sidebarProj) sidebarProj.value = state.gcpProject;
+  if (sidebarLoc) sidebarLoc.value = state.gcpLocation;
+  const curlQuotaHeader = document.getElementById("curl-quota-project-header");
+  if (curlQuotaHeader) curlQuotaHeader.textContent = `-H "x-goog-user-project: ${state.gcpProject || 'gemini-api-505408'}"`;
+  updateCurlPreview();
+
   const totalEnabled = state.allModels.filter((m) => m.enabled).length;
   if (enabledCountBadge) {
     enabledCountBadge.textContent = `${totalEnabled} of ${state.allModels.length} Models Enabled`;
@@ -462,6 +492,156 @@ function updateGcpHeaderUI() {
       html += `<ul>${errors.slice(0, 6).map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`;
     }
     statusBox.innerHTML = html;
+  }
+}
+
+function selectAssessmentMode(mode) {
+  state.assessmentMode = mode;
+
+  // Update mode selector cards
+  document.querySelectorAll(".mode-select-card").forEach((card) => {
+    const isTarget = card.getAttribute("data-mode") === mode;
+    card.classList.toggle("active", isTarget);
+    card.setAttribute("aria-checked", isTarget ? "true" : "false");
+  });
+
+  // Toggle dynamic authorization panels in sidebar
+  const gcpPanel = document.getElementById("auth-panel-gcp");
+  const curlPanel = document.getElementById("auth-panel-curl");
+  const apiPanel = document.getElementById("auth-panel-api");
+  if (gcpPanel) gcpPanel.style.display = mode === "gcp" ? "flex" : "none";
+  if (curlPanel) curlPanel.style.display = mode === "curl" ? "flex" : "none";
+  if (apiPanel) apiPanel.style.display = mode === "api" ? "flex" : "none";
+
+  // Synchronize execution mode radio in Step 3
+  if (mode === "curl") {
+    const mockRadio = document.querySelector('input[name="exec-mode"][value="mock"]');
+    if (mockRadio) mockRadio.checked = true;
+  } else if (mode === "gcp") {
+    const liveRadio = document.querySelector('input[name="exec-mode"][value="live"]');
+    if (liveRadio) liveRadio.checked = true;
+  }
+
+  // Update curl sample preview endpoint
+  updateCurlPreview();
+
+  // Notify server of mode selection
+  fetch("/api/auth/mode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  }).catch(() => {});
+}
+
+function updateCurlPreview() {
+  const preview = document.getElementById("curl-endpoint-preview");
+  if (preview) {
+    const model = state.selectedModelId || "gemini-3.5-flash";
+    const proj = state.gcpProject || "gemini-api-505408";
+    const loc = state.gcpLocation || "global";
+    preview.textContent = `https://aiplatform.googleapis.com/v1/projects/${proj}/locations/${loc}/publishers/google/models/${model}:generateContent`;
+  }
+}
+
+function copySampleCurlCommand(btn) {
+  const model = state.selectedModelId || "gemini-3.5-flash";
+  const proj = state.gcpProject || "gemini-api-505408";
+  const loc = state.gcpLocation || "global";
+  const cmd = `curl -X POST "https://aiplatform.googleapis.com/v1/projects/${proj}/locations/${loc}/publishers/google/models/${model}:generateContent" \\
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\
+  -H "x-goog-user-project: ${proj}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"contents": [{"role": "user", "parts": [{"text": "Hello devbench"}]}]}'`;
+
+  navigator.clipboard.writeText(cmd).then(() => {
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.check} <span>Copied cURL Command!</span></span>`;
+      setTimeout(() => { btn.innerHTML = orig; }, 2000);
+    }
+  });
+}
+
+function toggleKeyMask(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === "password") {
+    input.type = "text";
+    btn.innerHTML = ICONS.visibilityOff;
+  } else {
+    input.type = "password";
+    btn.innerHTML = ICONS.visibility;
+  }
+}
+
+async function saveDirectApiKeys() {
+  const gemini = (document.getElementById("key-input-gemini")?.value || "").trim();
+  const anthropic = (document.getElementById("key-input-anthropic")?.value || "").trim();
+  const openai = (document.getElementById("key-input-openai")?.value || "").trim();
+  const fb = document.getElementById("api-keys-feedback");
+  const btn = document.getElementById("save-api-keys-btn");
+
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/auth/keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gemini_api_key: gemini,
+        anthropic_api_key: anthropic,
+        openai_api_key: openai,
+      }),
+    });
+    const data = await readJsonResponse(res);
+    updateKeyTags(data.keys_configured);
+    if (fb) {
+      fb.style.display = "block";
+      fb.style.color = "var(--google-green)";
+      fb.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.check} <span>Direct API Keys updated successfully.</span></span>`;
+      setTimeout(() => { fb.style.display = "none"; }, 3500);
+    }
+  } catch (err) {
+    if (fb) {
+      fb.style.display = "block";
+      fb.style.color = "var(--google-red)";
+      fb.textContent = `Error saving keys: ${err.message}`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function updateKeyTags(keys = {}) {
+  state.apiKeysConfigured = keys;
+  const tagGemini = document.getElementById("tag-key-gemini");
+  const tagAnthropic = document.getElementById("tag-key-anthropic");
+  const tagOpenai = document.getElementById("tag-key-openai");
+  if (tagGemini) {
+    tagGemini.textContent = keys.gemini ? "Configured ✓" : "Not set";
+    tagGemini.className = `key-status-tag ${keys.gemini ? "configured" : ""}`;
+  }
+  if (tagAnthropic) {
+    tagAnthropic.textContent = keys.anthropic ? "Configured ✓" : "Not set";
+    tagAnthropic.className = `key-status-tag ${keys.anthropic ? "configured" : ""}`;
+  }
+  if (tagOpenai) {
+    tagOpenai.textContent = keys.openai ? "Configured ✓" : "Not set";
+    tagOpenai.className = `key-status-tag ${keys.openai ? "configured" : ""}`;
+  }
+}
+
+async function loadAuthStatus() {
+  try {
+    const res = await fetch("/api/auth/status");
+    const data = await readJsonResponse(res);
+    if (data.mode) {
+      selectAssessmentMode(data.mode);
+    }
+    if (data.keys_configured) {
+      updateKeyTags(data.keys_configured);
+    }
+  } catch (err) {
+    // Non-critical background fetch
   }
 }
 
@@ -486,6 +666,49 @@ function enablementChip(m) {
   return `<span class="tag-chip install-chip ${cls}" title="${escapeHtml(m.status_detail || "")}">${label}</span>`;
 }
 
+function changeMiqPage(newPage) {
+  state.miqPage = newPage;
+  renderGcpMiqToggles(state.allModels);
+}
+
+function changeMiqPageSize(newSize) {
+  state.miqPageSize = parseInt(newSize, 10) || 12;
+  state.miqPage = 1;
+  renderGcpMiqToggles(state.allModels);
+}
+
+function toggleMiqSectionCollapse() {
+  state.miqCollapsed = !state.miqCollapsed;
+  const body = document.getElementById("miq-collapsible-body");
+  const summary = document.getElementById("miq-collapsed-summary");
+  const icon = document.getElementById("miq-collapse-icon");
+  const text = document.getElementById("miq-collapse-text");
+  const summaryText = document.getElementById("miq-collapsed-text");
+
+  if (body) {
+    if (state.miqCollapsed) {
+      body.classList.add("collapsed");
+    } else {
+      body.classList.remove("collapsed");
+    }
+  }
+  if (summary) {
+    summary.style.display = state.miqCollapsed ? "flex" : "none";
+  }
+  if (icon) {
+    icon.innerHTML = state.miqCollapsed
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12L8.59 7.41L10 6L16 12L10 18L8.59 16.59Z"/></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17L16.59 8.59L18 10L12 16L6 10L7.41 8.59Z"/></svg>`;
+  }
+  if (text) {
+    text.textContent = state.miqCollapsed ? "Expand Models" : "Collapse Models";
+  }
+  if (summaryText) {
+    const totalEnabled = state.allModels.filter((m) => m.enabled).length;
+    summaryText.textContent = `${state.allModels.length} Models Discovered (${totalEnabled} Enabled in Project) — Section collapsed to proceed quickly to Step 1 & 2. Click to expand.`;
+  }
+}
+
 function renderGcpMiqToggles(models) {
   const container = document.getElementById("gcp-miq-toggles-container");
   if (!container) return;
@@ -494,35 +717,153 @@ function renderGcpMiqToggles(models) {
 
   if (models.length === 0) {
     container.innerHTML = `<div class="loading-placeholder">No models discovered yet.</div>`;
+    const pageInfoTop = document.getElementById("miq-page-info");
+    const pageInfoBottom = document.getElementById("miq-page-info-bottom");
+    if (pageInfoTop) pageInfoTop.textContent = "0 Models available";
+    if (pageInfoBottom) pageInfoBottom.textContent = "0 Models";
     return;
   }
 
-  models.forEach((m) => {
+  // Pagination Math (Supports 9 or 12 models per page)
+  const pageSize = state.miqPageSize || 12;
+  const totalModels = models.length;
+  const totalPages = Math.max(1, Math.ceil(totalModels / pageSize));
+  if (state.miqPage > totalPages) state.miqPage = totalPages;
+  if (state.miqPage < 1) state.miqPage = 1;
+  const curPage = state.miqPage;
+
+  const startIdx = (curPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, totalModels);
+  const pagedModels = models.slice(startIdx, endIdx);
+
+  // Sync Page Size Selector
+  const sizeSelect = document.getElementById("miq-page-size-select");
+  if (sizeSelect && sizeSelect.value !== String(pageSize)) {
+    sizeSelect.value = String(pageSize);
+  }
+
+  // Update Page Info labels
+  const pageInfoTop = document.getElementById("miq-page-info");
+  const pageInfoBottom = document.getElementById("miq-page-info-bottom");
+  const infoText = `Showing ${startIdx + 1}–${endIdx} of ${totalModels} Models (Page ${curPage} of ${totalPages})`;
+  if (pageInfoTop) pageInfoTop.textContent = infoText;
+  if (pageInfoBottom) pageInfoBottom.textContent = `Page ${curPage} of ${totalPages} • ${totalModels} Total Discovered Models`;
+
+  // Render Page Navigation Buttons (Top & Bottom)
+  const renderNavButtons = (containerId) => {
+    const nav = document.getElementById(containerId);
+    if (!nav) return;
+    nav.innerHTML = "";
+    if (totalPages <= 1) return;
+
+    // Previous Button
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.className = "page-pill-btn";
+    prevBtn.innerHTML = "&lsaquo; Prev";
+    prevBtn.disabled = curPage === 1;
+    prevBtn.title = "Previous Page";
+    prevBtn.onclick = () => changeMiqPage(curPage - 1);
+    nav.appendChild(prevBtn);
+
+    // Numbered Page Pills
+    for (let p = 1; p <= totalPages; p++) {
+      const pageBtn = document.createElement("button");
+      pageBtn.type = "button";
+      pageBtn.className = `page-pill-btn ${p === curPage ? "active" : ""}`;
+      pageBtn.textContent = String(p);
+      pageBtn.title = `Page ${p}`;
+      pageBtn.onclick = () => changeMiqPage(p);
+      nav.appendChild(pageBtn);
+    }
+
+    // Next Button
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "page-pill-btn";
+    nextBtn.innerHTML = "Next &rsaquo;";
+    nextBtn.disabled = curPage === totalPages;
+    nextBtn.title = "Next Page";
+    nextBtn.onclick = () => changeMiqPage(curPage + 1);
+    nav.appendChild(nextBtn);
+  };
+
+  renderNavButtons("miq-page-nav-top");
+  renderNavButtons("miq-page-nav-bottom");
+
+  // Render Each Model in the +80% Larger Box (Whole title readable, attributes, verification & select)
+  pagedModels.forEach((m) => {
     const item = document.createElement("div");
     item.className = `miq-toggle-item ${m.enabled ? "enabled" : ""}`;
-    const meta = `${escapeHtml(m.publisher || m.brand || "")} • ${escapeHtml(m.location || state.gcpLocation)}${m.launch_stage ? " • " + escapeHtml(m.launch_stage) : ""}`;
-    let control;
+    const publisherName = m.publisher || m.brand || "Google Cloud";
+    const locTag = m.location || state.gcpLocation || "global";
+    const launchStage = m.launch_stage || (m.category === "dedicated_endpoint" ? "Dedicated Endpoint" : "MaaS Serverless");
+    const pricing = pricingLabel(m);
+    const isSelected = m.id === state.selectedModelId;
+
+    let verifyControl = "";
     if (discovered && m.discovered) {
       const canVerify = m.publisher && m.publisher !== "endpoint";
-      control = `
+      verifyControl = `
         <div style="display: flex; align-items: center; gap: 0.35rem;">
           ${enablementChip(m)}
-          ${canVerify ? `<button type="button" class="chip-btn" onclick="event.stopPropagation(); verifyModelAccess('${escapeHtml(m.id)}', this)">Verify</button>` : ""}
-        </div>`;
+          ${canVerify ? `<button type="button" class="chip-btn" onclick="event.stopPropagation(); verifyModelAccess('${escapeHtml(m.id)}', this)">Verify in Model Garden</button>` : ""}
+        </div>
+      `;
     } else {
-      item.onclick = () => toggleMiqModelInProject(m.id, !m.enabled);
-      control = `<input type="checkbox" ${m.enabled ? "checked" : ""} aria-label="Enable ${escapeHtml(m.name)} (demo catalog)" onclick="event.stopPropagation(); toggleMiqModelInProject('${escapeHtml(m.id)}', this.checked)">`;
+      verifyControl = `
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          ${enablementChip(m)}
+          <button type="button" class="chip-btn" onclick="event.stopPropagation(); verifyModelAccess('${escapeHtml(m.id)}', this)">Verify</button>
+        </div>
+      `;
     }
+
     item.innerHTML = `
-      <div class="miq-toggle-left">
-        <div class="miq-toggle-brand">${getBrandLogoSvg(m.brand, m.id)}</div>
-        <div style="min-width: 0;">
-          <div class="miq-toggle-name" title="${escapeHtml(m.status_detail || m.name)}">${escapeHtml(m.name)}</div>
-          <div class="miq-toggle-meta">${meta}</div>
+      <div>
+        <div class="miq-item-top">
+          <div class="miq-item-left">
+            <div class="miq-toggle-brand" title="${escapeHtml(m.provider || publisherName)}">
+              ${getBrandLogoSvg(m.brand, m.id)}
+            </div>
+            <div class="miq-item-title-block">
+              <div class="miq-toggle-name" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</div>
+              <div class="miq-toggle-meta">${escapeHtml(m.id)} • ${escapeHtml(publisherName)}</div>
+            </div>
+          </div>
+          <div class="miq-toggle-check" onclick="event.stopPropagation()">
+            <input type="checkbox" id="chk-miq-${escapeHtml(m.id)}" ${m.enabled ? "checked" : ""} aria-label="Enable ${escapeHtml(m.name)}" onchange="toggleMiqModelInProject('${escapeHtml(m.id)}', this.checked)">
+          </div>
+        </div>
+
+        <div class="miq-item-attrs" style="margin-top: 0.5rem;">
+          <span class="miq-attr-chip location">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="vertical-align: -1px; margin-right: 2px;">
+              <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9C9.5 7.62 10.62 6.5 12 6.5C13.38 6.5 14.5 7.62 14.5 9C14.5 10.38 13.38 11.5 12 11.5Z" fill="#1a73e8"/>
+            </svg>
+            ${escapeHtml(locTag)}
+          </span>
+          <span class="miq-attr-chip">${escapeHtml(launchStage)}</span>
+          <span class="miq-attr-chip pricing">${pricing}</span>
         </div>
       </div>
-      ${control}
+
+      <div class="miq-item-bottom">
+        ${verifyControl}
+        <button type="button" class="chip-btn ${isSelected ? 'btn-selected' : ''}" style="${isSelected ? 'background: var(--google-blue); color: #fff; font-weight: 600;' : ''}" onclick="event.stopPropagation(); selectModel('${escapeHtml(m.id)}')">
+          ${isSelected ? '✓ Active MIQ' : 'Select as MIQ'}
+        </button>
+      </div>
     `;
+
+    item.onclick = () => {
+      if (!discovered) {
+        toggleMiqModelInProject(m.id, !m.enabled);
+      } else {
+        selectModel(m.id);
+      }
+    };
+
     container.appendChild(item);
   });
 }
@@ -599,14 +940,14 @@ async function retryModelVerificationFromModal() {
   const btn = document.getElementById("modal-reverify-btn");
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = "<span>Checking…</span>";
+    btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Checking…</span></span>`;
   }
   try {
     await verifyModelAccess(currentModelForAccessVerify);
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>↻ Re-Verify Model Access</span>";
+      btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.refresh} <span>Re-Verify Model Access</span></span>`;
     }
   }
 }
@@ -614,7 +955,7 @@ async function retryModelVerificationFromModal() {
 async function verifyModelAccess(modelId, btn) {
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "Checking…";
+    btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Checking…</span></span>`;
   }
   try {
     const res = await fetch("/api/gcp/models/verify", {
@@ -680,7 +1021,7 @@ async function saveGcpConfiguration() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = "<span>⏳</span> Verifying project & discovering models...";
+    btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Verifying project &amp; discovering models...</span></span>`;
   }
 
   try {
@@ -704,7 +1045,7 @@ async function saveGcpConfiguration() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>☁️</span> Link &amp; Discover Models";
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle; margin-right: 4px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04ZM15.5 13H13V16C13 16.55 12.55 17 12 17C11.45 17 11 16.55 11 16V13H8.5C8.05 13 7.83 12.46 8.15 12.15L11.65 8.65C11.85 8.45 12.16 8.45 12.36 8.65L15.86 12.15C16.17 12.46 15.95 13 15.5 13Z" fill="currentColor"/></svg><span>Link &amp; Discover Models</span>`;
     }
   }
 }
@@ -748,7 +1089,7 @@ async function submitCustomGcpModel() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = "<span>⏳</span> Adding...";
+    btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Adding...</span></span>`;
   }
 
   try {
@@ -790,7 +1131,7 @@ async function submitCustomGcpModel() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>+</span> Add Model";
+      btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM17 13H13V17H11V13H7V11H11V7H13V11H17V13Z" fill="currentColor"/></svg><span>Add Model</span></span>`;
     }
   }
 }
@@ -890,6 +1231,7 @@ function selectModel(modelId) {
   updateDropdownBanner();
   updateActiveModelIndicator();
   updateHarnessWarning();
+  updateCurlPreview();
 }
 
 function onSelectDropdownModel(modelId) {
@@ -948,15 +1290,19 @@ async function fetchScenarios() {
         const opt = document.createElement("option");
         opt.value = s.scenario_id;
         opt.textContent = `[${s.difficulty}] ${s.scenario_id} (${s.suite_slug})`;
+        if (s.scenario_id === "storage_operations") {
+          opt.selected = true;
+        }
         select.appendChild(opt);
       });
+      select.value = "storage_operations";
     }
 
-    // Initialize default suite with 1 standard scenario so user can immediately run or add more
+    // Initialize default suite with storage_operations as the preset test
     if (state.customSuiteItems.length === 0 && scenarios.length > 0) {
       const defaultSc =
-        scenarios.find((s) => s.scenario_id === "oauth_api_enablement") || scenarios[0];
-      addScenarioToCustomSuite(defaultSc, false);
+        scenarios.find((s) => s.scenario_id === "storage_operations") || scenarios[0];
+      addScenarioToCustomSuite(defaultSc, true);
     }
 
     renderStandardScenariosChecklist();
@@ -1152,7 +1498,7 @@ async function saveCustomTestSuite() {
   const btn = document.getElementById("save-custom-suite-btn");
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = "<span>⏳</span> Saving Suite...";
+    btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Saving Suite...</span></span>`;
   }
 
   try {
@@ -1184,7 +1530,7 @@ async function saveCustomTestSuite() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = "<span>📦</span> Save Custom Test Suite";
+      btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.package} <span>Save Custom Test Suite</span></span>`;
     }
   }
 }
@@ -1228,7 +1574,7 @@ async function generateArgonSuite() {
 
   const btn = document.getElementById("generate-suite-btn");
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> Synthesizing with Argon...';
+  btn.innerHTML = `<span class="btn-icon">${ICONS.spinner}</span> Synthesizing with Argon...`;
 
   try {
     const res = await fetch("/api/scenarios/generate", {
@@ -1255,7 +1601,7 @@ async function generateArgonSuite() {
     alert("Error communicating with Argon Agent: " + err.message);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">✨</span> Synthesize & Add Custom Use Case to Suite';
+    btn.innerHTML = `<span class="btn-icon">${ICONS.sparkle}</span> Synthesize & Add Custom Use Case to Suite`;
   }
 }
 
@@ -1332,7 +1678,7 @@ async function startEvaluation() {
   state.isEvaluating = true;
   state.activeRunData = null;
   document.getElementById("run-eval-btn").disabled = true;
-  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">⏳</span> Assessing via ${escapeHtml(agentHarness)} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
+  document.getElementById("run-eval-btn").innerHTML = `<span class="btn-icon">${ICONS.spinner}</span> Assessing via ${escapeHtml(agentHarness)} (${scenarioIds.length} Test${scenarioIds.length > 1 ? "s" : ""})...`;
   document.getElementById("timer-status-badge").textContent = `Running (${agentHarness})`;
   document.getElementById("timer-status-badge").className = "badge badge-recommended";
 
@@ -1361,6 +1707,7 @@ async function startEvaluation() {
         harbor: useHarbor,
         environment_type: environmentType,
         mode: mode,
+        auth_mode: state.assessmentMode || "gcp",
         async: true,
       }),
     });
@@ -1427,7 +1774,7 @@ function stopEvaluationUI(label = "Complete") {
   }
   const btn = document.getElementById("run-eval-btn");
   btn.disabled = false;
-  btn.innerHTML = '<span class="btn-icon">▶</span> Run Assessment';
+  btn.innerHTML = `<span class="btn-icon">${ICONS.play}</span> Run Assessment`;
   document.getElementById("timer-status-badge").textContent = label;
   document.getElementById("timer-status-badge").className = `badge ${label === "Complete" ? "badge-speed" : "badge-danger"}`;
 }
@@ -1472,7 +1819,7 @@ function renderReport(data) {
     const errorLine = data.status === "FAILED" && data.error ? [`Run failed: ${data.error}`] : [];
     const all = [...warnings, ...errorLine];
     warningsBox.style.display = all.length ? "block" : "none";
-    warningsBox.innerHTML = all.map((w) => `<div>⚠ ${escapeHtml(w)}</div>`).join("");
+    warningsBox.innerHTML = all.map((w) => `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">${ICONS.warning} <span>${escapeHtml(w)}</span></div>`).join("");
   }
 
   const sum = (key) => rows.reduce((acc, r) => acc + Number(r[key] || 0), 0);
@@ -1536,7 +1883,7 @@ function renderReport(data) {
           <tr class="pending-row">
             <td>${rows.length + i + 1}</td>
             <td><strong>${escapeHtml(sid)}</strong></td>
-            <td colspan="10" class="muted">${i === 0 && data.status === "RUNNING" ? "⏳ Running…" : "Queued"}</td>
+            <td colspan="10" class="muted">${i === 0 && data.status === "RUNNING" ? `<span style="display:inline-flex;align-items:center;gap:4px;">${ICONS.spinner} <span>Running…</span></span>` : "Queued"}</td>
           </tr>`
         )
         .join("");
@@ -1728,17 +2075,17 @@ function prepareRepositoryExport(data) {
   const pathInput = document.getElementById("repo-subpath-input");
 
   if (suiteSlug === "agent_skill_creation") {
-    iconEl.textContent = "🧠";
+    iconEl.innerHTML = ICONS.brain;
     titleEl.textContent = "Artifact: Agent Skill Package";
     subEl.textContent = "Generates Skill.md specification, Python skill implementation, and automated test suite.";
     pathInput.value = `skills/${scenarioId}`;
   } else if (suiteSlug === "cloud_tool_writing") {
-    iconEl.textContent = "☁️";
+    iconEl.innerHTML = ICONS.cloud;
     titleEl.textContent = "Artifact: GCP Workflow Package";
     subEl.textContent = "Generates cloudbuild.yaml, Dockerfile, provisioning scripts, and README.md.";
     pathInput.value = `workflows/${scenarioId}`;
   } else {
-    iconEl.textContent = "🔄";
+    iconEl.innerHTML = ICONS.codeTransform;
     titleEl.textContent = "Artifact: Translated Codebase Module";
     subEl.textContent = "Generates translated source files, modular boundaries, and refactored architecture.";
     pathInput.value = `src/${scenarioId}`;
@@ -1762,7 +2109,7 @@ async function exportToRepository() {
 
   const btn = document.getElementById("insert-repo-btn");
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> Inserting...';
+  btn.innerHTML = `<span class="btn-icon">${ICONS.spinner}</span> Inserting...`;
 
   try {
     const res = await fetch("/api/export/repo", {
@@ -1793,6 +2140,6 @@ async function exportToRepository() {
     alert("Error during repository insertion: " + err.message);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">📥</span> Insert into Repository';
+    btn.innerHTML = `<span class="btn-icon">${ICONS.commit}</span> Insert into Repository`;
   }
 }

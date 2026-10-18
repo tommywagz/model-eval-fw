@@ -9,9 +9,12 @@ jobs/
 artifacts/
 artifacts/**
 reports/
+# Python bytecode and cache directories
 __pycache__/
+**/__pycache__/
 **/__pycache__/**
-*.pyc
+*.py[cod]
+*$py.class
 .pytest_cache/
 *.egg-info/
 dist/

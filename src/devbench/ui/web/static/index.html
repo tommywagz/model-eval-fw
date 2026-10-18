@@ -60,17 +60,249 @@
           <span class="status-dot online"></span>
           <span id="gcp-status-text">GCP: devbench-eval-sandbox</span>
           <span class="gcp-location-tag" id="gcp-header-location">us-central1</span>
-          <span style="font-size: 0.7rem;">⚙ Configure</span>
+          <span style="font-size: 0.72rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M19.14 12.94C19.18 12.63 19.2 12.32 19.2 12C19.2 11.68 19.18 11.37 19.14 11.06L21.46 9.25C21.67 9.09 21.73 8.78 21.59 8.54L19.39 4.73C19.25 4.49 18.96 4.4 18.73 4.49L16 5.59C15.44 5.16 14.83 4.8 14.16 4.53L13.75 1.6C13.72 1.34 13.5 1.15 13.23 1.15H8.82C8.55 1.15 8.33 1.34 8.3 1.6L7.89 4.53C7.22 4.8 6.61 5.16 6.05 5.59L3.32 4.49C3.09 4.4 2.8 4.49 2.66 4.73L0.46 8.54C0.32 8.78 0.38 9.09 0.59 9.25L2.91 11.06C2.87 11.37 2.85 11.68 2.85 12C2.85 12.32 2.87 12.63 2.91 12.94L0.59 14.75C0.38 14.91 0.32 15.22 0.46 15.46L2.66 19.27C2.8 19.51 3.09 19.6 3.32 19.51L6.05 18.41C6.61 18.84 7.22 19.2 7.89 19.47L8.3 22.4C8.33 22.66 8.55 22.85 8.82 22.85H13.23C13.5 22.85 13.72 22.66 13.75 22.4L14.16 19.47C14.83 19.2 15.44 18.84 16 18.41L18.73 19.51C18.96 19.6 19.25 19.51 19.39 19.27L21.59 15.46C21.73 15.22 21.67 14.91 21.46 14.75L19.14 12.94ZM11.02 15.5C9.09 15.5 7.52 13.93 7.52 12C7.52 10.07 9.09 8.5 11.02 8.5C12.95 8.5 14.52 10.07 14.52 12C14.52 13.93 12.95 15.5 11.02 15.5Z" fill="#1a73e8"/>
+            </svg>
+            Configure
+          </span>
         </button>
 
         <div class="status-pill tokens-pill" id="token-summary-pill" title="Aggregated Session Token Spend">
-          <span class="token-icon">🪙</span>
+          <span class="token-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+              <circle cx="12" cy="12" r="7" stroke="#f9ab00" stroke-width="1.2" stroke-dasharray="2 2"/>
+              <path d="M12 7V17M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5C13.4 7.5 14.5 8.4 14.5 9.5C14.5 11 12 11.5 12 12.5C12 13.5 13.4 14.5 14.5 14.5M9.5 14.5C10.6 14.5 12 13.6 12 12.5" stroke="#b06000" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
           <span id="token-summary-text">Loading tokens...</span>
         </div>
       </div>
     </header>
 
-    <main class="main-content">
+    <div class="studio-layout">
+      <!-- Assessment Mode & Authorization Sidebar (Left side) -->
+      <aside class="assessment-mode-sidebar" id="assessment-mode-sidebar" aria-label="Assessment Mode and Authorization">
+        <div class="sidebar-header">
+          <div class="sidebar-title-row">
+            <span class="sidebar-mode-icon" aria-hidden="true" title="Google Security Shield">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <defs>
+                  <linearGradient id="googleShieldGrad" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#1a73e8"/>
+                    <stop offset="100%" stop-color="#174ea6"/>
+                  </linearGradient>
+                </defs>
+                <path d="M12 2L4 5.5V11.5C4 16.5 7.4 21.1 12 22.3C16.6 21.1 20 16.5 20 11.5V5.5L12 2Z" fill="#e8f0fe" stroke="url(#googleShieldGrad)" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M12 4.2V19.8C15.4 18.7 18 15.3 18 11.5V6.8L12 4.2Z" fill="#1a73e8" fill-opacity="0.16"/>
+                <path d="M9 11.8L11 13.8L15.3 9.5" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <div>
+              <h3 class="sidebar-title">Assessment Mode</h3>
+              <p class="sidebar-sub">Select assessment &amp; authorization path</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode Selector Cards (GCP, curl only, API Keys) -->
+        <div class="mode-selector-list" role="radiogroup" aria-label="Assessment Execution Mode">
+          <!-- Mode 1: GCP (Vertex AI / ADC) -->
+          <div class="mode-select-card active" id="mode-card-gcp" data-mode="gcp" onclick="selectAssessmentMode('gcp')" role="radio" aria-checked="true" tabindex="0">
+            <div class="mode-card-top">
+              <div class="mode-title-wrap">
+                <span class="mode-icon-svg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M18.5 10.2C17.8 6.7 14.7 4 11 4C7.2 4 4 6.8 3.5 10.5C1.5 11.2 0 13.1 0 15.5C0 18.5 2.5 21 5.5 21H18C21.3 21 24 18.3 24 15C24 12.1 21.6 10.4 18.5 10.2Z" fill="#1a73e8" fill-opacity="0.2"/>
+                    <path d="M18 19H6C3.8 19 2 17.2 2 15C2 13 3.5 11.3 5.4 11.1C6 7.6 9 5 12.5 5C16.3 5 19.4 7.9 19.9 11.6C21.7 12.1 23 13.7 23 15.6C23 17.6 21.1 19 18 19Z" stroke="#1a73e8" stroke-width="1.8"/>
+                  </svg>
+                </span>
+                <strong class="mode-name">GCP Vertex AI</strong>
+              </div>
+              <span class="mode-radio-check">✓</span>
+            </div>
+            <p class="mode-desc">Live inference on Google Cloud Vertex AI via local Application Default Credentials (ADC).</p>
+          </div>
+
+          <!-- Mode 2: curl only -->
+          <div class="mode-select-card" id="mode-card-curl" data-mode="curl" onclick="selectAssessmentMode('curl')" role="radio" aria-checked="false" tabindex="0">
+            <div class="mode-card-top">
+              <div class="mode-title-wrap">
+                <span class="mode-icon-svg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="2" y="4" width="20" height="16" rx="4" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+                    <path d="M7 10L10 12L7 14M12 14H16" stroke="#b06000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <strong class="mode-name">curl only</strong>
+              </div>
+              <span class="mode-radio-check">✓</span>
+            </div>
+            <p class="mode-desc">Direct CLI cURL payload inspection with OAuth access tokens and zero quota spend.</p>
+          </div>
+
+          <!-- Mode 3: API (Direct Keys) -->
+          <div class="mode-select-card" id="mode-card-api" data-mode="api" onclick="selectAssessmentMode('api')" role="radio" aria-checked="false" tabindex="0">
+            <div class="mode-card-top">
+              <div class="mode-title-wrap">
+                <span class="mode-icon-svg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="8" cy="12" r="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+                    <path d="M13 12H21M17 12V16M20 12V15" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <strong class="mode-name">Direct API Keys</strong>
+              </div>
+              <span class="mode-radio-check">✓</span>
+            </div>
+            <p class="mode-desc">Bypass GCP project IAM using provider API keys (Google AI Studio, Anthropic, OpenAI).</p>
+          </div>
+        </div>
+
+        <!-- Dynamic Context-Sensitive Authorization Displays -->
+        <div class="sidebar-auth-section" id="sidebar-auth-section">
+          <!-- Auth Display 1: GCP (ADC) -->
+          <div class="auth-panel" id="auth-panel-gcp">
+            <div class="auth-panel-header">
+              <span class="auth-panel-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04Z" fill="#1a73e8"/>
+                </svg>
+              </span>
+              <h4>GCP Vertex AI Authorization</h4>
+            </div>
+            <div class="auth-field-group">
+              <label for="sidebar-gcp-project">GCP Project</label>
+              <input type="text" id="sidebar-gcp-project" readonly value="" placeholder="Linked project ID">
+            </div>
+            <div class="auth-field-group">
+              <label for="sidebar-gcp-location">Vertex Location</label>
+              <input type="text" id="sidebar-gcp-location" readonly value="" placeholder="Region">
+            </div>
+            <div class="auth-status-box">
+              <div class="status-indicator-line">
+                <span class="status-dot online"></span>
+                <strong>ADC Authenticated</strong>
+              </div>
+              <p class="auth-hint">Generated automatically via Application Default Credentials (ADC):</p>
+              <div class="auth-cmd-box">
+                <code>gcloud auth application-default login</code>
+                <button type="button" class="btn-copy-tiny" onclick="copyAdcLoginCommand(this)" title="Copy Command">Copy</button>
+              </div>
+            </div>
+            <div class="auth-roles-box">
+              <div class="auth-roles-title">Required IAM Roles:</div>
+              <ul class="auth-roles-list">
+                <li><code>roles/aiplatform.user</code></li>
+                <li><code>roles/serviceusage.serviceUsageConsumer</code></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Auth Display 2: curl only -->
+          <div class="auth-panel" id="auth-panel-curl" style="display: none;">
+            <div class="auth-panel-header">
+              <span class="auth-panel-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="4" width="20" height="16" rx="3.5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+                  <path d="M7 10L10 12L7 14M12 14H16" stroke="#b06000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <h4>curl CLI Authorization &amp; Preview</h4>
+            </div>
+            <div class="auth-badge-banner banner-warning">
+              <span>Zero Quota Spend</span> • Generates CLI payload preview with exact cURL calls.
+            </div>
+            <div class="auth-field-group">
+              <label>Authorization Header Format</label>
+              <div class="auth-cmd-box">
+                <code>-H "Authorization: Bearer $(gcloud auth print-access-token)"</code>
+              </div>
+            </div>
+            <div class="auth-field-group">
+              <label>Project Header Format</label>
+              <div class="auth-cmd-box">
+                <code id="curl-quota-project-header">-H "x-goog-user-project: gemini-api-505408"</code>
+              </div>
+            </div>
+            <div class="auth-field-group">
+              <label>Sample Model Endpoint Preview</label>
+              <div class="auth-cmd-box code-scroll">
+                <code id="curl-endpoint-preview">https://aiplatform.googleapis.com/v1/projects/.../models/...:generateContent</code>
+              </div>
+            </div>
+            <button type="button" class="secondary-btn w-100" onclick="copySampleCurlCommand(this)" style="margin-top: 0.5rem; justify-content: center; gap: 0.4rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" fill="currentColor"/>
+              </svg>
+              <span>Copy Active Model cURL</span>
+            </button>
+          </div>
+
+          <!-- Auth Display 3: API (Direct Keys) -->
+          <div class="auth-panel" id="auth-panel-api" style="display: none;">
+            <div class="auth-panel-header">
+              <span class="auth-panel-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12.65 10C11.83 7.67 9.61 6 7 6C3.69 6 1 8.69 1 12C1 15.31 3.69 18 7 18C9.61 18 11.83 16.33 12.65 14H17V18H21V14H23V10H12.65ZM7 14C5.9 14 5 13.1 5 12C5 10.9 5.9 10 7 10C8.1 10 9 10.9 9 12C9 13.1 8.1 14 7 14Z" fill="#1e8e3e"/>
+                </svg>
+              </span>
+              <h4>Direct Provider API Keys</h4>
+            </div>
+            <p class="auth-hint">Enter your direct provider keys to evaluate candidate &amp; critic models without GCP Vertex AI quota:</p>
+
+            <div class="auth-field-group">
+              <div class="auth-label-row">
+                <label for="key-input-gemini">Gemini / Google AI Studio Key</label>
+                <span class="key-status-tag" id="tag-key-gemini">Not set</span>
+              </div>
+              <div class="key-input-wrapper">
+                <input type="password" id="key-input-gemini" placeholder="AIzaSy..." autocomplete="off">
+                <button type="button" class="toggle-mask-btn" onclick="toggleKeyMask('key-input-gemini', this)" title="Show/Hide Key">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="auth-field-group">
+              <div class="auth-label-row">
+                <label for="key-input-anthropic">Anthropic Claude Key</label>
+                <span class="key-status-tag" id="tag-key-anthropic">Not set</span>
+              </div>
+              <div class="key-input-wrapper">
+                <input type="password" id="key-input-anthropic" placeholder="sk-ant-..." autocomplete="off">
+                <button type="button" class="toggle-mask-btn" onclick="toggleKeyMask('key-input-anthropic', this)" title="Show/Hide Key">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="auth-field-group">
+              <div class="auth-label-row">
+                <label for="key-input-openai">OpenAI Key (Optional)</label>
+                <span class="key-status-tag" id="tag-key-openai">Not set</span>
+              </div>
+              <div class="key-input-wrapper">
+                <input type="password" id="key-input-openai" placeholder="sk-..." autocomplete="off">
+                <button type="button" class="toggle-mask-btn" onclick="toggleKeyMask('key-input-openai', this)" title="Show/Hide Key">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <button type="button" class="primary-btn w-100" id="save-api-keys-btn" onclick="saveDirectApiKeys()" style="margin-top: 0.6rem; justify-content: center; gap: 0.4rem;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                <path d="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3ZM12 19C10.34 19 9 17.66 9 16C9 14.34 10.34 13 12 13C13.66 13 15 14.34 15 16C15 17.66 13.66 19 12 19ZM15 9H5V5H15V9Z" fill="currentColor"/>
+              </svg>
+              <span>Save API Keys to Session</span>
+            </button>
+            <div id="api-keys-feedback" style="display: none; font-size: 0.75rem; margin-top: 0.4rem;"></div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-content">
       <!-- GCP Project, Location & MIQ Model Enablement Configuration Panel -->
       <section class="gcp-config-card" id="gcp-config-panel">
         <div class="gcp-config-header">
@@ -109,8 +341,11 @@
             </select>
           </div>
           <div>
-            <button type="button" class="primary-btn" id="save-gcp-config-btn" onclick="saveGcpConfiguration()">
-              <span>☁️</span> Link &amp; Discover Models
+            <button type="button" class="primary-btn" id="save-gcp-config-btn" onclick="saveGcpConfiguration()" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4C9.11 4 6.6 5.64 5.35 8.04C2.34 8.36 0 10.91 0 14C0 17.31 2.69 20 6 20H19C21.76 20 24 17.76 24 15C24 12.36 21.95 10.22 19.35 10.04ZM15.5 13H13V16C13 16.55 12.55 17 12 17C11.45 17 11 16.55 11 16V13H8.5C8.05 13 7.83 12.46 8.15 12.15L11.65 8.65C11.85 8.45 12.16 8.45 12.36 8.65L15.86 12.15C16.17 12.46 15.95 13 15.5 13Z" fill="currentColor"/>
+              </svg>
+              <span>Link &amp; Discover Models</span>
             </button>
           </div>
         </div>
@@ -123,7 +358,11 @@
         <!-- ADC & Vertex Curl Authentication Instructions -->
         <div class="gcp-adc-instructions-card">
           <div class="gcp-adc-header-line">
-            <span class="gcp-adc-icon">⚡</span>
+            <span class="gcp-adc-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M7 2V13H10V22L17 10H13L16 2H7Z" fill="#f9ab00"/>
+              </svg>
+            </span>
             <strong>Vertex CLI &amp; Curl Authorization (Application Default Credentials):</strong>
           </div>
           <p class="gcp-adc-text">
@@ -140,16 +379,68 @@
           Offline demo catalog — link a GCP project to discover the models enabled in it.
         </div>
 
-        <div class="miq-enablement-section">
+        <div class="miq-enablement-section" id="miq-enablement-section">
           <div class="miq-enablement-header">
             <div>
               <h4>Models Available in the Linked GCP Project</h4>
               <p class="miq-enablement-sub" id="miq-enablement-sub">Enabled models populate the Model-in-Question selector in Section 1. Partner models marked "unverified" must be enabled in Vertex AI Model Garden — click <strong>Verify</strong> to check.</p>
             </div>
-            <span class="badge badge-recommended" id="enabled-miq-count-badge">0 Models Enabled</span>
+            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+              <span class="badge badge-recommended" id="enabled-miq-count-badge">0 Models Enabled</span>
+              <button type="button" class="chip-btn miq-collapse-btn" id="toggle-miq-collapse-btn" onclick="toggleMiqSectionCollapse()" title="Collapse or Expand Models Available section">
+                <span id="miq-collapse-icon" style="display: inline-flex; align-items: center;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7.41 8.59L12 13.17L16.59 8.59L18 10L12 16L6 10L7.41 8.59Z"/>
+                  </svg>
+                </span>
+                <span id="miq-collapse-text">Collapse Models</span>
+              </button>
+            </div>
           </div>
-          <div class="miq-toggles-grid" id="gcp-miq-toggles-container">
-            <!-- Populated dynamically with all MIQ models -->
+
+          <!-- Collapsible Body containing pagination controls and the +80% larger model boxes -->
+          <div class="miq-collapsible-body" id="miq-collapsible-body">
+            <!-- Top Pagination & Page-Size Bar -->
+            <div class="miq-pagination-bar" id="miq-pagination-bar-top">
+              <div class="miq-page-size-picker">
+                <label for="miq-page-size-select">Show:</label>
+                <select id="miq-page-size-select" onchange="changeMiqPageSize(this.value)">
+                  <option value="12" selected>12 models / page</option>
+                  <option value="9">9 models / page</option>
+                </select>
+              </div>
+              <div class="miq-page-info" id="miq-page-info">Showing models...</div>
+              <div class="miq-page-nav" id="miq-page-nav-top">
+                <!-- Page buttons populated dynamically in app.js -->
+              </div>
+            </div>
+
+            <!-- Populated dynamically with all MIQ models in +80% larger boxes -->
+            <div class="miq-toggles-grid" id="gcp-miq-toggles-container">
+              <!-- Populated dynamically with all MIQ models -->
+            </div>
+
+            <!-- Bottom Pagination Bar -->
+            <div class="miq-pagination-bar miq-pagination-bottom" id="miq-pagination-bar-bottom">
+              <div class="miq-page-info-bottom" id="miq-page-info-bottom">Page 1</div>
+              <div class="miq-page-nav" id="miq-page-nav-bottom">
+                <!-- Page buttons populated dynamically in app.js -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Collapsed Summary Row shown when section is collapsed -->
+          <div class="miq-collapsed-summary" id="miq-collapsed-summary" style="display: none;" onclick="toggleMiqSectionCollapse()">
+            <span class="collapsed-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="#1a73e8"/>
+              </svg>
+            </span>
+            <span id="miq-collapsed-text">Models Available section is collapsed. Click to expand.</span>
+            <span class="badge badge-speed" style="margin-left: auto; display: inline-flex; align-items: center; gap: 4px;">
+              <span>Expand Models</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
+            </span>
           </div>
         </div>
 
@@ -158,7 +449,10 @@
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <div>
               <h5 style="margin: 0; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span>➕</span> Connect Custom Model / Dedicated Endpoint (GCP Setup)
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM17 13H13V17H11V13H7V11H11V7H13V11H17V13Z" fill="#1a73e8"/>
+                </svg>
+                <span>Connect Custom Model / Dedicated Endpoint (GCP Setup)</span>
               </h5>
               <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
                 Directly configure a Vertex AI Managed Model (Gemini) or Self-Deployed Dedicated Endpoint (e.g. Llama 3, Gemma, Mistral) per Step 3 of the GCP setup specification.
@@ -244,15 +538,27 @@
       <section class="studio-section" id="section-select-harness">
         <div class="section-header">
           <div class="section-header-left">
-            <div class="step-badge">⚙</div>
+            <div class="step-badge" aria-label="Step 1B">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                <path d="M19.14 12.94C19.18 12.63 19.2 12.32 19.2 12C19.2 11.68 19.18 11.37 19.14 11.06L21.46 9.25C21.67 9.09 21.73 8.78 21.59 8.54L19.39 4.73C19.25 4.49 18.96 4.4 18.73 4.49L16 5.59C15.44 5.16 14.83 4.8 14.16 4.53L13.75 1.6C13.72 1.34 13.5 1.15 13.23 1.15H8.82C8.55 1.15 8.33 1.34 8.3 1.6L7.89 4.53C7.22 4.8 6.61 5.16 6.05 5.59L3.32 4.49C3.09 4.4 2.8 4.49 2.66 4.73L0.46 8.54C0.32 8.78 0.38 9.09 0.59 9.25L2.91 11.06C2.87 11.37 2.85 11.68 2.85 12C2.85 12.32 2.87 12.63 2.91 12.94L0.59 14.75C0.38 14.91 0.32 15.22 0.46 15.46L2.66 19.27C2.8 19.51 3.09 19.6 3.32 19.51L6.05 18.41C6.61 18.84 7.22 19.2 7.89 19.47L8.3 22.4C8.33 22.66 8.55 22.85 8.82 22.85H13.23C13.5 22.85 13.72 22.66 13.75 22.4L14.16 19.47C14.83 19.2 15.44 18.84 16 18.41L18.73 19.51C18.96 19.6 19.25 19.51 19.39 19.27L21.59 15.46C21.73 15.22 21.67 14.91 21.46 14.75L19.14 12.94ZM11.02 15.5C9.09 15.5 7.52 13.93 7.52 12C7.52 10.07 9.09 8.5 11.02 8.5C12.95 8.5 14.52 10.07 14.52 12C14.52 13.93 12.95 15.5 11.02 15.5Z" fill="currentColor"/>
+              </svg>
+            </div>
             <div>
               <h2>Configure Agent Harness &amp; Harbor Sandbox Permissions</h2>
               <p class="section-desc">Choose the coding agent that hosts the MIQ during the evaluation. <strong>Antigravity (AGY)</strong> is the default; <strong>Jetski</strong>, <strong>Claude Code</strong>, <strong>OpenCode</strong>, <strong>Codex</strong>, <strong>Gemini CLI</strong> or any CLI you register below can be used as long as it is already installed on this machine. Harnesses are auto-detected. In live mode the harness runs headless against Vertex AI in your linked project and Harbor sandboxes verify its output.</p>
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <button type="button" class="secondary-btn" id="refresh-harnesses-btn" onclick="fetchHarnesses()" title="Re-scan this machine for installed agent CLIs">⟳ Re-detect</button>
-            <div class="badge badge-speed" id="internal-google-perms-badge" title="Application Default Credentials (ADC) &amp; least-privilege Vertex AI IAM provisioned in Harbor sandbox">🔒 Internal Google Default Permissions: Active</div>
+            <button type="button" class="secondary-btn" id="refresh-harnesses-btn" onclick="fetchHarnesses()" title="Re-scan this machine for installed agent CLIs" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+              <span>Re-detect</span>
+            </button>
+            <div class="badge badge-speed" id="internal-google-perms-badge" title="Application Default Credentials (ADC) &amp; least-privilege Vertex AI IAM provisioned in Harbor sandbox" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                <path d="M18 8H17V6C17 3.24 14.76 1 12 1C9.24 1 7 3.24 7 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8ZM12 17C10.9 17 10 16.1 10 15C10 13.9 10.9 13 12 13C13.1 13 14 13.9 14 15C14 16.1 13.1 17 12 17ZM9 8V6C9 4.34 10.34 3 12 3C13.66 3 15 4.34 15 6V8H9Z" fill="#1e8e3e"/>
+              </svg>
+              <span>Internal Google Default Permissions: Active</span>
+            </div>
             <div class="badge badge-recommended" id="active-harness-indicator">Active Harness: AGY</div>
           </div>
         </div>
@@ -264,33 +570,86 @@
 
         <div class="harness-warning" id="harness-warning" style="display: none;"></div>
 
-        <!-- Additional Harnesses Dropdown + Harbor Sandbox & Internal Google Permissions Bar -->
-        <div class="gcp-dropdown-selector-bar harness-sandbox-config-bar" id="internal-google-permissions-bar">
-          <div class="gcp-dropdown-left">
-            <div>
-              <div class="gcp-dropdown-label">
-                Harbor Sandbox Execution &amp; Internal Google Default Permissions
-                (<code id="sandbox-sa-label">devbench-sa@devbench-eval-sandbox.iam.gserviceaccount.com</code>)
+        <!-- Layered Harbor Sandbox Configuration & Dropdown Selection Bar -->
+        <div class="harness-sandbox-config-bar" id="internal-google-permissions-bar">
+          <!-- Layer 1: Harbor Sandbox Status & Internal Google Permissions Policy -->
+          <div class="sandbox-layer-header">
+            <div class="sandbox-layer-header-left">
+              <div class="sandbox-layer-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L4 5V11.09C4 16.14 7.41 20.85 12 22C16.59 20.85 20 16.14 20 11.09V5L12 2ZM10 15.5L6.5 12L7.91 10.59L10 12.67L16.09 6.59L17.5 8L10 15.5Z" fill="#1a73e8"/>
+                </svg>
               </div>
-              <div class="gcp-dropdown-sub" id="sandbox-permissions-sub">
-                ADC mounted at <code>/var/run/secrets/google/adc.json</code> • Roles: <code>roles/aiplatform.user</code>, <code>roles/serviceusage.serviceUsageConsumer</code>, <code>roles/logging.logWriter</code>
+              <div class="sandbox-layer-titles">
+                <div class="sandbox-layer-title">
+                  <span>Harbor Sandbox Execution &amp; Internal Google Default Permissions</span>
+                  <code id="sandbox-sa-label" class="sandbox-sa-chip">devbench-sa@devbench-eval-sandbox.iam.gserviceaccount.com</code>
+                </div>
+                <div class="sandbox-layer-sub" id="sandbox-permissions-sub">
+                  ADC mounted at <code>/var/run/secrets/google/adc.json</code> • Roles: <code>roles/aiplatform.user</code>, <code>roles/serviceusage.serviceUsageConsumer</code>, <code>roles/logging.logWriter</code>
+                </div>
               </div>
             </div>
+            <div class="sandbox-layer-toggle-wrap">
+              <label class="radio-label sandbox-toggle-label" style="font-size: 0.82rem;" title="Execute selected agent harness inside a Harbor sandbox trial package">
+                <input type="checkbox" id="harbor-sandbox-toggle" checked>
+                <span style="font-weight: 500;">Run in Harbor Sandbox</span>
+              </label>
+            </div>
           </div>
-          <div class="gcp-dropdown-controls" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-            <label class="radio-label" style="font-size: 0.8rem;" title="Execute selected agent harness inside a Harbor sandbox trial package">
-              <input type="checkbox" id="harbor-sandbox-toggle" checked>
-              <span>Run in Harbor Sandbox</span>
-            </label>
-            <select id="harbor-env-select" aria-label="Select Harbor container runtime environment" style="min-width: 150px;">
-              <option value="podman" selected>Harbor Env: Podman (Rootless)</option>
-              <option value="docker">Harbor Env: Docker</option>
-              <option value="modal">Harbor Env: Modal Cloud</option>
-              <option value="daytona">Harbor Env: Daytona</option>
-            </select>
-            <select id="additional-harnesses-dropdown" onchange="onSelectDropdownHarness(this.value)" aria-label="Select additional or custom agent harness" style="min-width: 220px;">
-              <option value="">-- Additional Harnesses --</option>
-            </select>
+
+          <!-- Layer 2: Dedicated Dropdown Selection Menus Grid (Zero Overlap) -->
+          <div class="sandbox-dropdown-grid">
+            <!-- Sandbox Dropdown Card: Container Runtime Environment -->
+            <div class="sandbox-dropdown-card">
+              <div class="sandbox-dropdown-card-header">
+                <label for="harbor-env-select" class="sandbox-dropdown-label">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M19 4H5C3.89 4 3 4.9 3 6V20C3 21.1 3.89 22 5 22H19C20.1 22 21 21.1 21 20V6C21 4.9 20.1 4 19 4ZM19 20H5V8H19V20ZM7 10H9V12H7V10ZM7 14H9V16H7V14ZM11 10H17V12H11V10ZM11 14H17V16H11V14Z" fill="#1a73e8"/>
+                  </svg>
+                  <span>Sandbox Container Runtime</span>
+                </label>
+                <span class="sandbox-dropdown-badge">Harbor Env</span>
+              </div>
+              <div class="sandbox-dropdown-select-wrap">
+                <select id="harbor-env-select" aria-label="Select Harbor container runtime environment">
+                  <option value="podman" selected>Podman (Rootless Isolation - Recommended)</option>
+                  <option value="docker">Docker (Host Container Daemon)</option>
+                  <option value="modal">Modal Cloud (Serverless Remote Sandbox)</option>
+                  <option value="daytona">Daytona (Secure Dev Environment)</option>
+                </select>
+                <div class="sandbox-select-arrow" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M7 10L12 15L17 10H7Z" fill="currentColor"/>
+                  </svg>
+                </div>
+              </div>
+              <span class="sandbox-dropdown-hint">Rootless container isolation with Application Default Credentials (ADC) mounted read-only.</span>
+            </div>
+
+            <!-- Additional Harnesses Dropdown Card -->
+            <div class="sandbox-dropdown-card">
+              <div class="sandbox-dropdown-card-header">
+                <label for="additional-harnesses-dropdown" class="sandbox-dropdown-label">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M20 18C20 19.1 19.1 20 18 20H6C4.9 20 4 19.1 4 18V6C4 4.9 4.9 4 6 4H18C19.1 4 20 4.9 20 6V18ZM6 7H8V11H6V7ZM9 7H11V11H9V7ZM12 7H14V11H12V7ZM15 7H17V11H15V7Z" fill="#1e8e3e"/>
+                  </svg>
+                  <span>Additional Coding Agent Harness</span>
+                </label>
+                <span class="sandbox-dropdown-badge">Detected CLIs</span>
+              </div>
+              <div class="sandbox-dropdown-select-wrap">
+                <select id="additional-harnesses-dropdown" onchange="onSelectDropdownHarness(this.value)" aria-label="Select additional or custom agent harness">
+                  <option value="">-- Additional Installed Harnesses --</option>
+                </select>
+                <div class="sandbox-select-arrow" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M7 10L12 15L17 10H7Z" fill="currentColor"/>
+                  </svg>
+                </div>
+              </div>
+              <span class="sandbox-dropdown-hint">Select secondary detected agent CLIs or register another custom harness below.</span>
+            </div>
           </div>
         </div>
 
@@ -332,41 +691,15 @@
         </div>
 
         <div class="suite-builder-layout">
-          <!-- Left Panel: Add Custom Use Cases & Standard Benchmark Scenarios -->
+          <!-- Left Panel: Add Pre-configured Standard Tests & Custom Use Cases -->
           <div class="suite-source-panel">
             <div class="tab-controls">
-              <button class="tab-btn active" id="tab-custom-btn" onclick="switchUseCaseTab('custom')">+ Add Your Own Test Scenario (Argon Agent)</button>
-              <button class="tab-btn" id="tab-presets-btn" onclick="switchUseCaseTab('presets')">+ Add Pre-configured Standard Tests</button>
+              <button class="tab-btn active" id="tab-presets-btn" onclick="switchUseCaseTab('presets')">+ Add Pre-configured Standard Tests</button>
+              <button class="tab-btn" id="tab-custom-btn" onclick="switchUseCaseTab('custom')">+ Add Your Own Test Scenario (Argon Agent)</button>
             </div>
 
-            <!-- Custom Tab: Create 1+ Custom Use Cases -->
-            <div id="tab-custom" class="tab-pane active">
-              <div class="quick-templates">
-                <span class="templates-label">Quick Templates:</span>
-                <button class="chip-btn" type="button" onclick="applyTemplate('skill_bigquery_alert')">BigQuery Alerting Skill</button>
-                <button class="chip-btn" type="button" onclick="applyTemplate('gcp_cloudrun_workflow')">Cloud Run GCP Workflow</button>
-                <button class="chip-btn" type="button" onclick="applyTemplate('codebase_flask_to_go')">Flask to Go Translation</button>
-              </div>
-
-              <div class="input-group">
-                <label for="custom-scenario-title-input">Custom Use Case Title (Optional)</label>
-                <input type="text" id="custom-scenario-title-input" placeholder="e.g. BigQuery Real-Time Anomaly Skill">
-              </div>
-
-              <div class="input-group">
-                <label for="scenario-prompt-input">Custom Use Case Description</label>
-                <textarea id="scenario-prompt-input" rows="4" placeholder="Describe the task or capability to test, e.g.: Create an agent skill that validates JSON customer records against a strict schema, records telemetry into BigQuery, and alerts Pub/Sub on validation failure."></textarea>
-              </div>
-
-              <div class="action-row">
-                <button class="primary-btn" id="generate-suite-btn" onclick="generateArgonSuite()">
-                  <span class="btn-icon">✨</span> Synthesize &amp; Add Custom Use Case to Suite
-                </button>
-              </div>
-            </div>
-
-            <!-- Presets Tab: Select 1+ Standard Benchmark Scenarios -->
-            <div id="tab-presets" class="tab-pane">
+            <!-- Presets Tab: Select 1+ Standard Benchmark Scenarios (Initial Option) -->
+            <div id="tab-presets" class="tab-pane active">
               <div class="input-group">
                 <label for="preset-scenario-select">Quick Select Standard Benchmark Scenario</label>
                 <div style="display: flex; gap: 0.5rem;">
@@ -392,12 +725,48 @@
                 </div>
               </div>
             </div>
+
+            <!-- Custom Tab: Create 1+ Custom Use Cases -->
+            <div id="tab-custom" class="tab-pane">
+              <div class="quick-templates">
+                <span class="templates-label">Quick Templates:</span>
+                <button class="chip-btn" type="button" onclick="applyTemplate('skill_bigquery_alert')">BigQuery Alerting Skill</button>
+                <button class="chip-btn" type="button" onclick="applyTemplate('gcp_cloudrun_workflow')">Cloud Run GCP Workflow</button>
+                <button class="chip-btn" type="button" onclick="applyTemplate('codebase_flask_to_go')">Flask to Go Translation</button>
+              </div>
+
+              <div class="input-group">
+                <label for="custom-scenario-title-input">Custom Use Case Title (Optional)</label>
+                <input type="text" id="custom-scenario-title-input" placeholder="e.g. BigQuery Real-Time Anomaly Skill">
+              </div>
+
+              <div class="input-group">
+                <label for="scenario-prompt-input">Custom Use Case Description</label>
+                <textarea id="scenario-prompt-input" rows="4" placeholder="Describe the task or capability to test, e.g.: Create an agent skill that validates JSON customer records against a strict schema, records telemetry into BigQuery, and alerts Pub/Sub on validation failure."></textarea>
+              </div>
+
+              <div class="action-row">
+                <button class="primary-btn" id="generate-suite-btn" onclick="generateArgonSuite()" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                  <span class="btn-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                      <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="currentColor"/>
+                    </svg>
+                  </span>
+                  <span>Synthesize &amp; Add Custom Use Case to Suite</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Right Panel: User's Custom Test Suite Composer -->
           <div class="suite-manifest-panel" id="custom-suite-builder">
             <div class="manifest-header">
-              <span class="manifest-title">🧰 Your Custom Test Suite</span>
+              <span class="manifest-title" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                  <path d="M11.99 18.54L4.62 12.81L3 14.07L11.99 21.07L20.98 14.07L19.36 12.81L11.99 18.54ZM12 16L19.36 10.27L21 9L12 2L3 9L4.63 10.27L12 16Z" fill="#1a73e8"/>
+                </svg>
+                <span>Your Custom Test Suite</span>
+              </span>
               <div class="manifest-counts">
                 <span class="badge badge-recommended" id="suite-standard-count-badge">1 Standard</span>
                 <span class="badge badge-speed" id="suite-custom-count-badge">0 Custom</span>
@@ -417,8 +786,11 @@
               <button type="button" class="secondary-btn" id="clear-custom-suite-btn" onclick="clearCustomSuite()">
                 Reset Suite
               </button>
-              <button type="button" class="primary-btn" id="save-custom-suite-btn" onclick="saveCustomTestSuite()">
-                <span>📦</span> Save Custom Test Suite
+              <button type="button" class="primary-btn" id="save-custom-suite-btn" onclick="saveCustomTestSuite()" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                  <path d="M12 3L2 8.5L12 14L22 8.5L12 3ZM2 10.5V16.5L12 22V16L4 11.6V10.5H2ZM22 10.5H20V11.6L12 16V22L22 16.5V10.5Z" fill="currentColor"/>
+                </svg>
+                <span>Save Custom Test Suite</span>
               </button>
             </div>
           </div>
@@ -474,8 +846,13 @@
             </label>
           </div>
 
-          <button class="primary-btn run-btn" id="run-eval-btn" onclick="startEvaluation()">
-            <span class="btn-icon">▶</span> Run Assessment
+          <button class="primary-btn run-btn" id="run-eval-btn" onclick="startEvaluation()" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+            <span class="btn-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+              </svg>
+            </span>
+            <span>Run Assessment</span>
           </button>
         </div>
 
@@ -484,7 +861,12 @@
           <!-- Time Metrics Card -->
           <div class="telemetry-card">
             <div class="card-title">
-              <span>⏱ Execution Timers</span>
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                  <path d="M15 1H9V3H15V1ZM11 14H13V8H11V14ZM19.03 7.39L20.45 5.97C20 5.46 19.55 4.98 19.04 4.56L17.62 5.98C16.07 4.74 14.12 4 12 4C7.03 4 3 8.03 3 13C3 17.97 7.02 22 12 22C16.98 22 21 17.97 21 13C21 10.88 20.26 8.93 19.03 7.39ZM12 20C8.13 20 5 16.87 5 13C5 9.13 8.13 6 12 6C15.87 6 19 9.13 19 13C19 16.87 15.87 20 12 20Z" fill="#1a73e8"/>
+                </svg>
+                <span>Execution Timers</span>
+              </span>
               <span class="badge" id="timer-status-badge">Idle</span>
             </div>
             <div class="main-metric" id="metric-duration">0.00 <span class="metric-unit">s</span></div>
@@ -507,7 +889,13 @@
           <!-- Token Cost Metrics Card -->
           <div class="telemetry-card">
             <div class="card-title">
-              <span>🪙 Token Usage &amp; Cost</span>
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                  <circle cx="12" cy="12" r="9" stroke="#f9ab00" stroke-width="1.8" fill="#fef7e0"/>
+                  <path d="M12 7V17M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5C13.4 7.5 14.5 8.4 14.5 9.5C14.5 11 12 11.5 12 12.5C12 13.5 13.4 14.5 14.5 14.5M9.5 14.5C10.6 14.5 12 13.6 12 12.5" stroke="#b06000" stroke-width="1.6" stroke-linecap="round"/>
+                </svg>
+                <span>Token Usage &amp; Cost</span>
+              </span>
               <span class="badge badge-cost" id="cost-badge">USD</span>
             </div>
             <div class="main-metric cost-metric" id="metric-cost">$0.00000 <span class="metric-unit">USD</span></div>
@@ -594,7 +982,11 @@
 
         <div class="export-box">
           <div class="export-type-banner" id="export-type-banner">
-            <span class="export-icon" id="export-icon">📦</span>
+            <span class="export-icon" id="export-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3L2 8.5L12 14L22 8.5L12 3ZM2 10.5V16.5L12 22V16L4 11.6V10.5H2ZM22 10.5H20V11.6L12 16V22L22 16.5V10.5Z" fill="#1a73e8"/>
+              </svg>
+            </span>
             <div>
               <h4 id="export-title">Artifact: Agent Skill Package</h4>
               <p id="export-subtitle">Includes Skill.md, executable entrypoint, and automated regression test suite.</p>
@@ -618,15 +1010,24 @@
               <input type="text" id="repo-subpath-input" placeholder="e.g. skills/my-skill or workflows/deploy">
             </div>
             <div class="input-group flex-1 action-cell">
-              <button class="primary-btn export-btn" id="insert-repo-btn" onclick="exportToRepository()">
-                <span class="btn-icon">📥</span> Insert into Repository
+              <button class="primary-btn export-btn" id="insert-repo-btn" onclick="exportToRepository()" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                <span class="btn-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;">
+                    <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
+                  </svg>
+                </span>
+                <span>Insert into Repository</span>
               </button>
             </div>
           </div>
 
           <!-- Export Confirmation Alert -->
           <div class="export-alert" id="export-alert" style="display: none;">
-            <div class="alert-icon">✓</div>
+            <div class="alert-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M9 16.2L4.8 12L3.4 13.4L9 19L21 7L19.6 5.6L9 16.2Z" fill="#ffffff"/>
+              </svg>
+            </div>
             <div class="alert-body">
               <h4 id="export-alert-title">Successfully Inserted into Repository!</h4>
               <p id="export-alert-msg"></p>
@@ -644,7 +1045,11 @@
       <section class="studio-section eval-report-section" id="eval-report-section" style="display: none;">
         <div class="section-header">
           <div class="section-header-left">
-            <div class="step-badge">📊</div>
+            <div class="step-badge" aria-label="Evaluation Report">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align: middle;">
+                <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM9 17H7V10H9V17ZM13 17H11V7H13V17ZM17 17H15V13H17V17Z" fill="currentColor"/>
+              </svg>
+            </div>
             <div>
               <h2>Evaluation Report</h2>
               <p class="section-desc" id="eval-report-subtitle">Result metrics, token usage, cost and time for every test in the suite.</p>
@@ -652,8 +1057,14 @@
           </div>
           <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
             <span class="badge" id="eval-report-status-badge">RUNNING</span>
-            <button type="button" class="secondary-btn" onclick="downloadReportJson()">⬇ JSON</button>
-            <button type="button" class="secondary-btn" onclick="downloadReportCsv()">⬇ CSV</button>
+            <button type="button" class="secondary-btn" onclick="downloadReportJson()" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/></svg>
+              <span>JSON</span>
+            </button>
+            <button type="button" class="secondary-btn" onclick="downloadReportCsv()" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/></svg>
+              <span>CSV</span>
+            </button>
           </div>
         </div>
 
@@ -686,6 +1097,7 @@
         <p class="report-footnote">MIQ cost = tokens consumed by the Model in Question (as reported by the harness/Vertex AI, or estimated from list prices); Total cost adds the actor-critic panel. Mock runs use simulated tokens and zero real spend.</p>
       </section>
     </main>
+  </div> <!-- .studio-layout -->
 
     <!-- Footer with Powered by Harbor & Jev Logos -->
     <footer class="app-footer">
@@ -790,8 +1202,9 @@
 
       <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModelAccessModal()">Dismiss</button>
-        <button type="button" class="primary-btn" id="modal-reverify-btn" onclick="retryModelVerificationFromModal()">
-          <span>↻ Re-Verify Model Access</span>
+        <button type="button" class="primary-btn" id="modal-reverify-btn" onclick="retryModelVerificationFromModal()" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+          <span>Re-Verify Model Access</span>
         </button>
       </div>
     </div>

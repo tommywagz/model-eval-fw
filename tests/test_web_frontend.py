@@ -543,3 +543,85 @@ def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:
         assert run_data["internal_google_permissions"]["enabled"] is True
         assert run_data["harbor"]["agent_harness"] == "jetski"
 
+
+def test_assessment_mode_sidebar_and_model_pagination(web_server: str) -> None:
+    """Verify assessment mode sidebar (GCP, curl, API), auth displays, and model pagination controls."""
+    # 1. Verify index.html static markup contains sidebar and pagination elements
+    with urllib.request.urlopen(f"{web_server}/") as resp:
+        assert resp.status == 200
+        html = resp.read().decode("utf-8")
+        assert 'id="assessment-mode-sidebar"' in html
+        assert 'id="mode-card-gcp"' in html
+        assert 'id="mode-card-curl"' in html
+        assert 'id="mode-card-api"' in html
+        assert 'id="auth-panel-gcp"' in html
+        assert 'id="auth-panel-curl"' in html
+        assert 'id="auth-panel-api"' in html
+        assert 'id="toggle-miq-collapse-btn"' in html
+        assert 'id="miq-collapsible-body"' in html
+        assert 'id="miq-pagination-bar-top"' in html
+        assert 'id="miq-page-size-select"' in html
+        assert 'id="miq-pagination-bar-bottom"' in html
+        assert 'id="miq-collapsed-summary"' in html
+
+    # 2. Verify styles.css contains sidebar, pagination, and enlarged box classes
+    with urllib.request.urlopen(f"{web_server}/styles.css") as resp:
+        assert resp.status == 200
+        css = resp.read().decode("utf-8")
+        assert ".assessment-mode-sidebar" in css
+        assert ".mode-select-card" in css
+        assert ".miq-collapsible-body" in css
+        assert ".miq-pagination-bar" in css
+        assert ".page-pill-btn" in css
+        assert ".miq-toggle-item" in css
+
+    # 3. Verify app.js contains interaction controllers
+    with urllib.request.urlopen(f"{web_server}/app.js") as resp:
+        assert resp.status == 200
+        js = resp.read().decode("utf-8")
+        assert "selectAssessmentMode" in js
+        assert "toggleMiqSectionCollapse" in js
+        assert "changeMiqPage" in js
+        assert "changeMiqPageSize" in js
+        assert "saveDirectApiKeys" in js
+
+    # 4. Verify /api/auth/status returns current mode and key status
+    with urllib.request.urlopen(f"{web_server}/api/auth/status") as resp:
+        assert resp.status == 200
+        auth_status = json.loads(resp.read().decode("utf-8"))
+        assert "mode" in auth_status
+        assert "keys_configured" in auth_status
+        assert "adc_authenticated" in auth_status
+
+    # 5. Verify /api/auth/mode updates the mode (GCP, curl only, API)
+    for mode in ["gcp", "curl", "api"]:
+        mode_req = urllib.request.Request(
+            f"{web_server}/api/auth/mode",
+            data=json.dumps({"mode": mode}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(mode_req) as resp:
+            assert resp.status == 200
+            res = json.loads(resp.read().decode("utf-8"))
+            assert res["success"] is True
+            assert res["mode"] == mode
+
+    # 6. Verify /api/auth/keys saves provider keys
+    keys_req = urllib.request.Request(
+        f"{web_server}/api/auth/keys",
+        data=json.dumps({
+            "gemini_api_key": "AIzaSy_fake_test_key",
+            "anthropic_api_key": "sk-ant_fake_test_key",
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(keys_req) as resp:
+        assert resp.status == 200
+        keys_res = json.loads(resp.read().decode("utf-8"))
+        assert keys_res["success"] is True
+        assert keys_res["keys_configured"]["gemini"] is True
+        assert keys_res["keys_configured"]["anthropic"] is True
+
+

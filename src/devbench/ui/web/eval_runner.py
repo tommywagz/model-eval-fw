@@ -81,6 +81,7 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
     models_by_id = {m["id"]: m for m in gcp_snapshot.get("models", [])}
     model_entry = models_by_id.get(model_alias)
     link_status = gcp_snapshot.get("link_status") or {}
+    auth_mode = str(payload.get("auth_mode", "gcp")).lower()
     if model_entry is None:
         if model_alias not in load_model_registry():
             raise EvalRequestError(
@@ -88,26 +89,32 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
             )
         model_entry = {"id": model_alias, "name": model_alias, "brand": "vertex", "enabled": True}
     elif not model_entry.get("enabled"):
-        proj_id = gcp_snapshot.get("project_id", "")
-        loc = model_entry.get("location") or gcp_snapshot.get("location", "us-central1")
-        raise EvalRequestError(
-            f"Model '{model_entry.get('name', model_alias)}' is not enabled in linked project "
-            f"{proj_id}: {model_entry.get('status_detail') or 'enable it in Vertex AI Model Garden'}.",
-            error_type="MODEL_ACCESS_DENIED",
-            details={
-                "model_id": model_alias,
-                "model_name": model_entry.get("name", model_alias),
-                "project_id": proj_id,
-                "location": loc,
-                "remediation": (
-                    f"1. Run `gcloud auth application-default login` on your local terminal.\n"
-                    f"2. Open Vertex AI Model Garden to enable '{model_alias}' in project '{proj_id}':\n"
-                    f"   https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}\n"
-                    f"3. Ensure your GCP identity has the 'roles/aiplatform.user' role on project '{proj_id}'."
-                ),
-                "model_garden_url": f"https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}",
-            },
-        )
+        if auth_mode in ("curl", "api", "api_key"):
+            warnings.append(
+                f"Model '{model_entry.get('name', model_alias)}' is not enabled in linked GCP project {gcp_snapshot.get('project_id')}; "
+                f"proceeding with {auth_mode.upper()} auth."
+            )
+        else:
+            proj_id = gcp_snapshot.get("project_id", "")
+            loc = model_entry.get("location") or gcp_snapshot.get("location", "us-central1")
+            raise EvalRequestError(
+                f"Model '{model_entry.get('name', model_alias)}' is not enabled in linked project "
+                f"{proj_id}: {model_entry.get('status_detail') or 'enable it in Vertex AI Model Garden'}.",
+                error_type="MODEL_ACCESS_DENIED",
+                details={
+                    "model_id": model_alias,
+                    "model_name": model_entry.get("name", model_alias),
+                    "project_id": proj_id,
+                    "location": loc,
+                    "remediation": (
+                        f"1. Run `gcloud auth application-default login` on your local terminal.\n"
+                        f"2. Open Vertex AI Model Garden to enable '{model_alias}' in project '{proj_id}':\n"
+                        f"   https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}\n"
+                        f"3. Ensure your GCP identity has the 'roles/aiplatform.user' role on project '{proj_id}'."
+                    ),
+                    "model_garden_url": f"https://console.cloud.google.com/vertex-ai/model-garden?project={proj_id}",
+                },
+            )
     if mode == "live":
         if link_status.get("source") != "discovered" or not model_entry.get("discovered"):
             raise EvalRequestError(
@@ -132,6 +139,7 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
 
     use_harbor = bool(payload.get("harbor", False))
     environment_type = str(payload.get("environment_type", payload.get("env", "podman")))
+    auth_mode = str(payload.get("auth_mode") or "auto").lower().strip()
 
     return {
         "scenario_list": scenario_list,
@@ -139,6 +147,7 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
         "model_alias": model_alias,
         "model_entry": model_entry,
         "mode": mode,
+        "auth_mode": auth_mode,
         "agent_type": agent_type,
         "harness_spec": harness_spec,
         "run_harness_on_host": bool(mode == "live" and host_harness and harness_spec.get("installed")),
@@ -375,7 +384,8 @@ def run_evaluation(
                         candidate_usage=candidate_usage,
                         project_id=str(req["gcp_project_id"]),
                         location=str(req["gcp_location"]),
-                        use_vertex=True,
+                        use_vertex=(req.get("auth_mode") != "api_key"),
+                        auth_mode=str(req.get("auth_mode") or "auto"),
                     )
             except Exception as ex:  # noqa: BLE001 - one failing test must not abort the suite
                 error = f"{type(ex).__name__}: {ex}"
