@@ -2209,13 +2209,16 @@ function renderReport(data) {
   const sum = (key) => rows.reduce((acc, r) => acc + Number(r[key] || 0), 0);
   const passedCount = rows.filter((r) => r.status === "PASSED").length;
   const scored = rows.filter((r) => r.status !== "ERROR");
-  const avgScore = scored.length ? scored.reduce((a, r) => a + Number(r.composite_score || 0), 0) / scored.length : 0;
+  const rawAvg = scored.length ? scored.reduce((a, r) => a + Number(r.composite_score || 0), 0) / scored.length : 0;
+  // Score normalization: if on 1-5 rubric scale, scale to 0-100%; if already 0-100%, clamp to max 100%
+  const avgCriticPercent = rawAvg <= 5.0 && rawAvg > 0 ? rawAvg * 20.0 : Math.min(100, Math.max(0, rawAvg));
+  const avgCriticFive = (avgCriticPercent / 20.0).toFixed(2);
   const summary = document.getElementById("eval-report-summary");
   if (summary) {
     const cards = [
       ["Tests", `${done}/${total}`, `${rows.filter((r) => !r.is_custom).length} standard • ${rows.filter((r) => r.is_custom).length} custom`],
       ["Pass Rate", `${rows.length ? ((100 * passedCount) / rows.length).toFixed(0) : 0}%`, `${passedCount} passed • ${rows.length - passedCount} failed/error`],
-      ["Avg Critic Score", `${avgScore.toFixed(2)} / 5`, "Actor-critic composite"],
+      ["Avg Critic Score", `${avgCriticPercent.toFixed(1)}%`, `Actor-critic composite (${avgCriticFive} / 5.0)`],
       ["Total Time", `${sum("wall_seconds").toFixed(2)} s`, `avg ${(rows.length ? sum("wall_seconds") / rows.length : 0).toFixed(2)} s / test`],
       ["Total Tokens", fmtInt(sum("total_tokens")), `${fmtInt(sum("input_tokens"))} in • ${fmtInt(sum("output_tokens"))} out • ${fmtInt(sum("critic_tokens"))} critic`],
       ["Total Cost", fmtUsd(sum("estimated_cost_usd")), `MIQ ${fmtUsd(sum("candidate_cost_usd"))} • critics ${fmtUsd(sum("critic_cost_usd"))}`],
@@ -2244,13 +2247,16 @@ function renderReport(data) {
             r.harbor_tasks_total !== undefined && r.harbor_tasks_total !== null
               ? `${r.harbor_tasks_passed}/${r.harbor_tasks_total}`
               : "—";
+          const jevRubric = Number(r.rubric_score || 0).toFixed(1);
+          const rawCrit = Number(r.composite_score || 0);
+          const critPercent = rawCrit <= 5.0 && rawCrit > 0 ? rawCrit * 20.0 : Math.min(100, Math.max(0, rawCrit));
           return `
           <tr>
             <td>${idx + 1}</td>
             <td><strong>${escapeHtml(r.scenario_name || r.scenario_id)}</strong><div class="muted mono">${escapeHtml(r.scenario_id)}</div>${r.error ? `<div class="report-error">${escapeHtml(r.error)}</div>` : ""}</td>
             <td><span class="badge ${r.is_custom ? "badge-coding" : "badge-recommended"}">${r.is_custom ? "Custom" : "Standard"}</span></td>
             <td><span class="badge ${statusCls}">${escapeHtml(r.status)}</span></td>
-            <td class="mono">${Number(r.rubric_score || 0).toFixed(1)} / ${Number(r.composite_score || 0).toFixed(2)}</td>
+            <td class="mono">${jevRubric} / 5 • ${critPercent.toFixed(1)}%</td>
             <td class="mono">${harborCell}</td>
             <td class="mono">${Number(r.wall_seconds || 0).toFixed(2)} s</td>
             <td class="mono">${fmtInt(r.input_tokens)}</td>
@@ -2278,7 +2284,7 @@ function renderReport(data) {
       <tr>
         <td></td>
         <td colspan="3"><strong>Total (${rows.length} test${rows.length > 1 ? "s" : ""})</strong></td>
-        <td class="mono">avg ${avgScore.toFixed(2)}</td>
+        <td class="mono">avg ${avgCriticPercent.toFixed(1)}%</td>
         <td></td>
         <td class="mono"><strong>${sum("wall_seconds").toFixed(2)} s</strong></td>
         <td class="mono">${fmtInt(sum("input_tokens"))}</td>
@@ -2412,22 +2418,41 @@ function displayEvaluationResults(data) {
   }
 
   const acScores = data.actor_critic_scores || {};
-  const compScore = acScores.composite_normalized_score || 0;
-  document.getElementById("composite-score-text").textContent = `${Number(compScore).toFixed(1)} / 5.0`;
+  const rawComp = acScores.composite_normalized_score !== undefined
+    ? Number(acScores.composite_normalized_score || 0)
+    : (Number(acScores.composite_score || 0) <= 5.0 && Number(acScores.composite_score || 0) > 0
+        ? Number(acScores.composite_score || 0) * 20.0
+        : Number(acScores.composite_score || 0));
+  const compNorm = Math.min(100, Math.max(0, rawComp));
+  const compFive = (compNorm / 20.0).toFixed(1);
+  const compTextEl = document.getElementById("composite-score-text");
+  if (compTextEl) {
+    compTextEl.textContent = `${compNorm.toFixed(1)}% (${compFive} / 5.0)`;
+  }
+
+  const formatCriticScore = (evalObj) => {
+    if (!evalObj) return "-";
+    const rawVal = evalObj.normalized_score !== undefined
+      ? Number(evalObj.normalized_score || 0)
+      : (evalObj.score !== undefined ? Number(evalObj.score) * 20.0 : 0);
+    const norm = Math.min(100, Math.max(0, rawVal));
+    const five = evalObj.score !== undefined ? Number(evalObj.score).toFixed(0) : (norm / 20.0).toFixed(1);
+    return `${norm.toFixed(1)}% (${five}/5)`;
+  };
 
   const evals = acScores.evaluations || {};
   if (evals.qwen) {
-    document.getElementById("critic-score-qwen").textContent = `${evals.qwen.normalized_score} / 5`;
+    document.getElementById("critic-score-qwen").textContent = formatCriticScore(evals.qwen);
     document.getElementById("critic-rationale-qwen").textContent =
       evals.qwen.rationale || "Architectural modularity verified.";
   }
   if (evals.minimax) {
-    document.getElementById("critic-score-minimax").textContent = `${evals.minimax.normalized_score} / 5`;
+    document.getElementById("critic-score-minimax").textContent = formatCriticScore(evals.minimax);
     document.getElementById("critic-rationale-minimax").textContent =
       evals.minimax.rationale || "Execution assertions pass deterministically.";
   }
   if (evals.kimi_k) {
-    document.getElementById("critic-score-kimi").textContent = `${evals.kimi_k.normalized_score} / 5`;
+    document.getElementById("critic-score-kimi").textContent = formatCriticScore(evals.kimi_k);
     document.getElementById("critic-rationale-kimi").textContent =
       evals.kimi_k.rationale || "GCP API & parameter grounding verified.";
   }

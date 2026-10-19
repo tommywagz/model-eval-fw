@@ -250,6 +250,9 @@ def build_test_metrics(
     else:
         token_source = "simulated (mock)"
 
+    critic_norm = float(ac.get("composite_normalized_score", 0.0) or 0.0)
+    critic_rubric = float(ac.get("composite_score", critic_norm / 20.0 if critic_norm else 0.0) or 0.0)
+
     base.update(
         {
             "run_id": res.get("run_id"),
@@ -257,7 +260,9 @@ def build_test_metrics(
             "passed": passed,
             "error": None,
             "rubric_score": float(res.get("rubric_score", 0.0) or 0.0),
-            "composite_score": float(ac.get("composite_normalized_score", 0.0) or 0.0),
+            "composite_score": critic_norm,
+            "composite_normalized_score": critic_norm,
+            "critic_rubric_score": critic_rubric,
             "duration_seconds": float(res.get("duration_seconds", timing.get("duration_seconds", 0.0)) or 0.0),
             "phase_timings_ms": dict(timing.get("phase_timings_ms") or {}),
             "input_tokens": in_tok,
@@ -299,6 +304,7 @@ def summarize_report(per_test: List[Dict[str, Any]], req: Dict[str, Any], starte
         "total_critic_cost_usd": round(sum(t["critic_cost_usd"] for t in per_test), 6),
         "total_cost_usd": round(sum(t["estimated_cost_usd"] for t in per_test), 6),
         "avg_composite_score": round(sum(scored) / len(scored), 2) if scored else 0.0,
+        "avg_composite_normalized_score": round(sum(scored) / len(scored), 2) if scored else 0.0,
         "model_alias": req["model_alias"],
         "model_name": req["model_entry"].get("name", req["model_alias"]),
         "harness": req["agent_type"],

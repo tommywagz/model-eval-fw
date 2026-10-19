@@ -507,6 +507,8 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "selectCriticModel" in js
         assert "renderCriticCards" in js
         assert "onCriticLocationChange" in js
+        assert "avgCriticPercent" in js
+        assert "formatCriticScore" in js
 
 
 def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:
@@ -870,6 +872,39 @@ def test_critic_model_selection_and_eval_dispatch(web_server: str) -> None:
         run_data_none = json.loads(resp.read().decode("utf-8"))
         assert run_data_none["status"] == "COMPLETED"
         assert run_data_none["no_critics"] is True
+
+
+def test_critic_composite_score_percentage_and_denominator(web_server: str) -> None:
+    """Verify that composite critic score reflects a percentage (max 100%) and doesn't mismatch / 5."""
+    payload = json.dumps({
+        "scenario_id": "oauth_api_enablement",
+        "model_alias": "gemini-4-argon",
+        "agent_type": "agy",
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        run_data = json.loads(resp.read().decode("utf-8"))
+        assert run_data["status"] == "COMPLETED"
+        ac = run_data.get("actor_critic_scores", {})
+        norm_score = ac.get("composite_normalized_score")
+        assert norm_score is not None
+        assert 0.0 <= norm_score <= 100.0
+
+        # Verify test_results contain accurate score metrics
+        tr = run_data["test_results"][0]
+        assert "composite_normalized_score" in tr
+        assert tr["composite_normalized_score"] <= 100.0
+        assert "critic_rubric_score" in tr
+        assert tr["critic_rubric_score"] <= 5.0
+
 
 
 
