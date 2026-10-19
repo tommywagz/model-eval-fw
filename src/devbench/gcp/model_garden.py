@@ -558,21 +558,34 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9._-]+", "-", text.lower()).strip("-") or "model"
 
 
-def _featured_rank(entry: Dict[str, Any]) -> Tuple[int, str]:
+def _featured_rank(entry: Dict[str, Any]) -> Tuple[int, int, str]:
     mid = entry["id"].lower()
+    # Priority 0: The 5 canonical default models requested by user:
+    # 1. Argon, 2. Gemini Flash 3.8, 3. Opus 5.5, 4. Sonnet 5.5, 5. Codestral 2
+    if "argon" in mid:
+        return 0, 0, mid
+    if "3.8-flash" in mid or "3-8-flash" in mid:
+        return 0, 1, mid
+    if "opus" in mid and ("5.5" in mid or "5-5" in mid or "5" in mid):
+        return 0, 2, mid
+    if "sonnet" in mid and ("5.5" in mid or "5-5" in mid or "5" in mid):
+        return 0, 3, mid
+    if "codestral" in mid:
+        return 0, 4, mid
+
     order = [
-        ("gemini", "argon"),
         ("gemini", "flash"),
+        ("gemini", "pro"),
         ("claude", "opus"),
         ("claude", "sonnet"),
-        ("codestral", ""),
+        ("claude", "haiku"),
         ("mistral", "large"),
         ("llama", ""),
     ]
     for idx, (a, b) in enumerate(order):
         if a in mid and (not b or b in mid):
-            return idx, mid
-    return len(order), mid
+            return 1, idx, mid
+    return 2, len(order), mid
 
 
 def discover_model_garden(

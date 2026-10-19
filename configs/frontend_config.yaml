@@ -207,7 +207,7 @@ model_garden:
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
     location: "us-east5"
-    is_default: true
+    is_default: false
     enabled: true
     selected: false
 
