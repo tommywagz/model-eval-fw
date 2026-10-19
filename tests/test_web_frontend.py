@@ -732,5 +732,66 @@ def test_models_sorted_provider_by_provider_reverse_release_order(web_server: st
         assert model_ids.index("claude-sonnet-4-5") < model_ids.index("grok-2-mini")
 
 
+def test_only_implemented_scenarios_visible_in_define_use_case(web_server: str) -> None:
+    """Verify that only the 4 implemented and runnable test suites (easy_deployment, model_training, oauth_api_enablement, storage_operations) are returned and visible in the frontend."""
+    # 1. Query /api/scenarios
+    req = urllib.request.Request(f"{web_server}/api/scenarios")
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read().decode("utf-8"))
+        scenarios = data["scenarios"]
+        standard_ids = {s["scenario_id"] for s in scenarios if not s.get("is_custom")}
+
+        expected_implemented = {
+            "easy_deployment",
+            "model_training",
+            "oauth_api_enablement",
+            "storage_operations",
+        }
+        assert standard_ids == expected_implemented
+
+        # Confirm non-implemented test suites are excluded
+        excluded = [
+            "agent_swarm",
+            "backend_rewrite",
+            "frontend_rewrite",
+            "bad_architecture_conversion",
+            "solid_architecture_improvement",
+            "skill_scaffolding",
+            "tool_skill_dispatching",
+            "coding_skill_execution",
+            "complex_skill_synthesis",
+        ]
+        for exc in excluded:
+            assert exc not in standard_ids
+
+    # 2. Verify eval runner accepts "oauth" shorthand and resolves it cleanly
+    eval_payload = json.dumps({
+        "scenario_ids": ["oauth", "storage_operations"],
+        "suite_name": "Implemented Standard Scenarios Run",
+        "model_alias": "gemini-4-argon",
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+
+    eval_req = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=eval_payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(eval_req) as resp:
+        assert resp.status == 200
+        run_data = json.loads(resp.read().decode("utf-8"))
+        assert run_data["status"] == "COMPLETED"
+        test_results = run_data["test_results"]
+        # Both scenarios executed
+        assert len(test_results) == 2
+        executed_ids = [tr["scenario_id"] for tr in test_results]
+        assert "oauth_api_enablement" in executed_ids
+        assert "storage_operations" in executed_ids
+
+
+
 
 

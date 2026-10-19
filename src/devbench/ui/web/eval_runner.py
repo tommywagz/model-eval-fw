@@ -60,14 +60,20 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
     if isinstance(scenario_ids_raw, list):
         scenario_list = []
         for s in scenario_ids_raw:
-            if s and str(s) not in scenario_list:
-                scenario_list.append(str(s))
+            sid = str(s).strip()
+            if sid == "oauth":
+                sid = "oauth_api_enablement"
+            if sid and sid not in scenario_list:
+                scenario_list.append(sid)
         if not scenario_list:
             raise EvalRequestError(
                 "Your test suite is empty. Add at least one standard test or one custom test scenario."
             )
     else:
-        scenario_list = [str(payload.get("scenario_id") or "complex_skill_synthesis")]
+        raw_s = str(payload.get("scenario_id") or "storage_operations").strip()
+        if raw_s == "oauth":
+            raw_s = "oauth_api_enablement"
+        scenario_list = [raw_s]
     unknown = [s for s in scenario_list if s not in SCENARIO_CATALOG]
     if unknown:
         raise EvalRequestError(f"Unknown test scenario(s): {', '.join(unknown)}")

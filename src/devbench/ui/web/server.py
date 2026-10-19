@@ -1085,8 +1085,17 @@ class devbenchRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/scenarios":
+            implemented_scenario_ids = {
+                "easy_deployment",
+                "model_training",
+                "oauth_api_enablement",
+                "storage_operations",
+            }
             scenarios_list = []
             for sc_id, sc_data in SCENARIO_CATALOG.items():
+                is_custom = sc_id.startswith("argon_") or bool(sc_data.get("is_custom", False))
+                if not is_custom and sc_id not in implemented_scenario_ids:
+                    continue
                 scenarios_list.append(
                     {
                         "scenario_id": sc_id,
@@ -1097,14 +1106,34 @@ class devbenchRequestHandler(BaseHTTPRequestHandler):
                         "difficulty": sc_data.get("difficulty", "Medium"),
                         "prompt": sc_data.get("prompt", ""),
                         "primary_metrics": sc_data.get("primary_metrics", []),
-                        "is_custom": sc_id.startswith("argon_") or bool(sc_data.get("is_custom", False)),
+                        "is_custom": is_custom,
                     }
                 )
-            self._send_json({"scenarios": scenarios_list, "suites": list(SUITE_CATALOG.values())})
+            filtered_suites = []
+            for s in SUITE_CATALOG.values():
+                s_scenarios = [sid for sid in s.get("scenarios", []) if sid in implemented_scenario_ids]
+                if s_scenarios:
+                    s_copy = dict(s)
+                    s_copy["scenarios"] = s_scenarios
+                    filtered_suites.append(s_copy)
+            self._send_json({"scenarios": scenarios_list, "suites": filtered_suites})
             return
 
         if path == "/api/suites":
-            self._send_json({"suites": list(SUITE_CATALOG.values())})
+            implemented_scenario_ids = {
+                "easy_deployment",
+                "model_training",
+                "oauth_api_enablement",
+                "storage_operations",
+            }
+            filtered_suites = []
+            for s in SUITE_CATALOG.values():
+                s_scenarios = [sid for sid in s.get("scenarios", []) if sid in implemented_scenario_ids]
+                if s_scenarios:
+                    s_copy = dict(s)
+                    s_copy["scenarios"] = s_scenarios
+                    filtered_suites.append(s_copy)
+            self._send_json({"suites": filtered_suites})
             return
 
         if path == "/api/runs":

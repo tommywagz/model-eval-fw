@@ -1432,6 +1432,23 @@ function updateActiveModelIndicator() {
 // Step 2: Scenarios & Custom Multi-Test Suite Builder
 // ============================================================================
 
+// Currently implemented & runnable standard benchmark scenarios
+const IMPLEMENTED_STANDARD_SCENARIO_IDS = new Set([
+  "easy_deployment",
+  "model_training",
+  "oauth_api_enablement",
+  "storage_operations",
+]);
+
+function isImplementedScenario(scenarioId) {
+  if (!scenarioId) return false;
+  return (
+    IMPLEMENTED_STANDARD_SCENARIO_IDS.has(scenarioId) ||
+    scenarioId === "oauth" ||
+    scenarioId.startsWith("argon_")
+  );
+}
+
 async function fetchScenarios() {
   const select = document.getElementById("preset-scenario-select");
   try {
@@ -1440,9 +1457,11 @@ async function fetchScenarios() {
     const scenarios = data.scenarios || [];
     state.allScenarios = scenarios;
 
+    const standardScenarios = getStandardScenarios();
+
     if (select) {
       select.innerHTML = '<option value="">-- Choose a standard benchmark scenario --</option>';
-      scenarios.forEach((s) => {
+      standardScenarios.forEach((s) => {
         const opt = document.createElement("option");
         opt.value = s.scenario_id;
         opt.textContent = `[${s.difficulty}] ${s.scenario_id} (${s.suite_slug})`;
@@ -1455,9 +1474,9 @@ async function fetchScenarios() {
     }
 
     // Initialize default suite with storage_operations as the preset test
-    if (state.customSuiteItems.length === 0 && scenarios.length > 0) {
+    if (state.customSuiteItems.length === 0 && standardScenarios.length > 0) {
       const defaultSc =
-        scenarios.find((s) => s.scenario_id === "storage_operations") || scenarios[0];
+        standardScenarios.find((s) => s.scenario_id === "storage_operations") || standardScenarios[0];
       addScenarioToCustomSuite(defaultSc, true);
     }
 
@@ -1493,7 +1512,12 @@ function renderStandardScenariosChecklist() {
 }
 
 function getStandardScenarios() {
-  return state.allScenarios.filter((s) => !s.is_custom && !s.scenario_id.startsWith("argon_"));
+  return state.allScenarios.filter(
+    (s) =>
+      !s.is_custom &&
+      !s.scenario_id.startsWith("argon_") &&
+      (IMPLEMENTED_STANDARD_SCENARIO_IDS.has(s.scenario_id) || s.scenario_id === "oauth")
+  );
 }
 
 function selectAllStandardScenarios() {
