@@ -42,9 +42,126 @@ GCP_STATE_LOCK = threading.Lock()
 GCP_RUNTIME_STATE: Optional[Dict[str, Any]] = None
 
 
+def sort_models_by_provider_and_release(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Sort models provider by provider (Google -> Anthropic -> xAI / Grok -> Mistral -> Meta -> DeepSeek -> Qwen -> ElevenLabs -> Others),
+    and within each provider in reverse release order (latest release first).
+    """
+    def _key(model: Dict[str, Any]) -> Tuple[int, float, float, int, str]:
+        mid = str(model.get("id") or model.get("model_id") or "").lower()
+        name = str(model.get("name") or "").lower()
+        pub = str(model.get("publisher") or "").lower()
+        brand = str(model.get("brand") or "").lower()
+        prov = str(model.get("provider") or "").lower()
+        text = f"{mid} {name}"
+
+        # 1. Provider ranking: Google -> Anthropic -> xAI / Grok -> Mistral -> Meta -> DeepSeek -> Qwen -> ElevenLabs -> Others
+        if pub == "google" or brand == "gemini" or "gemini" in text or "muse" in text or "gemma" in text or "google" in prov:
+            p_rank = 0
+        elif pub == "anthropic" or brand == "anthropic" or "claude" in text or "anthropic" in prov:
+            p_rank = 1
+        elif pub == "xai" or brand == "xai" or "grok" in text or "xai" in prov:
+            p_rank = 2
+        elif pub in ("mistral", "mistralai") or brand == "mistral" or "mistral" in text or "codestral" in text or "mistral" in prov:
+            p_rank = 3
+        elif pub == "meta" or brand == "meta" or "llama" in text or "meta" in prov or "llama" in prov:
+            p_rank = 4
+        elif pub == "deepseek" or brand == "deepseek" or "deepseek" in text or "deepseek" in prov:
+            p_rank = 5
+        elif pub in ("qwen", "alibaba") or brand == "qwen" or "qwen" in text or "qwen" in prov:
+            p_rank = 6
+        elif pub == "elevenlabs" or brand == "elevenlabs" or "eleven" in text or "elevenlabs" in prov:
+            p_rank = 7
+        else:
+            p_rank = 99
+
+        # 2. Extract version (latest first)
+        clean_mid = re.sub(r"[-_](?:[0-9]+b|[0-9]+m)\b", "", mid)
+        clean_name = re.sub(r"\b(?:[0-9]+b|[0-9]+m)\b", "", name)
+        combined = f"{clean_mid} {clean_name}"
+
+        ver_match = re.search(r"(?:gemini|claude|grok|llama|mistral|qwen|deepseek|r|v)[-_ ]?([0-9]+(?:[\.\-][0-9]+)?)", combined)
+        if not ver_match:
+            ver_match = re.search(r"([0-9]+(?:[\.\-][0-9]+)?)", clean_mid)
+
+        major, minor = 0.0, 0.0
+        if ver_match:
+            raw_v = ver_match.group(1).replace("-", ".")
+            parts = raw_v.split(".")
+            try:
+                major = float(parts[0])
+                minor = float(parts[1]) if len(parts) > 1 else 0.0
+            except ValueError:
+                pass
+
+        # 3. Tier ranking within same version (reasoning/flagship/pro before flash/haiku/mini)
+        tier_rank = 0
+        if "argon" in text:
+            tier_rank = 10
+        elif "opus" in text or "reasoning" in text or "large" in text:
+            tier_rank = 8
+        elif "pro" in text or "sonnet" in text or "medium" in text:
+            tier_rank = 6
+        elif "flash" in text or "haiku" in text or "small" in text or "codestral" in text:
+            tier_rank = 4
+        elif "mini" in text or "turbo" in text or "lite" in text:
+            tier_rank = 2
+
+        return (p_rank, -major, -minor, -tier_rank, mid)
+
+    return sorted(models, key=_key)
+
+
 def _default_model_garden() -> List[Dict[str, Any]]:
-    """Return the canonical catalog of assessable Frontier Models (MIQs) on GCP Model Garden."""
-    return [
+    """Return the canonical catalog of assessable Frontier Models (MIQs) on GCP Model Garden,
+    ordered provider by provider with latest models first.
+    """
+    catalog = [
+        # --- Provider 1: Google (Latest releases first: Gemini 4 -> 3.8 -> 3.5 -> 3.1 -> 3.0 -> Muse) ---
+        {
+            "id": "gemini-4-argon",
+            "name": "Gemini 4 Argon",
+            "brand": "gemini",
+            "provider": "Google DeepMind (Vertex AI Model Garden)",
+            "badge": "Experimental Argon",
+            "tags": ["10M Context", "Agentic Synthesis", "ADK Native"],
+            "description": "Experimental Argon-series Gemini frontier endpoint on Vertex AI for autonomous test suite synthesis.",
+            "cost_per_1k_input_usd": 0.00200,
+            "cost_per_1k_output_usd": 0.00800,
+            "location": "us-central1",
+            "is_default": False,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "gemini-3.8-flash",
+            "name": "Gemini 3.8 Flash",
+            "brand": "gemini",
+            "provider": "Google DeepMind (Vertex AI Model Garden)",
+            "badge": "High Speed Frontier",
+            "tags": ["Sub-Second Latency", "High Throughput", "Tool Dispatch"],
+            "description": "Ultra-fast frontier model optimized for high-frequency agent tool invocation, real-time code synthesis, and cost-efficient scaling.",
+            "cost_per_1k_input_usd": 0.00015,
+            "cost_per_1k_output_usd": 0.00060,
+            "location": "us-central1",
+            "is_default": True,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "gemini-3.5-pro",
+            "name": "Gemini 3.5 Pro",
+            "brand": "gemini",
+            "provider": "Google DeepMind (Vertex AI Model Garden)",
+            "badge": "Enterprise Pro",
+            "tags": ["2M Context", "Production Grade", "Cloud Native"],
+            "description": "Enterprise-hardened Gemini Pro release on Vertex AI for reliable cloud tool writing and code transformation.",
+            "cost_per_1k_input_usd": 0.00125,
+            "cost_per_1k_output_usd": 0.00500,
+            "location": "us-central1",
+            "is_default": False,
+            "enabled": True,
+            "selected": False,
+        },
         {
             "id": "gemini-3.5-flash",
             "name": "Gemini 3.5 Flash",
@@ -76,96 +193,6 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "selected": False,
         },
         {
-            "id": "gemini-3.8-flash",
-            "name": "Gemini 3.8 Flash",
-            "brand": "gemini",
-            "provider": "Google DeepMind (Vertex AI Model Garden)",
-            "badge": "High Speed Frontier",
-            "tags": ["Sub-Second Latency", "High Throughput", "Tool Dispatch"],
-            "description": "Ultra-fast frontier model optimized for high-frequency agent tool invocation, real-time code synthesis, and cost-efficient scaling.",
-            "cost_per_1k_input_usd": 0.00015,
-            "cost_per_1k_output_usd": 0.00060,
-            "location": "us-central1",
-            "is_default": True,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "claude-opus-5.1",
-            "name": "Claude Opus 5.1",
-            "brand": "anthropic",
-            "provider": "Anthropic (Vertex AI Partner Model)",
-            "badge": "Frontier Reasoning",
-            "tags": ["Multi-Step Planning", "System Architecture", "Zero-Shot Refactor"],
-            "description": "Anthropic's most capable Opus 5.1 frontier partner model on Vertex AI specializing in deep architectural reasoning and complex multi-agent synthesis.",
-            "cost_per_1k_input_usd": 0.00500,
-            "cost_per_1k_output_usd": 0.02500,
-            "location": "us-east5",
-            "is_default": True,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "claude-sonnet-5.5",
-            "name": "Claude Sonnet 5.5",
-            "brand": "anthropic",
-            "provider": "Anthropic (Vertex AI Partner Model)",
-            "badge": "Coding Specialist",
-            "tags": ["Advanced Coding", "Architectural Conversion", "Low Error Rate"],
-            "description": "Next-gen Anthropic Sonnet 5.5 frontier partner model on Google Cloud delivering state-of-the-art polyglot code translation and deterministic test adherence.",
-            "cost_per_1k_input_usd": 0.00300,
-            "cost_per_1k_output_usd": 0.01500,
-            "location": "us-east5",
-            "is_default": True,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "mistral-large-3",
-            "name": "Mistral Large 3",
-            "brand": "mistral",
-            "provider": "Mistral AI (Vertex AI Partner Model)",
-            "badge": "Latest Mistral Release",
-            "tags": ["Latest Release", "Function Calling", "Concise Code", "Polyglot"],
-            "description": "Latest Mistral AI flagship release on Google Cloud Vertex AI with high-precision structured output, agentic tool calling, and multilingual code synthesis.",
-            "cost_per_1k_input_usd": 0.00200,
-            "cost_per_1k_output_usd": 0.00600,
-            "location": "europe-west4",
-            "is_default": True,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "gemini-4-argon",
-            "name": "Gemini 4 Argon",
-            "brand": "gemini",
-            "provider": "Google DeepMind (Vertex AI Model Garden)",
-            "badge": "Experimental Argon",
-            "tags": ["10M Context", "Agentic Synthesis", "ADK Native"],
-            "description": "Experimental Argon-series Gemini frontier endpoint on Vertex AI for autonomous test suite synthesis.",
-            "cost_per_1k_input_usd": 0.00200,
-            "cost_per_1k_output_usd": 0.00800,
-            "location": "us-central1",
-            "is_default": False,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "gemini-3.5-pro",
-            "name": "Gemini 3.5 Pro",
-            "brand": "gemini",
-            "provider": "Google DeepMind (Vertex AI Model Garden)",
-            "badge": "Enterprise Pro",
-            "tags": ["2M Context", "Production Grade", "Cloud Native"],
-            "description": "Enterprise-hardened Gemini Pro release on Vertex AI for reliable cloud tool writing and code transformation.",
-            "cost_per_1k_input_usd": 0.00125,
-            "cost_per_1k_output_usd": 0.00500,
-            "location": "us-central1",
-            "is_default": False,
-            "enabled": True,
-            "selected": False,
-        },
-        {
             "id": "gemini-3-pro",
             "name": "Gemini 3 Pro",
             "brand": "gemini",
@@ -192,6 +219,53 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "cost_per_1k_output_usd": 0.00300,
             "location": "us-central1",
             "is_default": False,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "muse",
+            "name": "Muse",
+            "brand": "google",
+            "provider": "Google (Vertex AI Model Garden MaaS)",
+            "badge": "Cheap Serverless",
+            "tags": ["Open Weights", "Serverless MaaS", "Fast Generation"],
+            "description": "Cheap serverless open-weight generative partner model on Vertex AI Model Garden.",
+            "cost_per_1k_input_usd": 0.00010,
+            "cost_per_1k_output_usd": 0.00030,
+            "location": "us-central1",
+            "is_default": False,
+            "enabled": True,
+            "selected": False,
+        },
+
+        # --- Provider 2: Anthropic (Latest releases first: Claude 5.5 -> 5.1 -> 4.6 -> 4.5) ---
+        {
+            "id": "claude-sonnet-5.5",
+            "name": "Claude Sonnet 5.5",
+            "brand": "anthropic",
+            "provider": "Anthropic (Vertex AI Partner Model)",
+            "badge": "Coding Specialist",
+            "tags": ["Advanced Coding", "Architectural Conversion", "Low Error Rate"],
+            "description": "Next-gen Anthropic Sonnet 5.5 frontier partner model on Google Cloud delivering state-of-the-art polyglot code translation and deterministic test adherence.",
+            "cost_per_1k_input_usd": 0.00300,
+            "cost_per_1k_output_usd": 0.01500,
+            "location": "us-east5",
+            "is_default": True,
+            "enabled": True,
+            "selected": False,
+        },
+        {
+            "id": "claude-opus-5.1",
+            "name": "Claude Opus 5.1",
+            "brand": "anthropic",
+            "provider": "Anthropic (Vertex AI Partner Model)",
+            "badge": "Frontier Reasoning",
+            "tags": ["Multi-Step Planning", "System Architecture", "Zero-Shot Refactor"],
+            "description": "Anthropic's most capable Opus 5.1 frontier partner model on Vertex AI specializing in deep architectural reasoning and complex multi-agent synthesis.",
+            "cost_per_1k_input_usd": 0.00500,
+            "cost_per_1k_output_usd": 0.02500,
+            "location": "us-east5",
+            "is_default": True,
             "enabled": True,
             "selected": False,
         },
@@ -240,6 +314,8 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "enabled": True,
             "selected": False,
         },
+
+        # --- Provider 3: xAI / Grok ---
         {
             "id": "grok-2-mini",
             "name": "Grok 2 Mini",
@@ -255,33 +331,20 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "enabled": True,
             "selected": False,
         },
+
+        # --- Provider 4: Mistral AI ---
         {
-            "id": "llama-3.1-8b",
-            "name": "Llama 3.1 8B Instruct",
-            "brand": "meta",
-            "provider": "Meta (Vertex AI Model Garden MaaS)",
-            "badge": "Cheap Serverless",
-            "tags": ["Open Weights", "Serverless MaaS", "Zero Lock-in"],
-            "description": "Leading open-weight instruction-tuned lightweight model deployed via Vertex AI Model Garden serverless MaaS.",
-            "cost_per_1k_input_usd": 0.00015,
-            "cost_per_1k_output_usd": 0.00060,
-            "location": "us-central1",
-            "is_default": False,
-            "enabled": True,
-            "selected": False,
-        },
-        {
-            "id": "muse",
-            "name": "Muse",
-            "brand": "google",
-            "provider": "Google (Vertex AI Model Garden MaaS)",
-            "badge": "Cheap Serverless",
-            "tags": ["Open Weights", "Serverless MaaS", "Fast Generation"],
-            "description": "Cheap serverless open-weight generative partner model on Vertex AI Model Garden.",
-            "cost_per_1k_input_usd": 0.00010,
-            "cost_per_1k_output_usd": 0.00030,
-            "location": "us-central1",
-            "is_default": False,
+            "id": "mistral-large-3",
+            "name": "Mistral Large 3",
+            "brand": "mistral",
+            "provider": "Mistral AI (Vertex AI Partner Model)",
+            "badge": "Latest Mistral Release",
+            "tags": ["Latest Release", "Function Calling", "Concise Code", "Polyglot"],
+            "description": "Latest Mistral AI flagship release on Google Cloud Vertex AI with high-precision structured output, agentic tool calling, and multilingual code synthesis.",
+            "cost_per_1k_input_usd": 0.00200,
+            "cost_per_1k_output_usd": 0.00600,
+            "location": "europe-west4",
+            "is_default": True,
             "enabled": True,
             "selected": False,
         },
@@ -300,21 +363,25 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "enabled": True,
             "selected": False,
         },
+
+        # --- Provider 5: Meta / Llama ---
         {
-            "id": "eleven-labs",
-            "name": "ElevenLabs Turbo v2",
-            "brand": "elevenlabs",
-            "provider": "ElevenLabs (Vertex AI Partner Model)",
+            "id": "llama-3.1-8b",
+            "name": "Llama 3.1 8B Instruct",
+            "brand": "meta",
+            "provider": "Meta (Vertex AI Model Garden MaaS)",
             "badge": "Cheap Serverless",
-            "tags": ["Partner Model", "Serverless Voice & Speech", "Low Latency"],
-            "description": "ElevenLabs cheap high-speed serverless speech and synthesis partner model served via Vertex AI Model Garden.",
+            "tags": ["Open Weights", "Serverless MaaS", "Zero Lock-in"],
+            "description": "Leading open-weight instruction-tuned lightweight model deployed via Vertex AI Model Garden serverless MaaS.",
             "cost_per_1k_input_usd": 0.00015,
-            "cost_per_1k_output_usd": 0.00050,
+            "cost_per_1k_output_usd": 0.00060,
             "location": "us-central1",
             "is_default": False,
             "enabled": True,
             "selected": False,
         },
+
+        # --- Provider 6: DeepSeek ---
         {
             "id": "deepseek-r2",
             "name": "DeepSeek R2 Reasoning",
@@ -330,6 +397,8 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "enabled": False,
             "selected": False,
         },
+
+        # --- Provider 7: Alibaba / Qwen ---
         {
             "id": "qwen-3-72b",
             "name": "Qwen 3 72B Instruct",
@@ -345,7 +414,25 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "enabled": False,
             "selected": False,
         },
+
+        # --- Provider 8: ElevenLabs & Specialized Services ---
+        {
+            "id": "eleven-labs",
+            "name": "ElevenLabs Turbo v2",
+            "brand": "elevenlabs",
+            "provider": "ElevenLabs (Vertex AI Partner Model)",
+            "badge": "Cheap Serverless",
+            "tags": ["Partner Model", "Serverless Voice & Speech", "Low Latency"],
+            "description": "ElevenLabs cheap high-speed serverless speech and synthesis partner model served via Vertex AI Model Garden.",
+            "cost_per_1k_input_usd": 0.00015,
+            "cost_per_1k_output_usd": 0.00050,
+            "location": "us-central1",
+            "is_default": False,
+            "enabled": True,
+            "selected": False,
+        },
     ]
+    return sort_models_by_provider_and_release(catalog)
 
 
 def load_frontend_config() -> Dict[str, Any]:
@@ -518,7 +605,7 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                     {
                         "project_id": env_proj or persisted["project_id"],
                         "location": env_loc or persisted.get("location", GCP_RUNTIME_STATE["location"]),
-                        "models": persisted["models"],
+                        "models": sort_models_by_provider_and_release(persisted["models"]),
                         "link_status": persisted.get("link_status", {}),
                         "linked": True,
                     }
@@ -539,7 +626,7 @@ def get_gcp_config_Snapshot() -> Dict[str, Any]:
         location = state["location"]
         linked = state["linked"]
         available_locations = list(state["available_locations"])
-        all_models = copy.deepcopy(state["models"])
+        all_models = sort_models_by_provider_and_release(copy.deepcopy(state["models"]))
         link_status = copy.deepcopy(state.get("link_status", {}))
 
     for m in all_models:
@@ -628,6 +715,7 @@ def link_gcp_project(
             state["link_status"] = {**link_status, "verified": True}
         return {"ok": False, **link_status}
 
+    sorted_discovered_models = sort_models_by_provider_and_release(discovery["models"])
     link_status.update(
         {
             "verified": True,
@@ -644,7 +732,7 @@ def link_gcp_project(
         state["project_id"] = project_id
         state["location"] = location
         state["linked"] = True
-        state["models"] = discovery["models"]
+        state["models"] = sorted_discovered_models
         state["link_status"] = link_status
         if location not in state["available_locations"]:
             state["available_locations"].append(location)
@@ -653,7 +741,7 @@ def link_gcp_project(
         os.environ["VERTEX_LOCATION"] = location
         os.environ["GOOGLE_CLOUD_LOCATION"] = location
         snapshot_state = copy.deepcopy(state)
-    _register_models_with_factory(discovery["models"])
+    _register_models_with_factory(sorted_discovered_models)
     _persist_link(snapshot_state)
     return {"ok": True, **link_status}
 

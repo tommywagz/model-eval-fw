@@ -399,14 +399,80 @@ function updateInternalPermissionsBar() {
   }
 }
 
+function sortModelsByProviderAndRelease(models) {
+  if (!Array.isArray(models)) return [];
+
+  function getSortKey(m) {
+    const mid = String(m.id || m.model_id || "").toLowerCase();
+    const name = String(m.name || "").toLowerCase();
+    const pub = String(m.publisher || "").toLowerCase();
+    const brand = String(m.brand || "").toLowerCase();
+    const prov = String(m.provider || "").toLowerCase();
+    const text = `${mid} ${name}`;
+
+    // 1. Provider ranking: Google -> Anthropic -> xAI / Grok -> Mistral -> Meta -> DeepSeek -> Qwen -> ElevenLabs -> Others
+    let pRank = 99;
+    if (pub === "google" || brand === "gemini" || text.includes("gemini") || text.includes("muse") || text.includes("gemma") || prov.includes("google")) {
+      pRank = 0;
+    } else if (pub === "anthropic" || brand === "anthropic" || text.includes("claude") || prov.includes("anthropic")) {
+      pRank = 1;
+    } else if (pub === "xai" || brand === "xai" || text.includes("grok") || prov.includes("xai")) {
+      pRank = 2;
+    } else if (pub === "mistral" || pub === "mistralai" || brand === "mistral" || text.includes("mistral") || text.includes("codestral") || prov.includes("mistral")) {
+      pRank = 3;
+    } else if (pub === "meta" || brand === "meta" || text.includes("llama") || prov.includes("meta") || prov.includes("llama")) {
+      pRank = 4;
+    } else if (pub === "deepseek" || brand === "deepseek" || text.includes("deepseek") || prov.includes("deepseek")) {
+      pRank = 5;
+    } else if (pub === "qwen" || pub === "alibaba" || brand === "qwen" || text.includes("qwen") || prov.includes("qwen")) {
+      pRank = 6;
+    } else if (pub === "elevenlabs" || brand === "elevenlabs" || text.includes("eleven") || prov.includes("elevenlabs")) {
+      pRank = 7;
+    }
+
+    // 2. Extract version (reverse release order: latest first)
+    const cleanMid = mid.replace(/[-_](?:[0-9]+b|[0-9]+m)\b/g, "");
+    const cleanName = name.replace(/\b(?:[0-9]+b|[0-9]+m)\b/g, "");
+    const combined = `${cleanMid} ${cleanName}`;
+
+    let major = 0.0, minor = 0.0;
+    const verMatch = combined.match(/(?:gemini|claude|grok|llama|mistral|qwen|deepseek|r|v)[-_ ]?([0-9]+(?:[\.\-][0-9]+)?)/) || cleanMid.match(/([0-9]+(?:[\.\-][0-9]+)?)/);
+    if (verMatch) {
+      const parts = verMatch[1].replace("-", ".").split(".");
+      major = parseFloat(parts[0]) || 0.0;
+      minor = parts.length > 1 ? (parseFloat(parts[1]) || 0.0) : 0.0;
+    }
+
+    // 3. Tier ranking within same version
+    let tierRank = 0;
+    if (text.includes("argon")) tierRank = 10;
+    else if (text.includes("opus") || text.includes("reasoning") || text.includes("large")) tierRank = 8;
+    else if (text.includes("pro") || text.includes("sonnet") || text.includes("medium")) tierRank = 6;
+    else if (text.includes("flash") || text.includes("haiku") || text.includes("small") || text.includes("codestral")) tierRank = 4;
+    else if (text.includes("mini") || text.includes("turbo") || text.includes("lite")) tierRank = 2;
+
+    return { pRank, major, minor, tierRank, mid };
+  }
+
+  return [...models].sort((a, b) => {
+    const ka = getSortKey(a);
+    const kb = getSortKey(b);
+    if (ka.pRank !== kb.pRank) return ka.pRank - kb.pRank;
+    if (ka.major !== kb.major) return kb.major - ka.major; // descending
+    if (ka.minor !== kb.minor) return kb.minor - ka.minor; // descending
+    if (ka.tierRank !== kb.tierRank) return kb.tierRank - ka.tierRank; // descending
+    return ka.mid.localeCompare(kb.mid);
+  });
+}
+
 function applyModelsSnapshot(data) {
   state.gcpProject = data.project_id || state.gcpProject;
   state.gcpLocation = data.location || state.gcpLocation;
   state.linkStatus = data.link_status || {};
-  state.allModels = data.models || [];
+  state.allModels = sortModelsByProviderAndRelease(data.models || []);
   state.models = state.allModels;
-  state.defaultModels = data.default_models || state.allModels.filter((m) => m.is_default && m.enabled);
-  state.dropdownModels = data.dropdown_models || state.allModels.filter((m) => m.enabled && !m.is_default);
+  state.defaultModels = sortModelsByProviderAndRelease(data.default_models || state.allModels.filter((m) => m.is_default && m.enabled));
+  state.dropdownModels = sortModelsByProviderAndRelease(data.dropdown_models || state.allModels.filter((m) => m.enabled && !m.is_default));
 
   // Keep the selected MIQ valid: it must be enabled in the linked project.
   const enabled = state.allModels.filter((m) => m.enabled);
@@ -724,9 +790,12 @@ function renderGcpMiqToggles(models) {
     return;
   }
 
+  // Sort provider by provider in reverse release order (latest first)
+  const sorted = sortModelsByProviderAndRelease(models);
+
   // Pagination Math (Supports 9 or 12 models per page)
   const pageSize = state.miqPageSize || 12;
-  const totalModels = models.length;
+  const totalModels = sorted.length;
   const totalPages = Math.max(1, Math.ceil(totalModels / pageSize));
   if (state.miqPage > totalPages) state.miqPage = totalPages;
   if (state.miqPage < 1) state.miqPage = 1;
@@ -734,7 +803,7 @@ function renderGcpMiqToggles(models) {
 
   const startIdx = (curPage - 1) * pageSize;
   const endIdx = Math.min(startIdx + pageSize, totalModels);
-  const pagedModels = models.slice(startIdx, endIdx);
+  const pagedModels = sorted.slice(startIdx, endIdx);
 
   // Sync Page Size Selector
   const sizeSelect = document.getElementById("miq-page-size-select");

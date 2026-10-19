@@ -656,4 +656,77 @@ def test_error_message_handles_list_payloads_and_edge_cases():
     assert "Not available in global" in res["detail"]
 
 
+def test_models_sorted_provider_by_provider_reverse_release_order(web_server: str) -> None:
+    """Verify that models are sorted provider by provider (Google -> Anthropic -> xAI / Grok -> Mistral -> Meta -> etc.)
+    and within each provider in reverse release order (latest release first).
+    """
+    from devbench.ui.web.server import sort_models_by_provider_and_release
+
+    # 1. Verify sort_models_by_provider_and_release with a mixed list of models
+    mixed_models = [
+        {"id": "grok-2-mini", "publisher": "xai", "name": "Grok 2 Mini"},
+        {"id": "claude-haiku-4-5", "publisher": "anthropic", "name": "Claude Haiku 4.5"},
+        {"id": "gemini-3-flash", "publisher": "google", "name": "Gemini 3 Flash"},
+        {"id": "claude-sonnet-5.5", "publisher": "anthropic", "name": "Claude Sonnet 5.5"},
+        {"id": "gemini-4-argon", "publisher": "google", "name": "Gemini 4 Argon"},
+        {"id": "grok-4.20-reasoning", "publisher": "xai", "name": "Grok 4.20 Reasoning"},
+        {"id": "gemini-3.8-flash", "publisher": "google", "name": "Gemini 3.8 Flash"},
+        {"id": "claude-opus-5.1", "publisher": "anthropic", "name": "Claude Opus 5.1"},
+        {"id": "gemini-3.5-flash", "publisher": "google", "name": "Gemini 3.5 Flash"},
+        {"id": "mistral-large-3", "publisher": "mistral", "name": "Mistral Large 3"},
+        {"id": "llama-3.1-8b", "publisher": "meta", "name": "Llama 3.1 8B"},
+    ]
+
+    sorted_res = sort_models_by_provider_and_release(mixed_models)
+    sorted_ids = [m["id"] for m in sorted_res]
+
+    # Google first: 4-argon -> 3.8-flash -> 3.5-flash -> 3-flash
+    assert sorted_ids[:4] == [
+        "gemini-4-argon",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3-flash",
+    ]
+
+    # Anthropic second: 5.5 -> 5.1 -> 4.5
+    assert sorted_ids[4:7] == [
+        "claude-sonnet-5.5",
+        "claude-opus-5.1",
+        "claude-haiku-4-5",
+    ]
+
+    # xAI / Grok third: 4.20 -> 2
+    assert sorted_ids[7:9] == [
+        "grok-4.20-reasoning",
+        "grok-2-mini",
+    ]
+
+    # Mistral fourth: mistral-large-3
+    assert sorted_ids[9] == "mistral-large-3"
+
+    # Meta fifth: llama-3.1-8b
+    assert sorted_ids[10] == "llama-3.1-8b"
+
+    # 2. Verify /api/models endpoint returns models in this order
+    req = urllib.request.Request(f"{web_server}/api/models")
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read().decode("utf-8"))
+        models = data["models"]
+        model_ids = [m["id"] for m in models]
+
+        # Google models appear before Claude models
+        assert model_ids.index("gemini-4-argon") < model_ids.index("claude-sonnet-5.5")
+        assert model_ids.index("gemini-3.8-flash") < model_ids.index("gemini-3.5-flash")
+        assert model_ids.index("gemini-3.5-flash") < model_ids.index("gemini-3.1-pro")
+        assert model_ids.index("gemini-3.1-pro") < model_ids.index("gemini-3-pro")
+
+        # Claude models appear before Grok models
+        assert model_ids.index("claude-sonnet-5.5") < model_ids.index("claude-opus-5.1")
+        assert model_ids.index("claude-opus-5.1") < model_ids.index("claude-sonnet-4-6")
+        assert model_ids.index("claude-sonnet-4-6") < model_ids.index("claude-sonnet-4-5")
+        assert model_ids.index("claude-sonnet-4-5") < model_ids.index("grok-2-mini")
+
+
+
 
