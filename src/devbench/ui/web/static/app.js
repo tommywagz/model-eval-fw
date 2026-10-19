@@ -20,6 +20,7 @@ const state = {
   models: [],
   selectedModelId: "gemini-3.5-flash",
   selectedCriticModelId: "gemini-3.8-flash",
+  selectedCriticLocation: "us-central1",
   allHarnesses: [],
   defaultHarnesses: [],
   dropdownHarnesses: [],
@@ -220,6 +221,7 @@ async function initStudio() {
   renderCriticCards();
   renderCriticDropdown();
   updateActiveCriticIndicator();
+  updateActiveCriticLocationIndicator();
   await Promise.all([
     fetchModels(),
     fetchHarnesses(),
@@ -1552,6 +1554,22 @@ function renderCriticDropdown() {
   }
 }
 
+function onCriticLocationChange(loc) {
+  if (!loc) return;
+  state.selectedCriticLocation = loc;
+  updateActiveCriticLocationIndicator();
+  const select = document.getElementById("critic-location-select");
+  if (select && select.value !== loc) {
+    select.value = loc;
+  }
+}
+
+function updateActiveCriticLocationIndicator() {
+  const el = document.getElementById("active-critic-location-indicator");
+  if (!el) return;
+  el.textContent = `Location: ${state.selectedCriticLocation || "us-central1"}`;
+}
+
 function onSelectDropdownModel(modelId) {
   if (!modelId) {
     const fallback = state.defaultModels[0] || state.allModels.find((m) => m.enabled);
@@ -2068,6 +2086,7 @@ async function startEvaluation() {
         agent_type: agentHarness,
         harness: agentHarness,
         critic_model: state.selectedCriticModelId || "gemini-3.8-flash",
+        critic_location: state.selectedCriticLocation || "us-central1",
         no_critics: state.selectedCriticModelId === "none",
         harbor: useHarbor,
         environment_type: environmentType,

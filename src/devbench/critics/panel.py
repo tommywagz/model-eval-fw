@@ -211,12 +211,12 @@ class ActorCriticPanel:
             or project_id
             or self.actor_project_id
         )
-        # If an explicit critic_location is passed (e.g. 'global' or 'us-east5') or CRITIC_LOCATION env is set,
-        # use it. Otherwise, let each critic resolve its own configured model location.
+        # If an explicit critic_location is passed (e.g. 'global' or 'us-central1') or CRITIC_LOCATION env is set,
+        # use it. Otherwise, fall back to the project location or let the model resolve its location.
         self.critic_location = (
             critic_location
             or os.environ.get("CRITIC_LOCATION")
-            or (location if critic_location is not None else None)
+            or location
         )
         self.project_id = self.critic_project_id
         self.location = self.critic_location

@@ -151,12 +151,19 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
     no_critics = bool(payload.get("no_critics", False) or raw_critic in ("none", "no_critics", "disabled"))
     critic_model = None if (no_critics or raw_critic in ("auto", "default", "none", None, "")) else str(raw_critic).strip()
 
+    raw_critic_loc = payload.get("critic_location")
+    if raw_critic_loc in ("auto", "", None):
+        critic_location = os.environ.get("CRITIC_LOCATION") or gcp_snapshot.get("location") or "us-central1"
+    else:
+        critic_location = str(raw_critic_loc).strip()
+
     return {
         "scenario_list": scenario_list,
         "scenario_id": scenario_list[0],
         "model_alias": model_alias,
         "model_entry": model_entry,
         "critic_model": critic_model,
+        "critic_location": critic_location,
         "no_critics": no_critics,
         "mode": mode,
         "auth_mode": auth_mode,
@@ -173,7 +180,7 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
         "actor_project_id": payload.get("actor_project_id") or gcp_snapshot.get("project_id"),
         "actor_location": payload.get("actor_location") or gcp_snapshot.get("location"),
         "critic_project_id": payload.get("critic_project_id") or os.environ.get("CRITIC_PROJECT_ID"),
-        "critic_location": payload.get("critic_location") or os.environ.get("CRITIC_LOCATION"),
+        "critic_location": critic_location,
         "internal_google_permissions": get_internal_google_default_permissions(
             project_id=gcp_snapshot.get("project_id"),
             location=gcp_snapshot.get("location"),
@@ -303,6 +310,7 @@ def summarize_report(per_test: List[Dict[str, Any]], req: Dict[str, Any], starte
         "harbor": req["use_harbor"],
         "environment_type": req["environment_type"] if req["use_harbor"] else None,
         "critic_model": req.get("critic_model") or ("None (Deterministic Only)" if req.get("no_critics") else "Auto Cross-Evaluator"),
+        "critic_location": req.get("critic_location"),
         "no_critics": req.get("no_critics", False),
         "warnings": req["warnings"],
     }
@@ -336,6 +344,7 @@ def run_evaluation(
             "agent_harness": agent_type,
             "harness_spec": req["harness_spec"],
             "critic_model": req.get("critic_model") or ("None (Deterministic Only)" if req.get("no_critics") else "Auto Cross-Evaluator"),
+            "critic_location": req.get("critic_location"),
             "no_critics": req.get("no_critics", False),
             "internal_google_permissions": req["internal_google_permissions"],
             "warnings": req["warnings"],
