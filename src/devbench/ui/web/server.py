@@ -1588,10 +1588,16 @@ def start_web_server(
     return httpd
 
 
-def run_web_ui(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False) -> None:
+def run_web_ui(
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    open_browser: bool = False,
+) -> None:
     """Run the Web UI server synchronously (blocking)."""
-    httpd = start_web_server(host=host, port=port, open_browser=open_browser)
-    print(f"\n🚀 devbench Evaluation Studio running at http://{host}:{port}\nPress Ctrl+C to stop.\n")
+    target_host = host or os.environ.get("HOST", "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+    target_port = port if port is not None else int(os.environ.get("PORT", 8080))
+    httpd = start_web_server(host=target_host, port=target_port, open_browser=open_browser)
+    print(f"\n🚀 devbench Evaluation Studio running at http://{target_host}:{target_port}\nPress Ctrl+C to stop.\n")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

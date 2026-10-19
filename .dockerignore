@@ -1,0 +1,13 @@
+.git
+.github
+.env*
+.devbench
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+artifacts
+harbor/jobs/*
+*.log
+.DS_Store

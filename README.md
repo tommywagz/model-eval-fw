@@ -227,6 +227,13 @@ python3 -m devbench.ui.web.server --port 8080
 ```
 Open **`http://localhost:8080`** (or `http://127.0.0.1:8080`) in any modern browser.
 
+#### Hosted Cloud Run Evaluation Studio
+Try out the hosted Evaluation Studio directly in your browser:
+🔗 **[DevBench Cloud Run Studio](https://devbench-studio-onlciquboq-uc.a.run.app)**
+
+> [!NOTE]
+> The hosted Cloud Run instance runs in a secure, zero-credential hermetic sandbox with the offline demo catalog. To execute live evaluations against your own models, link your own Google Cloud Project in Section 0—your project's quota and spend remain strictly isolated to your account.
+
 ---
 
 #### Step-by-Step User Guide & Navigation Flow
