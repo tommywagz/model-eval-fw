@@ -198,7 +198,7 @@ def get_access_token(force_refresh: bool = False) -> Tuple[str, str]:
 # ----------------------------------------------------------------------------
 
 
-HttpFn = Callable[[str, str, Optional[Dict[str, Any]], Dict[str, str]], Tuple[int, Dict[str, Any]]]
+HttpFn = Callable[[str, str, Optional[Dict[str, Any]], Dict[str, str]], Tuple[int, Any]]
 
 
 def _http_json(
@@ -207,7 +207,7 @@ def _http_json(
     body: Optional[Dict[str, Any]],
     headers: Dict[str, str],
     timeout: float = 20.0,
-) -> Tuple[int, Dict[str, Any]]:
+) -> Tuple[int, Any]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     for k, v in headers.items():
@@ -232,13 +232,25 @@ def _http_json(
         return 0, {"error": {"message": str(exc)}}
 
 
-def _error_message(payload: Dict[str, Any]) -> str:
-    err = payload.get("error")
-    if isinstance(err, dict):
-        return str(err.get("message") or err.get("status") or err)[:300]
-    if isinstance(payload, list) and payload:
-        return _error_message(payload[0])
-    return str(err or payload.get("raw") or payload)[:300]
+def _error_message(payload: Any) -> str:
+    if isinstance(payload, list):
+        if not payload:
+            return ""
+        return "; ".join(_error_message(item) for item in payload if item)[:300]
+    if isinstance(payload, dict):
+        err = payload.get("error")
+        if isinstance(err, dict):
+            return str(err.get("message") or err.get("status") or err)[:300]
+        if isinstance(err, list):
+            return _error_message(err)
+        if err:
+            return str(err)[:300]
+        if "raw" in payload:
+            return str(payload["raw"])[:300]
+        if "message" in payload:
+            return str(payload["message"])[:300]
+        return str(payload)[:300]
+    return str(payload)[:300]
 
 
 def vertex_host(location: str) -> str:

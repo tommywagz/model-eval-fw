@@ -625,3 +625,35 @@ def test_assessment_mode_sidebar_and_model_pagination(web_server: str) -> None:
         assert keys_res["keys_configured"]["anthropic"] is True
 
 
+def test_error_message_handles_list_payloads_and_edge_cases():
+    """Verify that _error_message in model_garden handles list error payloads without raising AttributeError."""
+    from devbench.gcp.model_garden import _error_message, probe_model_access
+
+    # 1. OpenAPI error format returned as a list of error objects
+    list_payload = [{"error": {"code": 404, "message": "Publisher model not found", "status": "NOT_FOUND"}}]
+    msg = _error_message(list_payload)
+    assert "Publisher model not found" in msg
+
+    # 2. Empty list, strings, and scalar payloads
+    assert _error_message([]) == ""
+    assert _error_message("plain string error") == "plain string error"
+    assert _error_message(None) == "None"
+
+    # 3. probe_model_access with mock http_fn returning list payload
+    def mock_http_list(method, url, body, headers):
+        return 404, [{"error": {"code": 404, "message": "Not found in region", "status": "NOT_FOUND"}}]
+
+    res = probe_model_access(
+        project_id="test-proj",
+        location="global",
+        publisher="xai",
+        model_id="grok-4.6",
+        token="fake-token",
+        http=mock_http_list,
+    )
+    assert res["enabled"] is False
+    assert res["enablement"] == "not_available"
+    assert "Not available in global" in res["detail"]
+
+
+
