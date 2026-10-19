@@ -106,6 +106,32 @@ models:
       max_output_tokens: 8192
       seed: 42
 
+  claude-opus-5.5:
+    provider: "vertex_anthropic"
+    model_name: "claude-opus-5-5"
+    project_id: "devbench-eval-sandbox"
+    location: "us-east5"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00500
+    cost_per_1k_output_usd: 0.02500
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
+  codestral-2:
+    provider: "vertex_endpoint"
+    model_name: "codestral-2"
+    project_id: "devbench-eval-sandbox"
+    location: "europe-west4"
+    role: "candidate"
+    cost_per_1k_input_usd: 0.00030
+    cost_per_1k_output_usd: 0.00090
+    generation_defaults:
+      temperature: 0.0
+      max_output_tokens: 8192
+      seed: 42
+
   gemini-4-argon:
     provider: "vertex_genai"
     model_name: "gemini-4-argon"

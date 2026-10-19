@@ -197,9 +197,9 @@ function getBrandLogoSvg(brand, modelId) {
     `;
   }
 
-  // Default Vertex AI / Partner Model Hex Emblem
+  // Default Agent Platform / Partner Model Hex Emblem
   return `
-    <svg viewBox="0 0 24 24" fill="none" aria-label="Vertex AI Partner Model Logo">
+    <svg viewBox="0 0 24 24" fill="none" aria-label="Agent Platform Partner Model Logo">
       <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
       <circle cx="12" cy="12" r="3" fill="#1a73e8"/>
     </svg>
@@ -215,6 +215,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function initStudio() {
+  initQuickNavScrollSpy();
   await Promise.all([
     fetchModels(),
     fetchHarnesses(),
@@ -945,7 +946,7 @@ function showModelAccessModal(info = {}) {
   currentModelForAccessVerify = modelId;
   const projectId = info.project_id || state.gcpProject || "not-specified";
   const location = info.location || state.gcpLocation || "us-central1";
-  const errorMsg = info.message || info.detail || info.error || "Vertex AI Model Garden access denied or model terms not accepted.";
+  const errorMsg = info.message || info.detail || info.error || "Agent Platform Model Garden access denied or model terms not accepted.";
   const statusBadge = info.error_status || "PERMISSION_DENIED";
 
   const modelIdEl = document.getElementById("modal-model-id");
@@ -1219,7 +1220,7 @@ function renderModelCards(models) {
   container.innerHTML = "";
 
   if (models.length === 0) {
-    container.innerHTML = `<div class="loading-placeholder">No enabled models in ${escapeHtml(state.gcpProject)} (${escapeHtml(state.gcpLocation)}). Link a project above, or enable/verify models in Vertex AI Model Garden.</div>`;
+    container.innerHTML = `<div class="loading-placeholder">No enabled models in ${escapeHtml(state.gcpProject)} (${escapeHtml(state.gcpLocation)}). Link a project above, or enable/verify models in Agent Platform Model Garden.</div>`;
     return;
   }
 
@@ -2322,4 +2323,86 @@ async function exportToRepository() {
     btn.disabled = false;
     btn.innerHTML = `<span class="btn-icon">${ICONS.commit}</span> Insert into Repository`;
   }
+}
+
+// ============================================================================
+// Quick Right-Side Navigation Dock Controllers
+// ============================================================================
+
+function quickNavigateTo(sectionId) {
+  const el = document.getElementById(sectionId);
+  if (!el) return;
+
+  // If target is gcp-config-panel and it is currently hidden, open it
+  if (sectionId === "gcp-config-panel" && el.style.display === "none") {
+    toggleGcpConfigPanel();
+  }
+
+  // Smooth scroll to section with offset for top header
+  const headerHeight = document.querySelector(".app-header")?.offsetHeight || 60;
+  const targetPos = el.getBoundingClientRect().top + window.pageYOffset - headerHeight - 16;
+  window.scrollTo({ top: Math.max(0, targetPos), behavior: "smooth" });
+
+  // Add brief flash highlight
+  el.classList.add("section-flash-highlight");
+  setTimeout(() => el.classList.remove("section-flash-highlight"), 1600);
+
+  // Update active item in quick nav dock
+  updateActiveQuickNavItem(sectionId);
+}
+
+function quickNavigateToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  updateActiveQuickNavItem("gcp-config-panel");
+}
+
+function toggleQuickNavDock() {
+  const dock = document.getElementById("quick-nav-dock");
+  if (dock) {
+    dock.classList.toggle("collapsed");
+  }
+}
+
+function updateActiveQuickNavItem(sectionId) {
+  const items = document.querySelectorAll(".quick-nav-item");
+  items.forEach((item) => {
+    const target = item.getAttribute("data-target");
+    item.classList.toggle("active", target === sectionId);
+  });
+}
+
+function initQuickNavScrollSpy() {
+  const sectionIds = [
+    "gcp-config-panel",
+    "section-select-models",
+    "section-select-harness",
+    "section-use-case-suite",
+    "section-run-eval",
+    "eval-report-section",
+  ];
+
+  let scrollTimeout = null;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (scrollTimeout) return;
+      scrollTimeout = setTimeout(() => {
+        scrollTimeout = null;
+        const scrollPos = window.pageYOffset + 200;
+        let currentId = null;
+
+        for (let i = sectionIds.length - 1; i >= 0; i--) {
+          const el = document.getElementById(sectionIds[i]);
+          if (el && el.style.display !== "none" && el.offsetTop <= scrollPos) {
+            currentId = sectionIds[i];
+            break;
+          }
+        }
+        if (currentId) {
+          updateActiveQuickNavItem(currentId);
+        }
+      }, 80);
+    },
+    { passive: true }
+  );
 }

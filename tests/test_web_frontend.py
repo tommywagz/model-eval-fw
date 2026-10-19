@@ -93,13 +93,8 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
         assert "dropdown_models" in data
 
         default_ids = [m["id"] for m in data["default_models"]]
-        assert "gemini-3.5-flash" in default_ids
-        assert "gemini-3.1-pro" in default_ids
-        assert "gemini-3.8-flash" in default_ids
-        assert "claude-opus-5.1" in default_ids
-        assert "claude-sonnet-5.5" in default_ids
-        assert "claude-sonnet-4-6" in default_ids
-        assert "mistral-large-3" in default_ids
+        expected_defaults = ["gemini-4-argon", "gemini-3.8-flash", "claude-opus-5.5", "claude-sonnet-5.5", "codestral-2"]
+        assert default_ids[:5] == expected_defaults
         assert len(data["dropdown_models"]) >= 3
 
         # Validate pricing and brand attributes exist
@@ -479,6 +474,7 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert 'id="generate-suite-btn"' in html
         assert 'id="run-eval-btn"' in html
         assert 'id="insert-repo-btn"' in html
+        assert 'id="quick-nav-dock"' in html
 
     with urllib.request.urlopen(f"{web_server}/styles.css") as resp:
         assert resp.status == 200
@@ -488,6 +484,7 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "--google-blue" in css
         assert ".selected-miq" in css
         assert ".btn-selected" in css
+        assert ".quick-nav-dock" in css
 
     with urllib.request.urlopen(f"{web_server}/app.js") as resp:
         assert resp.status == 200
@@ -501,6 +498,7 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "saveCustomTestSuite" in js
         assert "updateMiqTogglesSelection" in js
         assert "Select as MIQ" in js
+        assert "quickNavigateTo" in js
 
 
 def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:

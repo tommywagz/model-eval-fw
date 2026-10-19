@@ -2835,3 +2835,231 @@ textarea:focus, select:focus, input[type="text"]:focus {
   background: var(--bg-tertiary);
   border-color: var(--border-hover);
 }
+
+/* ============================================================================
+   Direct Managed Model / Custom Endpoint Card (Light Mode Theme)
+   ============================================================================ */
+
+.custom-endpoint-setup-card {
+  background-color: #ffffff !important;
+  border: 1px solid var(--border-color, #dadce0) !important;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.custom-endpoint-setup-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================================================
+   Floating Quick Section Navigation Tab (Right Dock)
+   ============================================================================ */
+
+.quick-nav-dock {
+  position: fixed;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1000;
+  background: #ffffff;
+  border: 1px solid var(--border-color, #dadce0);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(60, 64, 67, 0.15), 0 1px 4px rgba(60, 64, 67, 0.08);
+  padding: 0.45rem;
+  width: 175px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease, opacity 0.2s ease;
+  user-select: none;
+  backdrop-filter: blur(8px);
+}
+
+.quick-nav-dock.collapsed {
+  width: 48px;
+  padding: 0.45rem 0.35rem;
+}
+
+.quick-nav-dock.collapsed .quick-nav-title,
+.quick-nav-dock.collapsed .nav-label {
+  display: none;
+}
+
+.quick-nav-dock.collapsed .quick-nav-header {
+  justify-content: center;
+  padding: 0.35rem 0.2rem;
+}
+
+.quick-nav-dock.collapsed .quick-nav-arrow svg {
+  transform: rotate(180deg);
+}
+
+.quick-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.55rem;
+  border-bottom: 1px solid var(--border-color, #dadce0);
+  cursor: pointer;
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+  transition: background 0.15s ease;
+}
+
+.quick-nav-header:hover {
+  background: var(--bg-tertiary, #f1f3f4);
+}
+
+.quick-nav-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.quick-nav-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--google-blue, #1a73e8);
+}
+
+.quick-nav-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted, #70757a);
+  transition: transform 0.2s ease;
+}
+
+.quick-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.quick-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary, #5f6368);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.quick-nav-item:hover {
+  background: var(--google-blue-soft, #e8f0fe);
+  color: var(--google-blue, #1a73e8);
+}
+
+.quick-nav-item.active {
+  background: var(--google-blue-soft, #e8f0fe);
+  color: var(--google-blue, #1a73e8);
+  font-weight: 700;
+}
+
+.quick-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  background: var(--google-blue, #1a73e8);
+  border-radius: 0 4px 4px 0;
+}
+
+.nav-step-dot {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: var(--bg-tertiary, #f1f3f4);
+  color: var(--text-primary, #202124);
+  transition: all 0.15s ease;
+}
+
+.quick-nav-item:hover .nav-step-dot,
+.quick-nav-item.active .nav-step-dot {
+  background: var(--google-blue, #1a73e8);
+  color: #ffffff;
+}
+
+.dot-top {
+  background: var(--bg-tertiary);
+  color: var(--google-blue);
+}
+
+.nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.quick-nav-divider {
+  height: 1px;
+  background: var(--border-color, #dadce0);
+  margin: 0.25rem 0.4rem;
+}
+
+.nav-top-btn {
+  color: var(--google-blue, #1a73e8);
+  font-weight: 600;
+}
+
+/* Section Flash Pulse on Quick Navigation */
+.section-flash-highlight {
+  animation: sectionFlash 1.4s ease-out;
+}
+
+@keyframes sectionFlash {
+  0% {
+    box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.45);
+    border-color: var(--google-blue, #1a73e8);
+  }
+  100% {
+    box-shadow: none;
+    border-color: var(--border-color);
+  }
+}
+
+@media (max-width: 1350px) {
+  .quick-nav-dock {
+    width: 48px;
+    padding: 0.45rem 0.35rem;
+  }
+  .quick-nav-dock .quick-nav-title,
+  .quick-nav-dock .nav-label {
+    display: none;
+  }
+  .quick-nav-dock .quick-nav-header {
+    justify-content: center;
+    padding: 0.35rem 0.2rem;
+  }
+  .quick-nav-dock:hover {
+    width: 175px;
+    padding: 0.45rem;
+  }
+  .quick-nav-dock:hover .quick-nav-title,
+  .quick-nav-dock:hover .nav-label {
+    display: inline;
+  }
+  .quick-nav-dock:hover .quick-nav-header {
+    justify-content: space-between;
+    padding: 0.35rem 0.55rem;
+  }
+}

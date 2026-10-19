@@ -561,15 +561,16 @@ def _slug(text: str) -> str:
 def _featured_rank(entry: Dict[str, Any]) -> Tuple[int, str]:
     mid = entry["id"].lower()
     order = [
-        ("gemini", "pro"),
+        ("gemini", "argon"),
         ("gemini", "flash"),
         ("claude", "opus"),
         ("claude", "sonnet"),
+        ("codestral", ""),
         ("mistral", "large"),
         ("llama", ""),
     ]
     for idx, (a, b) in enumerate(order):
-        if a in mid and b in mid:
+        if a in mid and (not b or b in mid):
             return idx, mid
     return len(order), mid
 

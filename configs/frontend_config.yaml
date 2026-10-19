@@ -11,7 +11,7 @@ app:
     - name: "Jev"
       role: "Deterministic Verification & Rubric Orchestration"
 
-# Linked Google Cloud Project & Vertex AI Location Configuration
+# Linked Google Cloud Project & Agent Platform Location Configuration
 gcp_project:
   project_id: "devbench-eval-sandbox"
   location: "us-central1"
@@ -27,38 +27,24 @@ gcp_project:
 # Assessable Frontier Models (MIQs) hosted on GCP Model Garden
 # Default 5 Frontier Models appear as primary select squares; additional enabled GCP project models populate the dropdown selector.
 model_garden:
-  - id: "gemini-3.5-flash"
-    name: "Gemini 3.5 Flash"
+  - id: "gemini-4-argon"
+    name: "Gemini 4 Argon"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
-    badge: "Default Frontier"
-    tags: ["High Throughput", "Low Latency", "ADK Native", "Fast Synthesis"]
-    description: "Google's default Gemini 3.5 Flash model engineered for responsive autonomous agent execution, high throughput tool evaluation, and sub-second reasoning."
-    cost_per_1k_input_usd: 0.00010
-    cost_per_1k_output_usd: 0.00040
+    provider: "Google DeepMind (Agent Platform Model Garden)"
+    badge: "Flagship Argon"
+    tags: ["10M Context", "Agentic Synthesis", "ADK Native"]
+    description: "Experimental Argon-series Gemini frontier endpoint on Agent Platform for autonomous test suite synthesis and multi-step cloud verification."
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.00800
     location: "us-central1"
     is_default: true
     enabled: true
     selected: true
 
-  - id: "gemini-3.1-pro"
-    name: "Gemini 3.1 Pro"
-    brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
-    badge: "Flagship Frontier"
-    tags: ["Multimodal", "2M+ Context", "Deep Reasoning", "ADK Native"]
-    description: "Google's flagship Pro frontier model engineered for autonomous agent orchestration, deep architectural synthesis, and complex GCP operations."
-    cost_per_1k_input_usd: 0.00150
-    cost_per_1k_output_usd: 0.00600
-    location: "us-central1"
-    is_default: true
-    enabled: true
-    selected: false
-
   - id: "gemini-3.8-flash"
     name: "Gemini 3.8 Flash"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
+    provider: "Google DeepMind (Agent Platform Model Garden)"
     badge: "High Speed Frontier"
     tags: ["Sub-Second Latency", "High Throughput", "Tool Dispatch"]
     description: "Ultra-fast frontier model optimized for high-frequency agent tool invocation, real-time code synthesis, and cost-efficient scaling."
@@ -69,13 +55,13 @@ model_garden:
     enabled: true
     selected: false
 
-  - id: "claude-opus-5.1"
-    name: "Claude Opus 5.1"
+  - id: "claude-opus-5.5"
+    name: "Claude Opus 5.5"
     brand: "anthropic"
-    provider: "Anthropic (Vertex AI Partner Model)"
+    provider: "Anthropic (Agent Platform Partner Model)"
     badge: "Frontier Reasoning"
     tags: ["Multi-Step Planning", "System Architecture", "Zero-Shot Refactor"]
-    description: "Anthropic's most capable Opus 5.1 frontier partner model on Vertex AI specializing in deep architectural reasoning and complex multi-agent synthesis."
+    description: "Anthropic's most capable Opus 5.5 frontier partner model on Agent Platform specializing in deep architectural reasoning and complex multi-agent synthesis."
     cost_per_1k_input_usd: 0.00500
     cost_per_1k_output_usd: 0.02500
     location: "us-east5"
@@ -86,7 +72,7 @@ model_garden:
   - id: "claude-sonnet-5.5"
     name: "Claude Sonnet 5.5"
     brand: "anthropic"
-    provider: "Anthropic (Vertex AI Partner Model)"
+    provider: "Anthropic (Agent Platform Partner Model)"
     badge: "Coding Specialist"
     tags: ["Advanced Coding", "Architectural Conversion", "Low Error Rate"]
     description: "Next-gen Anthropic Sonnet 5.5 frontier partner model on Google Cloud delivering state-of-the-art polyglot code translation and deterministic test adherence."
@@ -97,31 +83,72 @@ model_garden:
     enabled: true
     selected: false
 
-  - id: "mistral-large-3"
-    name: "Mistral Large 3"
+  - id: "codestral-2"
+    name: "Codestral 2"
     brand: "mistral"
-    provider: "Mistral AI (Vertex AI Partner Model)"
-    badge: "Latest Mistral Release"
-    tags: ["Latest Release", "Function Calling", "Concise Code", "Polyglot"]
-    description: "Latest Mistral AI flagship release on Google Cloud Vertex AI with high-precision structured output, agentic tool calling, and multilingual code synthesis."
-    cost_per_1k_input_usd: 0.00200
-    cost_per_1k_output_usd: 0.00600
+    provider: "Mistral AI (Agent Platform Partner Model)"
+    badge: "Code Specialist"
+    tags: ["Generative Coding", "FIM Fill-In-Middle", "Low Latency"]
+    description: "Mistral AI's state-of-the-art Codestral 2 open-weight generative coding model deployed on Agent Platform with sub-second execution."
+    cost_per_1k_input_usd: 0.00030
+    cost_per_1k_output_usd: 0.00090
     location: "europe-west4"
     is_default: true
     enabled: true
     selected: false
 
-  # Additional Models Enabled / Configurable in the Linked GCP Project (Populate Dropdown)
-  - id: "gemini-4-argon"
-    name: "Gemini 4 Argon"
+  - id: "gemini-3.5-flash"
+    name: "Gemini 3.5 Flash"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
-    badge: "Experimental Argon"
-    tags: ["10M Context", "Agentic Synthesis", "ADK Native"]
-    description: "Experimental Argon-series Gemini frontier endpoint on Vertex AI for autonomous test suite synthesis and multi-step cloud verification."
-    cost_per_1k_input_usd: 0.00200
-    cost_per_1k_output_usd: 0.00800
+    provider: "Google DeepMind (Agent Platform Model Garden)"
+    badge: "Default Frontier"
+    tags: ["High Throughput", "Low Latency", "ADK Native", "Fast Synthesis"]
+    description: "Google's default Gemini 3.5 Flash model engineered for responsive autonomous agent execution, high throughput tool evaluation, and sub-second reasoning."
+    cost_per_1k_input_usd: 0.00010
+    cost_per_1k_output_usd: 0.00040
     location: "us-central1"
+    is_default: false
+    enabled: true
+    selected: false
+
+  - id: "gemini-3.1-pro"
+    name: "Gemini 3.1 Pro"
+    brand: "gemini"
+    provider: "Google DeepMind (Agent Platform Model Garden)"
+    badge: "Flagship Frontier"
+    tags: ["Multimodal", "2M+ Context", "Deep Reasoning", "ADK Native"]
+    description: "Google's flagship Pro frontier model engineered for autonomous agent orchestration, deep architectural synthesis, and complex GCP operations."
+    cost_per_1k_input_usd: 0.00150
+    cost_per_1k_output_usd: 0.00600
+    location: "us-central1"
+    is_default: false
+    enabled: true
+    selected: false
+
+  - id: "claude-opus-5.1"
+    name: "Claude Opus 5.1"
+    brand: "anthropic"
+    provider: "Anthropic (Agent Platform Partner Model)"
+    badge: "Frontier Reasoning"
+    tags: ["Multi-Step Planning", "System Architecture", "Zero-Shot Refactor"]
+    description: "Anthropic's capable Opus 5.1 frontier partner model on Agent Platform specializing in deep architectural reasoning and complex multi-agent synthesis."
+    cost_per_1k_input_usd: 0.00500
+    cost_per_1k_output_usd: 0.02500
+    location: "us-east5"
+    is_default: false
+    enabled: true
+    selected: false
+
+  - id: "mistral-large-3"
+    name: "Mistral Large 3"
+    brand: "mistral"
+    provider: "Mistral AI (Agent Platform Partner Model)"
+    badge: "Latest Mistral Release"
+    tags: ["Latest Release", "Function Calling", "Concise Code", "Polyglot"]
+    description: "Latest Mistral AI flagship release on Google Cloud Agent Platform with high-precision structured output, agentic tool calling, and multilingual code synthesis."
+    cost_per_1k_input_usd: 0.00200
+    cost_per_1k_output_usd: 0.00600
+    location: "europe-west4"
     is_default: false
     enabled: true
     selected: false
@@ -129,21 +156,23 @@ model_garden:
   - id: "gemini-3.5-pro"
     name: "Gemini 3.5 Pro"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
+    provider: "Google DeepMind (Agent Platform Model Garden)"
     badge: "Enterprise Pro"
     tags: ["2M Context", "Production Grade", "Cloud Native"]
-    description: "Enterprise-hardened Gemini Pro release on Vertex AI for reliable cloud tool writing and code transformation."
+    description: "Enterprise-hardened Gemini Pro release on Agent Platform for reliable cloud tool writing and code transformation."
     cost_per_1k_input_usd: 0.00125
     cost_per_1k_output_usd: 0.00500
     location: "us-central1"
     is_default: false
     enabled: true
     selected: false
+    enabled: true
+    selected: false
 
   - id: "gemini-3-pro"
     name: "Gemini 3 Pro"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
+    provider: "Google DeepMind (Agent Platform Model Garden)"
     badge: "Baseline Pro"
     tags: ["Multimodal", "2M Context", "Deep Reasoning"]
     description: "Google's baseline Pro model for complex engineering, ADK skill synthesis, and architectural conversion (oldest Gemini configurable)."
@@ -157,7 +186,7 @@ model_garden:
   - id: "gemini-3-flash"
     name: "Gemini 3 Flash"
     brand: "gemini"
-    provider: "Google DeepMind (Vertex AI Model Garden)"
+    provider: "Google DeepMind (Agent Platform Model Garden)"
     badge: "Baseline Flash"
     tags: ["Low Latency", "Cost Effective", "Lightweight"]
     description: "High-throughput, low-latency model optimized for rapid iteration and high-frequency tool invocation."
@@ -171,10 +200,10 @@ model_garden:
   - id: "claude-sonnet-4-6"
     name: "Claude Sonnet 4.6"
     brand: "anthropic"
-    provider: "Anthropic (Vertex AI Partner Model)"
+    provider: "Anthropic (Agent Platform Partner Model)"
     badge: "Default Critic"
     tags: ["Default Critic", "Advanced Coding", "High Precision"]
-    description: "Anthropic Claude 4.6 Sonnet frontier model on Google Cloud Vertex AI serving as the default cross-evaluator critic."
+    description: "Anthropic Claude 4.6 Sonnet frontier model on Google Cloud Agent Platform serving as the default cross-evaluator critic."
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
     location: "us-east5"
@@ -185,7 +214,7 @@ model_garden:
   - id: "claude-sonnet-4-5"
     name: "Claude Sonnet 4.5"
     brand: "anthropic"
-    provider: "Anthropic (Vertex AI Partner Model)"
+    provider: "Anthropic (Agent Platform Partner Model)"
     badge: "Partner Model"
     tags: ["Advanced Coding", "Architectural Refactoring"]
     description: "Anthropic Claude 4.5 partner model on Google Cloud for coding and complex refactoring (oldest Claude configurable)."
@@ -199,10 +228,10 @@ model_garden:
   - id: "claude-haiku-4-5"
     name: "Claude Haiku 4.5"
     brand: "anthropic"
-    provider: "Anthropic (Vertex AI Partner Model)"
+    provider: "Anthropic (Agent Platform Partner Model)"
     badge: "Fast & Compact"
     tags: ["Fast Coding", "Syntax Precision", "Low Latency"]
-    description: "Compact Anthropic 4.5 partner model on Vertex AI offering near-frontier speed and coding accuracy."
+    description: "Compact Anthropic 4.5 partner model on Agent Platform offering near-frontier speed and coding accuracy."
     cost_per_1k_input_usd: 0.00100
     cost_per_1k_output_usd: 0.00500
     location: "us-east5"
@@ -214,10 +243,10 @@ model_garden:
   - id: "grok-2-mini"
     name: "Grok 2 Mini"
     brand: "xai"
-    provider: "xAI (Vertex AI Model Garden MaaS)"
+    provider: "xAI (Agent Platform Model Garden MaaS)"
     badge: "Cheap Serverless"
     tags: ["Open Weights", "Serverless MaaS", "Low Cost"]
-    description: "xAI's compact serverless model deployed via Vertex AI Model Garden MaaS with pay-per-token serverless billing."
+    description: "xAI's compact serverless model deployed via Agent Platform Model Garden MaaS with pay-per-token serverless billing."
     cost_per_1k_input_usd: 0.00020
     cost_per_1k_output_usd: 0.00100
     location: "us-central1"
@@ -228,10 +257,10 @@ model_garden:
   - id: "llama-3.1-8b"
     name: "Llama 3.1 8B Instruct"
     brand: "meta"
-    provider: "Meta (Vertex AI Model Garden MaaS)"
+    provider: "Meta (Agent Platform Model Garden MaaS)"
     badge: "Cheap Serverless"
     tags: ["Open Weights", "Serverless MaaS", "Zero Lock-in"]
-    description: "Leading open-weight instruction-tuned lightweight model deployed via Vertex AI Model Garden serverless MaaS."
+    description: "Leading open-weight instruction-tuned lightweight model deployed via Agent Platform Model Garden serverless MaaS."
     cost_per_1k_input_usd: 0.00015
     cost_per_1k_output_usd: 0.00060
     location: "us-central1"
@@ -242,10 +271,10 @@ model_garden:
   - id: "muse"
     name: "Muse"
     brand: "google"
-    provider: "Google (Vertex AI Model Garden MaaS)"
+    provider: "Google (Agent Platform Model Garden MaaS)"
     badge: "Cheap Serverless"
     tags: ["Open Weights", "Serverless MaaS", "Fast Generation"]
-    description: "Cheap serverless open-weight generative partner model on Vertex AI Model Garden."
+    description: "Cheap serverless open-weight generative partner model on Agent Platform Model Garden."
     cost_per_1k_input_usd: 0.00010
     cost_per_1k_output_usd: 0.00030
     location: "us-central1"
@@ -256,7 +285,7 @@ model_garden:
   - id: "mistral-small"
     name: "Mistral Small"
     brand: "mistral"
-    provider: "Mistral AI (Vertex AI Partner Model)"
+    provider: "Mistral AI (Agent Platform Partner Model)"
     badge: "Cheap Serverless"
     tags: ["Open Weights", "Serverless MaaS", "Concise Code"]
     description: "Mistral AI's cheap serverless partner model with fast structured output and concise code generation."
@@ -270,10 +299,10 @@ model_garden:
   - id: "eleven-labs"
     name: "ElevenLabs Turbo v2"
     brand: "elevenlabs"
-    provider: "ElevenLabs (Vertex AI Partner Model)"
+    provider: "ElevenLabs (Agent Platform Partner Model)"
     badge: "Cheap Serverless"
     tags: ["Partner Model", "Serverless Voice & Speech", "Low Latency"]
-    description: "ElevenLabs cheap high-speed serverless speech and synthesis partner model served via Vertex AI Model Garden."
+    description: "ElevenLabs cheap high-speed serverless speech and synthesis partner model served via Agent Platform Model Garden."
     cost_per_1k_input_usd: 0.00015
     cost_per_1k_output_usd: 0.00050
     location: "us-central1"
@@ -289,8 +318,8 @@ agent_harnesses:
     provider: "Google DeepMind Internal Harness"
     badge: "Internal Google Default"
     cli_binary: "agy"
-    description: "Internal Google DeepMind Antigravity (AGY) agentic coding harness executing inside Harbor sandboxes with Google Application Default Credentials (ADC) and Vertex AI IAM permissions."
-    tags: ["Internal Google ADC", "Harbor Sandbox", "Vertex AI Native", "Tool Use"]
+    description: "Internal Google DeepMind Antigravity (AGY) agentic coding harness executing inside Harbor sandboxes with Google Application Default Credentials (ADC) and Agent Platform IAM permissions."
+    tags: ["Internal Google ADC", "Harbor Sandbox", "Agent Platform Native", "Tool Use"]
     supports_internal_google_permissions: true
     is_default: true
     selected: true
@@ -310,10 +339,10 @@ agent_harnesses:
   - id: "claude-code"
     name: "Claude Code"
     brand: "anthropic"
-    provider: "Anthropic CLI on Vertex AI"
+    provider: "Anthropic CLI on Agent Platform"
     badge: "Vertex Partner CLI"
     cli_binary: "claude"
-    description: "Anthropic Claude Code agentic terminal harness routed through Google Cloud Vertex AI Partner endpoints (CLAUDE_CODE_USE_VERTEX=1) with internal Google default permissions."
+    description: "Anthropic Claude Code agentic terminal harness routed through Google Cloud Agent Platform Partner endpoints (CLAUDE_CODE_USE_VERTEX=1) with internal Google default permissions."
     tags: ["CLAUDE_CODE_USE_VERTEX=1", "Internal Google ADC", "Harbor Sandbox", "Bash & Edit"]
     supports_internal_google_permissions: true
     is_default: true
@@ -325,8 +354,8 @@ agent_harnesses:
     provider: "OpenCode CLI Agent Harness"
     badge: "Open Terminal Agent"
     cli_binary: "opencode"
-    description: "Open-source terminal coding agent harness configured to authenticate against Google Cloud Vertex AI Model Garden endpoints using internal Google default permissions."
-    tags: ["Vertex AI Model Garden", "Internal Google ADC", "Harbor Sandbox", "Polyglot"]
+    description: "Open-source terminal coding agent harness configured to authenticate against Google Cloud Agent Platform Model Garden endpoints using internal Google default permissions."
+    tags: ["Agent Platform Model Garden", "Internal Google ADC", "Harbor Sandbox", "Polyglot"]
     supports_internal_google_permissions: true
     is_default: true
     selected: false
