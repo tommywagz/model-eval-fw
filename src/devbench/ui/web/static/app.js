@@ -19,6 +19,7 @@ const state = {
   dropdownModels: [],
   models: [],
   selectedModelId: "gemini-3.5-flash",
+  selectedCriticModelId: "gemini-3.8-flash",
   allHarnesses: [],
   defaultHarnesses: [],
   dropdownHarnesses: [],
@@ -216,6 +217,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initStudio() {
   initQuickNavScrollSpy();
+  renderCriticCards();
+  renderCriticDropdown();
+  updateActiveCriticIndicator();
   await Promise.all([
     fetchModels(),
     fetchHarnesses(),
@@ -486,7 +490,10 @@ function applyModelsSnapshot(data) {
   renderGcpMiqToggles(state.allModels);
   renderModelCards(state.defaultModels);
   renderEnabledModelsDropdown(state.dropdownModels);
+  renderCriticCards();
+  renderCriticDropdown();
   updateActiveModelIndicator();
+  updateActiveCriticIndicator();
   updateHarnessWarning();
   updateMiqTogglesSelection(state.selectedModelId);
 }
@@ -1370,6 +1377,181 @@ function updateMiqTogglesSelection(modelId) {
   });
 }
 
+// ============================================================================
+// Step 3: Select Frontier Critic Model (Actor-Critic Evaluation Panel)
+// ============================================================================
+
+const DEFAULT_CRITIC_OPTIONS = [
+  {
+    id: "gemini-3.8-flash",
+    name: "Gemini 3.8 Flash",
+    brand: "gemini",
+    provider: "Google DeepMind (Agent Platform)",
+    badge: "High Quota / Fast",
+    badgeClass: "badge-speed",
+    tags: ["Recommended for Quota", "Low Spend", "Agent Platform"],
+    description: "High-throughput frontier model with high rate limits. Ideal when partner model quota is constrained on your GCP project.",
+    pricing: "In: $0.15/M • Out: $0.60/M",
+  },
+  {
+    id: "gemini-3.5-flash",
+    name: "Gemini 3.5 Flash",
+    brand: "gemini",
+    provider: "Google DeepMind (Agent Platform)",
+    badge: "Cost Efficient",
+    badgeClass: "badge-speed",
+    tags: ["Abundant Quota", "Serverless", "Instant Triage"],
+    description: "Lightweight, ultra-fast evaluation critic with minimal token cost and ample quota across regions.",
+    pricing: "In: $0.10/M • Out: $0.40/M",
+  },
+  {
+    id: "claude-sonnet-5.5",
+    name: "Claude Sonnet 5.5",
+    brand: "anthropic",
+    provider: "Anthropic (Agent Platform Partner Model)",
+    badge: "Frontier Critic",
+    badgeClass: "badge-coding",
+    tags: ["Coding Rigor", "Partner Model", "High Precision"],
+    description: "Anthropic's flagship coding evaluator for multi-perspective reviews (requires available Claude quota).",
+    pricing: "In: $3.00/M • Out: $15.00/M",
+  },
+  {
+    id: "codestral-2",
+    name: "Codestral 2",
+    brand: "mistral",
+    provider: "Mistral AI (Agent Platform Partner Model)",
+    badge: "Code Specialist",
+    badgeClass: "badge-coding",
+    tags: ["Code Specialist", "Fast MaaS", "Partner Model"],
+    description: "Mistral's code synthesis and inspection model on Agent Platform.",
+    pricing: "In: $0.30/M • Out: $0.90/M",
+  },
+  {
+    id: "none",
+    name: "No LLM Critic (Jev Only)",
+    brand: "jev",
+    provider: "DevBench Hermetic Engine",
+    badge: "0 Quota / 0 Spend",
+    badgeClass: "badge-speed",
+    tags: ["Deterministic Only", "Bypass 429 Errors", "Zero Spend"],
+    description: "Bypasses all LLM critic requests completely. Evaluates candidate outputs purely with ground-truth assertions and Jev scoring.",
+    pricing: "Zero LLM Spend",
+  },
+  {
+    id: "auto",
+    name: "Auto Cross-Evaluator",
+    brand: "vertex",
+    provider: "DevBench Dynamic Policy",
+    badge: "Default Rule",
+    badgeClass: "badge-recommended",
+    tags: ["Dynamic", "Opposing Provider", "Cross-Check"],
+    description: "Automatically selects a frontier model from a different provider than the candidate model (e.g. Claude for Gemini, Gemini for Claude).",
+    pricing: "Varies by Model",
+  },
+];
+
+function selectCriticModel(criticId) {
+  if (!criticId) return;
+  state.selectedCriticModelId = criticId;
+  renderCriticCards();
+  const dropdown = document.getElementById("critic-models-dropdown");
+  if (dropdown && dropdown.value !== criticId) {
+    dropdown.value = criticId;
+  }
+  updateActiveCriticIndicator();
+}
+
+function updateActiveCriticIndicator() {
+  const el = document.getElementById("active-critic-indicator");
+  if (!el) return;
+  const opt = DEFAULT_CRITIC_OPTIONS.find((c) => c.id === state.selectedCriticModelId);
+  const foundInAll = (state.allModels || []).find((m) => m.id === state.selectedCriticModelId);
+  const name = opt ? opt.name : (foundInAll ? foundInAll.name : state.selectedCriticModelId);
+  el.textContent = `Active Critic: ${name}`;
+}
+
+function renderCriticCards() {
+  const container = document.getElementById("critic-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+
+  DEFAULT_CRITIC_OPTIONS.forEach((c) => {
+    const isSelected = c.id === state.selectedCriticModelId;
+    const card = document.createElement("div");
+    card.className = `model-card miq-card critic-card-item ${isSelected ? "selected" : ""}`;
+    card.setAttribute("data-critic-id", c.id);
+    card.onclick = () => selectCriticModel(c.id);
+
+    card.innerHTML = `
+      <div>
+        <div class="model-card-top">
+          <div class="model-brand-logo" title="${escapeHtml(c.provider)}">
+            ${getBrandLogoSvg(c.brand, c.id)}
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge ${c.badgeClass || 'badge-recommended'}">${escapeHtml(c.badge)}</span>
+            <div class="model-select-check" aria-hidden="true">✓</div>
+          </div>
+        </div>
+        <div class="model-card-header">
+          <span class="model-card-title">${escapeHtml(c.name)}</span>
+        </div>
+        <div class="model-provider">${escapeHtml(c.provider)}</div>
+        <p class="model-desc">${escapeHtml(c.description)}</p>
+        <div class="model-tags">
+          ${(c.tags || []).map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="model-pricing" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>${escapeHtml(c.pricing)}</span>
+        <button type="button" class="secondary-btn miq-select-btn ${isSelected ? "btn-selected" : ""}" style="font-size: 0.75rem; padding: 0.25rem 0.55rem; ${isSelected ? "background: var(--google-blue, #1a73e8); color: #fff; font-weight: 600;" : ""}">
+          ${isSelected ? "✓ Active Critic" : "Select as Critic"}
+        </button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderCriticDropdown() {
+  const dropdown = document.getElementById("critic-models-dropdown");
+  if (!dropdown) return;
+
+  const currentVal = state.selectedCriticModelId || "gemini-3.8-flash";
+  dropdown.innerHTML = "";
+
+  DEFAULT_CRITIC_OPTIONS.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = `${c.name} — ${c.provider} [${c.badge}]`;
+    opt.selected = c.id === currentVal;
+    dropdown.appendChild(opt);
+  });
+
+  const optGroup = document.createElement("optgroup");
+  optGroup.label = "All Models Discovered in GCP Project";
+  const standardIds = new Set(DEFAULT_CRITIC_OPTIONS.map((c) => c.id));
+
+  (state.allModels || []).forEach((m) => {
+    if (!standardIds.has(m.id)) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = `${m.name} — ${m.provider || "GCP"}`;
+      opt.selected = m.id === currentVal;
+      optGroup.appendChild(opt);
+    }
+  });
+
+  if (optGroup.children.length > 0) {
+    dropdown.appendChild(optGroup);
+  }
+
+  const projLabel = document.getElementById("critic-dropdown-project-label");
+  if (projLabel) {
+    projLabel.textContent = `${state.gcpProject || "devbench-eval-sandbox"} • ${state.gcpLocation || "us-central1"}`;
+  }
+}
+
 function onSelectDropdownModel(modelId) {
   if (!modelId) {
     const fallback = state.defaultModels[0] || state.allModels.find((m) => m.enabled);
@@ -1885,6 +2067,8 @@ async function startEvaluation() {
         model_alias: modelAlias,
         agent_type: agentHarness,
         harness: agentHarness,
+        critic_model: state.selectedCriticModelId || "gemini-3.8-flash",
+        no_critics: state.selectedCriticModelId === "none",
         harbor: useHarbor,
         environment_type: environmentType,
         mode: mode,
@@ -2376,6 +2560,7 @@ function initQuickNavScrollSpy() {
     "gcp-config-panel",
     "section-select-models",
     "section-select-harness",
+    "section-select-critic",
     "section-use-case-suite",
     "section-run-eval",
     "eval-report-section",

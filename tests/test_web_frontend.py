@@ -475,6 +475,9 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert 'id="run-eval-btn"' in html
         assert 'id="insert-repo-btn"' in html
         assert 'id="quick-nav-dock"' in html
+        assert 'id="section-select-critic"' in html
+        assert 'id="critic-cards-container"' in html
+        assert 'id="critic-models-dropdown"' in html
 
     with urllib.request.urlopen(f"{web_server}/styles.css") as resp:
         assert resp.status == 200
@@ -499,6 +502,8 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "updateMiqTogglesSelection" in js
         assert "Select as MIQ" in js
         assert "quickNavigateTo" in js
+        assert "selectCriticModel" in js
+        assert "renderCriticCards" in js
 
 
 def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:
@@ -788,6 +793,55 @@ def test_only_implemented_scenarios_visible_in_define_use_case(web_server: str) 
         executed_ids = [tr["scenario_id"] for tr in test_results]
         assert "oauth_api_enablement" in executed_ids
         assert "storage_operations" in executed_ids
+
+
+def test_critic_model_selection_and_eval_dispatch(web_server: str) -> None:
+    """Verify that user-selected critic model (e.g. gemini-3.8-flash, or none) is accepted and dispatched."""
+    # 1. Run eval with explicit critic_model: gemini-3.8-flash
+    payload = json.dumps({
+        "scenario_id": "oauth_api_enablement",
+        "model_alias": "gemini-4-argon",
+        "agent_type": "agy",
+        "critic_model": "gemini-3.8-flash",
+        "harbor": False,
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 200
+        run_data = json.loads(resp.read().decode("utf-8"))
+        assert run_data["status"] == "COMPLETED"
+        assert run_data["critic_model"] == "gemini-3.8-flash"
+        assert run_data["no_critics"] is False
+
+    # 2. Run eval with no_critics: True (Bypass LLM critics completely)
+    payload_none = json.dumps({
+        "scenario_id": "oauth_api_enablement",
+        "model_alias": "gemini-4-argon",
+        "agent_type": "agy",
+        "critic_model": "none",
+        "no_critics": True,
+        "harbor": False,
+        "mode": "mock",
+        "async": False,
+    }).encode("utf-8")
+    req_none = urllib.request.Request(
+        f"{web_server}/api/eval/run",
+        data=payload_none,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req_none) as resp:
+        assert resp.status == 200
+        run_data_none = json.loads(resp.read().decode("utf-8"))
+        assert run_data_none["status"] == "COMPLETED"
+        assert run_data_none["no_critics"] is True
 
 
 

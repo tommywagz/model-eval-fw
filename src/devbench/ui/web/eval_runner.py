@@ -147,11 +147,17 @@ def resolve_eval_request(payload: Dict[str, Any], gcp_snapshot: Dict[str, Any]) 
     environment_type = str(payload.get("environment_type", payload.get("env", "podman")))
     auth_mode = str(payload.get("auth_mode") or "auto").lower().strip()
 
+    raw_critic = payload.get("critic_model") or payload.get("critic")
+    no_critics = bool(payload.get("no_critics", False) or raw_critic in ("none", "no_critics", "disabled"))
+    critic_model = None if (no_critics or raw_critic in ("auto", "default", "none", None, "")) else str(raw_critic).strip()
+
     return {
         "scenario_list": scenario_list,
         "scenario_id": scenario_list[0],
         "model_alias": model_alias,
         "model_entry": model_entry,
+        "critic_model": critic_model,
+        "no_critics": no_critics,
         "mode": mode,
         "auth_mode": auth_mode,
         "agent_type": agent_type,
@@ -296,6 +302,8 @@ def summarize_report(per_test: List[Dict[str, Any]], req: Dict[str, Any], starte
         "execution_mode": req["mode"],
         "harbor": req["use_harbor"],
         "environment_type": req["environment_type"] if req["use_harbor"] else None,
+        "critic_model": req.get("critic_model") or ("None (Deterministic Only)" if req.get("no_critics") else "Auto Cross-Evaluator"),
+        "no_critics": req.get("no_critics", False),
         "warnings": req["warnings"],
     }
 
@@ -327,6 +335,8 @@ def run_evaluation(
             "harness": agent_type,
             "agent_harness": agent_type,
             "harness_spec": req["harness_spec"],
+            "critic_model": req.get("critic_model") or ("None (Deterministic Only)" if req.get("no_critics") else "Auto Cross-Evaluator"),
+            "no_critics": req.get("no_critics", False),
             "internal_google_permissions": req["internal_google_permissions"],
             "warnings": req["warnings"],
             "status": "RUNNING",
@@ -384,6 +394,13 @@ def run_evaluation(
                         environment_type=req["environment_type"],
                         candidate_override=candidate_override,
                         candidate_usage=candidate_usage,
+                        critic_model=req.get("critic_model"),
+                        no_critics=req.get("no_critics", False),
+                        project_id=str(req["gcp_project_id"]),
+                        location=str(req["gcp_location"]),
+                        critic_project_id=req.get("critic_project_id"),
+                        critic_location=req.get("critic_location"),
+                        use_vertex=True,
                     )
                 else:
                     res = execute_scenario_run(
@@ -398,6 +415,8 @@ def run_evaluation(
                         actor_location=req.get("actor_location"),
                         critic_project_id=req.get("critic_project_id"),
                         critic_location=req.get("critic_location"),
+                        critic_model=req.get("critic_model"),
+                        no_critics=req.get("no_critics", False),
                         use_vertex=True,
                     )
             except Exception as ex:  # noqa: BLE001 - one failing test must not abort the suite

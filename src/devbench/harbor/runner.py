@@ -454,6 +454,13 @@ class HarborPodmanRunner:
         tokens_script_path: Optional[str | Path] = None,
         candidate_override: Optional[str] = None,
         candidate_usage: Optional[Dict[str, Any]] = None,
+        critic_model: Optional[str] = None,
+        no_critics: bool = False,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        critic_project_id: Optional[str] = None,
+        critic_location: Optional[str] = None,
+        use_vertex: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Package a Test Scenario as a Harbor Job and run all Individual Tests as Harbor Tasks.
 
@@ -593,6 +600,13 @@ class HarborPodmanRunner:
                 tokens_script_path=tokens_script_path,
                 candidate_override=candidate_override,
                 candidate_usage=candidate_usage,
+                critic_model=critic_model,
+                no_critics=no_critics,
+                project_id=project_id,
+                location=location,
+                critic_project_id=critic_project_id,
+                critic_location=critic_location,
+                use_vertex=use_vertex,
             )
 
         job_timer.stop()
@@ -1212,6 +1226,13 @@ def run_harbor_scenario_job(
     tokens_script_path: Optional[str | Path] = None,
     candidate_override: Optional[str] = None,
     candidate_usage: Optional[Dict[str, Any]] = None,
+    critic_model: Optional[str] = None,
+    no_critics: bool = False,
+    project_id: Optional[str] = None,
+    location: Optional[str] = None,
+    critic_project_id: Optional[str] = None,
+    critic_location: Optional[str] = None,
+    use_vertex: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Convenience function to package and run a single scenario as a Harbor Job."""
     runner = HarborRunner(
@@ -1234,6 +1255,13 @@ def run_harbor_scenario_job(
         tokens_script_path=tokens_script_path,
         candidate_override=candidate_override,
         candidate_usage=candidate_usage,
+        critic_model=critic_model,
+        no_critics=no_critics,
+        project_id=project_id,
+        location=location,
+        critic_project_id=critic_project_id,
+        critic_location=critic_location,
+        use_vertex=use_vertex,
     )
 
 
