@@ -486,6 +486,8 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert ".studio-section" in css
         assert ".harness-cards-grid" in css
         assert "--google-blue" in css
+        assert ".selected-miq" in css
+        assert ".btn-selected" in css
 
     with urllib.request.urlopen(f"{web_server}/app.js") as resp:
         assert resp.status == 200
@@ -497,6 +499,8 @@ def test_static_files_and_spa(web_server: str) -> None:
         assert "selectHarness" in js
         assert "saveGcpConfiguration" in js
         assert "saveCustomTestSuite" in js
+        assert "updateMiqTogglesSelection" in js
+        assert "Select as MIQ" in js
 
 
 def test_agent_harness_api_and_harbor_sandbox_eval(web_server: str) -> None:

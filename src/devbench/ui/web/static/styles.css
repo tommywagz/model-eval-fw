@@ -884,6 +884,17 @@ body {
   box-shadow: var(--shadow-blue);
 }
 
+.miq-toggle-item.selected-miq {
+  border-color: var(--google-blue);
+  background-color: #e8f0fe;
+  box-shadow: 0 0 0 2px var(--google-blue), var(--shadow-blue);
+}
+
+.miq-toggle-item.selected-miq .miq-toggle-name {
+  color: var(--google-blue);
+  font-weight: 700;
+}
+
 .miq-item-top {
   display: flex;
   align-items: flex-start;
@@ -1709,6 +1720,14 @@ body {
 .chip-btn:hover {
   background-color: var(--google-blue-soft);
   border-color: var(--google-blue);
+}
+
+.chip-btn.btn-selected {
+  background-color: var(--google-blue) !important;
+  border-color: var(--google-blue) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(26, 115, 232, 0.35);
 }
 
 .input-group {

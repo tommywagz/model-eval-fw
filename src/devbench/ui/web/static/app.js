@@ -487,6 +487,7 @@ function applyModelsSnapshot(data) {
   renderEnabledModelsDropdown(state.dropdownModels);
   updateActiveModelIndicator();
   updateHarnessWarning();
+  updateMiqTogglesSelection(state.selectedModelId);
 }
 
 async function fetchModels() {
@@ -862,13 +863,14 @@ function renderGcpMiqToggles(models) {
 
   // Render Each Model in the +80% Larger Box (Whole title readable, attributes, verification & select)
   pagedModels.forEach((m) => {
+    const isSelected = m.id === state.selectedModelId;
     const item = document.createElement("div");
-    item.className = `miq-toggle-item ${m.enabled ? "enabled" : ""}`;
+    item.className = `miq-toggle-item ${m.enabled ? "enabled" : ""} ${isSelected ? "selected-miq" : ""}`;
+    item.setAttribute("data-model-id", m.id);
     const publisherName = m.publisher || m.brand || "Google Cloud";
     const locTag = m.location || state.gcpLocation || "global";
     const launchStage = m.launch_stage || (m.category === "dedicated_endpoint" ? "Dedicated Endpoint" : "MaaS Serverless");
     const pricing = pricingLabel(m);
-    const isSelected = m.id === state.selectedModelId;
 
     let verifyControl = "";
     if (discovered && m.discovered) {
@@ -919,18 +921,14 @@ function renderGcpMiqToggles(models) {
 
       <div class="miq-item-bottom">
         ${verifyControl}
-        <button type="button" class="chip-btn ${isSelected ? 'btn-selected' : ''}" style="${isSelected ? 'background: var(--google-blue); color: #fff; font-weight: 600;' : ''}" onclick="event.stopPropagation(); selectModel('${escapeHtml(m.id)}')">
+        <button type="button" class="chip-btn miq-select-btn ${isSelected ? 'btn-selected' : ''}" style="${isSelected ? 'background: var(--google-blue, #1a73e8); color: #fff; font-weight: 600;' : ''}" onclick="event.stopPropagation(); selectModel('${escapeHtml(m.id)}')">
           ${isSelected ? '✓ Active MIQ' : 'Select as MIQ'}
         </button>
       </div>
     `;
 
     item.onclick = () => {
-      if (!discovered) {
-        toggleMiqModelInProject(m.id, !m.enabled);
-      } else {
-        selectModel(m.id);
-      }
+      selectModel(m.id);
     };
 
     container.appendChild(item);
@@ -1284,23 +1282,91 @@ function renderEnabledModelsDropdown(dropdownModels) {
 }
 
 function selectModel(modelId) {
+  if (!modelId) return;
   state.selectedModelId = modelId;
 
+  // 1. Locate the model object across all models collections
+  const targetModel =
+    (state.allModels && state.allModels.find((m) => m.id === modelId)) ||
+    (state.dropdownModels && state.dropdownModels.find((m) => m.id === modelId)) ||
+    (state.defaultModels && state.defaultModels.find((m) => m.id === modelId));
+
+  // 2. If model is currently disabled, enable it so it can be evaluated
+  if (targetModel && !targetModel.enabled) {
+    targetModel.enabled = true;
+    const chk = document.getElementById(`chk-miq-${modelId}`);
+    if (chk) chk.checked = true;
+    toggleMiqModelInProject(modelId, true);
+  }
+
+  // 3. Check if it is one of the default cards in Section 1
+  const isDefaultCard = state.defaultModels && state.defaultModels.some((m) => m.id === modelId);
+
+  // Sync Section 1 default cards
   document.querySelectorAll(".miq-card").forEach((card) => {
     card.classList.toggle("selected", card.getAttribute("data-model-id") === modelId);
   });
 
-  // Sync dropdown value if selected from default squares vs dropdown
+  // 4. Sync Section 1 dropdown
   const dropdown = document.getElementById("enabled-models-dropdown");
   if (dropdown) {
-    const isDropdownModel = state.dropdownModels.some((m) => m.id === modelId);
-    dropdown.value = isDropdownModel ? modelId : "";
+    if (isDefaultCard) {
+      dropdown.value = "";
+    } else {
+      // If it's a dropdown / non-default model, ensure it is in state.dropdownModels
+      if (targetModel && !state.dropdownModels.some((m) => m.id === modelId)) {
+        state.dropdownModels.push(targetModel);
+        state.dropdownModels = sortModelsByProviderAndRelease(state.dropdownModels);
+        renderEnabledModelsDropdown(state.dropdownModels);
+      } else {
+        let opt = Array.from(dropdown.options).find((o) => o.value === modelId);
+        if (!opt && targetModel) {
+          opt = document.createElement("option");
+          opt.value = targetModel.id;
+          opt.textContent = `${targetModel.name} — ${targetModel.provider} (${targetModel.location || state.gcpLocation}) [$${(Number(targetModel.cost_per_1k_input_usd || 0) * 1000).toFixed(2)}/M in]`;
+          dropdown.appendChild(opt);
+        }
+      }
+      dropdown.value = modelId;
+    }
   }
 
+  // 5. Update dropdown banner (same banner as when selected via Section 1 dropdown)
   updateDropdownBanner();
+
+  // 6. Update Active MIQ indicator, warning, and curl preview
   updateActiveModelIndicator();
   updateHarnessWarning();
   updateCurlPreview();
+
+  // 7. Update Available Models cards button and highlighting
+  updateMiqTogglesSelection(modelId);
+}
+
+function updateMiqTogglesSelection(modelId) {
+  const items = document.querySelectorAll(".miq-toggle-item");
+  items.forEach((item) => {
+    const itemModelId = item.getAttribute("data-model-id");
+    const isSelected = itemModelId === modelId;
+    item.classList.toggle("selected-miq", isSelected);
+
+    const btn = item.querySelector(".miq-select-btn");
+    if (btn) {
+      if (isSelected) {
+        btn.classList.add("btn-selected");
+        btn.style.background = "var(--google-blue, #1a73e8)";
+        btn.style.color = "#ffffff";
+        btn.style.fontWeight = "600";
+        btn.textContent = "✓ Active MIQ";
+      } else {
+        btn.classList.remove("btn-selected");
+        btn.style.background = "";
+        btn.style.color = "";
+        btn.style.fontWeight = "";
+        btn.textContent = "Select as MIQ";
+      }
+    }
+  });
 }
 
 function onSelectDropdownModel(modelId) {
@@ -1316,22 +1382,43 @@ function updateDropdownBanner() {
   const banner = document.getElementById("selected-dropdown-model-banner");
   if (!banner) return;
 
-  const selectedDropdownModel = state.dropdownModels.find((m) => m.id === state.selectedModelId);
+  const isDefault = state.defaultModels && state.defaultModels.some((m) => m.id === state.selectedModelId);
+  if (isDefault || !state.selectedModelId) {
+    banner.style.display = "none";
+    return;
+  }
+
+  const selectedDropdownModel =
+    (state.dropdownModels && state.dropdownModels.find((m) => m.id === state.selectedModelId)) ||
+    (state.allModels && state.allModels.find((m) => m.id === state.selectedModelId));
+
   if (!selectedDropdownModel) {
     banner.style.display = "none";
     return;
   }
 
   banner.style.display = "flex";
-  document.getElementById("dropdown-selected-logo").innerHTML = getBrandLogoSvg(
-    selectedDropdownModel.brand,
-    selectedDropdownModel.id
-  );
-  document.getElementById("dropdown-selected-name").textContent = `${selectedDropdownModel.name} (${selectedDropdownModel.provider})`;
-  document.getElementById("dropdown-selected-desc").textContent = selectedDropdownModel.description;
-  document.getElementById("dropdown-selected-pricing").textContent = `In: $${(
-    selectedDropdownModel.cost_per_1k_input_usd * 1000
-  ).toFixed(2)}/M • Out: $${(selectedDropdownModel.cost_per_1k_output_usd * 1000).toFixed(2)}/M`;
+  const logoEl = document.getElementById("dropdown-selected-logo");
+  if (logoEl) {
+    logoEl.innerHTML = getBrandLogoSvg(
+      selectedDropdownModel.brand,
+      selectedDropdownModel.id
+    );
+  }
+  const nameEl = document.getElementById("dropdown-selected-name");
+  if (nameEl) {
+    nameEl.textContent = `${selectedDropdownModel.name} (${selectedDropdownModel.provider || selectedDropdownModel.publisher || "Google Cloud"})`;
+  }
+  const descEl = document.getElementById("dropdown-selected-desc");
+  if (descEl) {
+    descEl.textContent = selectedDropdownModel.description || "Frontier Model discovered in project";
+  }
+  const pricingEl = document.getElementById("dropdown-selected-pricing");
+  if (pricingEl) {
+    pricingEl.textContent = `In: $${(
+      Number(selectedDropdownModel.cost_per_1k_input_usd || 0) * 1000
+    ).toFixed(2)}/M • Out: $${(Number(selectedDropdownModel.cost_per_1k_output_usd || 0) * 1000).toFixed(2)}/M`;
+  }
 }
 
 function updateActiveModelIndicator() {
