@@ -76,7 +76,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 5 \
-  --set-env-vars "HOST=0.0.0.0,PORT=8080,DEVBENCH_STATE_DIR=/tmp/devbench_state,GOOGLE_CLOUD_PROJECT=,VERTEX_PROJECT_ID=" \
+  --port 8080 \
+  --set-env-vars "HOST=0.0.0.0,DEVBENCH_STATE_DIR=/tmp/devbench_state,GOOGLE_CLOUD_PROJECT=,VERTEX_PROJECT_ID=" \
   --allow-unauthenticated \
   --quiet
 
