@@ -80,7 +80,7 @@ class VertexAnthropicClient(BaseModelClient):
 
         import os
 
-        region = self.location if (self.location and self.location != "global") else "us-east5"
+        region = self.location or "global"
 
         try:
             if use_vertex:

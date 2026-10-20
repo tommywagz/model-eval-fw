@@ -111,8 +111,8 @@ def build_vertex_curl_command(
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
     elif pub == "anthropic":
-        # Anthropic Vertex endpoints are regional (e.g. us-east5 or europe-west1)
-        anthropic_loc = loc if loc and loc != "global" else "us-east5"
+        # Current Claude models are served on the global endpoint, not us-east5
+        anthropic_loc = loc or "global"
         anthropic_host = vertex_host(anthropic_loc)
         url = f"{anthropic_host}/v1/projects/{project_id}/locations/{anthropic_loc}/publishers/anthropic/models/{model_name}:rawPredict"
         body = {
@@ -146,6 +146,21 @@ def build_vertex_curl_command(
         f"-d '{body_json}'",
     ]
     return " \\\n  ".join(curl_parts)
+
+
+def _urlopen_with_retry(req: urllib.request.Request, timeout: float, max_attempts: int = 4) -> Dict[str, Any]:
+    """POST ``req`` and return its JSON body, retrying 429/503 with backoff (honors Retry-After)."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8") or "{}")
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 503) or attempt == max_attempts:
+                raise
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            delay = float(retry_after) if retry_after and retry_after.isdigit() else 2.0 ** attempt
+            time.sleep(min(delay, 30.0))
+    raise RuntimeError("unreachable")
 
 
 def execute_vertex_rest_prompt(
@@ -203,7 +218,7 @@ def execute_vertex_rest_prompt(
         if system_instruction:
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
     elif pub == "anthropic":
-        anthropic_loc = loc if loc and loc != "global" else "us-east5"
+        anthropic_loc = loc or "global"
         anthropic_host = vertex_host(anthropic_loc)
         url = f"{anthropic_host}/v1/projects/{project_id}/locations/{anthropic_loc}/publishers/anthropic/models/{model_name}:rawPredict"
         body = {
@@ -240,8 +255,7 @@ def execute_vertex_rest_prompt(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            resp_body = json.loads(resp.read().decode("utf-8") or "{}")
+        resp_body = _urlopen_with_retry(req, timeout)
     except urllib.error.HTTPError as exc:
         raw_err = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         try:
