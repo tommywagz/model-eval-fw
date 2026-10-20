@@ -25,6 +25,10 @@ devbench = "devbench.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"devbench.ui.web" = ["static/*", "static/**/*"]
+"*" = ["*.yaml", "*.yml", "*.json", "*.html", "*.css", "*.js", "*.svg", "*.png", "*.md"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]

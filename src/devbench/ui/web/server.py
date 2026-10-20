@@ -30,8 +30,34 @@ from devbench.telemetry.tokens import (
 from devbench.ui.web.argon_agent import ArgonSuiteCreator
 from devbench.ui.web.repo_inserter import RepoInserter
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-CONFIG_FILE = Path(__file__).resolve().parents[3] / "configs" / "frontend_config.yaml"
+def _resolve_static_dir() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent / "static",
+        Path("/app/src/devbench/ui/web/static"),
+        Path.cwd() / "src" / "devbench" / "ui" / "web" / "static",
+        Path.cwd() / "static",
+    ]
+    for c in candidates:
+        if c.is_dir() and (c / "index.html").is_file():
+            return c
+    return candidates[0]
+
+
+def _resolve_config_file() -> Path:
+    candidates = [
+        Path(__file__).resolve().parents[3] / "configs" / "frontend_config.yaml",
+        Path("/app/configs/frontend_config.yaml"),
+        Path.cwd() / "configs" / "frontend_config.yaml",
+        Path(__file__).resolve().parent.parent.parent / "configs" / "frontend_config.yaml",
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return candidates[0]
+
+
+STATIC_DIR = _resolve_static_dir()
+CONFIG_FILE = _resolve_config_file()
 
 # Global in-memory state for active evaluation runs
 ACTIVE_RUNS: Dict[str, Dict[str, Any]] = {}

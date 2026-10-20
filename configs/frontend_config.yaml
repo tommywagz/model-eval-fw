@@ -324,6 +324,34 @@ model_garden:
     enabled: true
     selected: false
 
+  - id: "deepseek-r2"
+    name: "DeepSeek R2 Reasoning"
+    brand: "deepseek"
+    provider: "DeepSeek (Agent Platform Model Garden)"
+    badge: "Chain-of-Thought"
+    tags: ["RL Reasoning", "Math & Code", "Open Weights"]
+    description: "Reinforcement-learned reasoning model hosted on Agent Platform Model Garden for deep algorithmic verification."
+    cost_per_1k_input_usd: 0.00055
+    cost_per_1k_output_usd: 0.00220
+    location: "us-central1"
+    is_default: false
+    enabled: false
+    selected: false
+
+  - id: "qwen-3-72b"
+    name: "Qwen 3 72B Instruct"
+    brand: "qwen"
+    provider: "Alibaba Cloud / Qwen (Agent Platform Endpoint)"
+    badge: "Systems & Code"
+    tags: ["Open Weights", "Polyglot", "Agentic"]
+    description: "High-performing open-weight model deployed on Agent Platform endpoints for code generation and system design."
+    cost_per_1k_input_usd: 0.00030
+    cost_per_1k_output_usd: 0.00120
+    location: "us-central1"
+    is_default: false
+    enabled: false
+    selected: false
+
 # Agent Harnesses Executed in Harbor Container Sandboxes with Internal Google Default Permissions
 agent_harnesses:
   - id: "agy"

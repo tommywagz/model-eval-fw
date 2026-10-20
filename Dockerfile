@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
     PORT=8080 \
     HOST=0.0.0.0 \
     DEVBENCH_STATE_DIR=/tmp/devbench_state \
@@ -16,8 +17,8 @@ COPY configs/ /app/configs/
 COPY src/ /app/src/
 COPY tests/ /app/tests/
 
-# Install devbench and runtime dependencies
-RUN pip install --no-cache-dir . google-auth
+# Install devbench in editable mode so /app source and static assets are directly served
+RUN pip install --no-cache-dir -e . google-auth
 
 EXPOSE 8080
 
