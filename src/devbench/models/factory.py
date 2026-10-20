@@ -140,6 +140,15 @@ DEFAULT_MODELS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "cost_per_1k_output_usd": 0.01000,
         "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
     },
+    "claude-fable-5-1": {
+        "provider": "vertex_anthropic",
+        "model_name": "claude-fable-5-1@20260514",
+        "project_id": "devbench-eval-sandbox",
+        "location": "us-central1",
+        "cost_per_1k_input_usd": 0.00250,
+        "cost_per_1k_output_usd": 0.01000,
+        "generation_defaults": {"temperature": 0.0, "max_output_tokens": 8192, "seed": 42},
+    },
     "sonnet-5.5": {
         "provider": "vertex_anthropic",
         "model_name": "claude-sonnet-5-5@20260514",

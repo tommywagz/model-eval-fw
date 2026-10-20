@@ -67,6 +67,8 @@ PRICE_TABLE_PER_1K: Dict[str, Tuple[float, float]] = {
     "gemini-3.5-flash": (0.00010, 0.00040),
     "gemini-3-pro": (0.00200, 0.01200),
     "gemini-3-flash": (0.00050, 0.00300),
+    "claude-fable": (0.00250, 0.01000),
+    "fable": (0.00250, 0.01000),
     "claude-opus-5": (0.00500, 0.02500),
     "claude-sonnet-5": (0.00300, 0.01500),
     "claude-opus-4-5": (0.00500, 0.02500),
@@ -560,18 +562,24 @@ def _slug(text: str) -> str:
 
 def _featured_rank(entry: Dict[str, Any]) -> Tuple[int, int, str]:
     mid = entry["id"].lower()
-    # Priority 0: The 5 canonical default models requested by user:
-    # 1. Argon, 2. Gemini Flash 3.8, 3. Opus 5.5, 4. Sonnet 5.5, 5. Codestral 2
+    # Explicitly exclude Claude Opus 5 and Claude Opus 4.5 from top featured slots (user requested replacement)
+    if mid in ("claude-opus-5", "claude-opus-4-5"):
+        return 1, 99, mid
+
+    # Priority 0: The 5 canonical default models:
+    # 1. Argon, 2. Gemini Flash 3.8, 3. Claude Opus 5.5, 4. Claude Fable 5.1, 5. Claude Sonnet 5.5
     if "argon" in mid:
         return 0, 0, mid
     if "3.8-flash" in mid or "3-8-flash" in mid:
         return 0, 1, mid
-    if "opus" in mid and ("5.5" in mid or "5-5" in mid or "5" in mid):
+    if "opus" in mid and ("5.5" in mid or "5-5" in mid):
         return 0, 2, mid
-    if "sonnet" in mid and ("5.5" in mid or "5-5" in mid or "5" in mid):
+    if "fable" in mid and ("5.1" in mid or "5-1" in mid or "5" in mid):
         return 0, 3, mid
-    if "codestral" in mid:
+    if "sonnet" in mid and ("5.5" in mid or "5-5" in mid):
         return 0, 4, mid
+    if "codestral" in mid:
+        return 0, 5, mid
 
     order = [
         ("gemini", "flash"),

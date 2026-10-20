@@ -255,6 +255,21 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "selected": False,
         },
         {
+            "id": "claude-fable-5-1",
+            "name": "Claude Fable 5.1",
+            "brand": "anthropic",
+            "provider": "Anthropic (Agent Platform Partner Model)",
+            "badge": "Frontier Partner",
+            "tags": ["Frontier Reasoning", "Autonomous Coding", "High Precision"],
+            "description": "Claude Fable 5.1 frontier partner model deployed on Agent Platform specializing in complex multi-step reasoning, autonomous coding, and modular architecture.",
+            "cost_per_1k_input_usd": 0.00250,
+            "cost_per_1k_output_usd": 0.01000,
+            "location": "us-central1",
+            "is_default": True,
+            "enabled": True,
+            "selected": False,
+        },
+        {
             "id": "claude-sonnet-5.5",
             "name": "Claude Sonnet 5.5",
             "brand": "anthropic",
@@ -359,7 +374,7 @@ def _default_model_garden() -> List[Dict[str, Any]]:
             "cost_per_1k_input_usd": 0.00030,
             "cost_per_1k_output_usd": 0.00090,
             "location": "europe-west4",
-            "is_default": True,
+            "is_default": False,
             "enabled": True,
             "selected": False,
         },
@@ -578,8 +593,11 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                 "gemini-4-argon",
                 "gemini-3.8-flash",
                 "claude-opus-5.5",
+                "claude-opus-5-5",
+                "claude-fable-5-1",
+                "fable-5.1",
                 "claude-sonnet-5.5",
-                "codestral-2",
+                "claude-sonnet-5-5",
             }
             for m in models:
                 if "is_default" not in m:
@@ -629,11 +647,20 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
 
             persisted = _load_persisted_link()
             if persisted:
+                p_models = persisted["models"]
+                # Replace Claude Opus 5 with Claude Fable 5.1 and Claude Opus 4.5 with Claude Sonnet 5.5 in defaults
+                for m in p_models:
+                    mid = m.get("id", "").lower()
+                    if mid in ("claude-opus-5", "claude-opus-4-5"):
+                        m["is_default"] = False
+                    elif mid in ("claude-fable-5-1", "claude-sonnet-5-5", "claude-opus-5-5", "gemini-4-argon", "gemini-3.8-flash"):
+                        m["is_default"] = True
+
                 GCP_RUNTIME_STATE.update(
                     {
                         "project_id": env_proj or persisted["project_id"],
                         "location": env_loc or persisted.get("location", GCP_RUNTIME_STATE["location"]),
-                        "models": sort_models_by_provider_and_release(persisted["models"]),
+                        "models": sort_models_by_provider_and_release(p_models),
                         "link_status": persisted.get("link_status", {}),
                         "linked": True,
                     }
@@ -642,7 +669,7 @@ def _ensure_gcp_runtime_state() -> Dict[str, Any]:
                 os.environ["VERTEX_PROJECT_ID"] = persisted["project_id"]
                 os.environ["GOOGLE_CLOUD_LOCATION"] = GCP_RUNTIME_STATE["location"]
                 os.environ["VERTEX_LOCATION"] = GCP_RUNTIME_STATE["location"]
-                _register_models_with_factory(persisted["models"])
+                _register_models_with_factory(p_models)
         return GCP_RUNTIME_STATE
 
 
@@ -662,7 +689,11 @@ def get_gcp_config_Snapshot() -> Dict[str, Any]:
         if not m.get("location"):
             m["location"] = location
 
-    default_models = [m for m in all_models if m.get("is_default") and m.get("enabled")]
+    from devbench.gcp.model_garden import _featured_rank
+    default_models = sorted(
+        [m for m in all_models if m.get("is_default") and m.get("enabled")],
+        key=_featured_rank,
+    )
     enabled_models = [m for m in all_models if m.get("enabled")]
     dropdown_models = [m for m in all_models if m.get("enabled") and not m.get("is_default")]
 

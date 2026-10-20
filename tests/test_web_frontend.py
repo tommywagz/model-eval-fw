@@ -93,7 +93,7 @@ def test_frontend_config_and_model_garden_models(web_server: str) -> None:
         assert "dropdown_models" in data
 
         default_ids = [m["id"] for m in data["default_models"]]
-        expected_defaults = ["gemini-4-argon", "gemini-3.8-flash", "claude-opus-5.5", "claude-sonnet-5.5", "codestral-2"]
+        expected_defaults = ["gemini-4-argon", "gemini-3.8-flash", "claude-opus-5.5", "claude-fable-5-1", "claude-sonnet-5.5"]
         assert default_ids[:5] == expected_defaults
         assert len(data["dropdown_models"]) >= 3
 
