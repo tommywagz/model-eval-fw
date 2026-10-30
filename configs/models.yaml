@@ -17,7 +17,7 @@ models:
     provider: "vertex_genai"
     model_name: "gemini-3.5-flash"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00010
     cost_per_1k_output_usd: 0.00040
@@ -27,25 +27,11 @@ models:
       top_p: 0.95
       seed: 42
 
-  gemini-3.1-pro:
-    provider: "vertex_genai"
-    model_name: "gemini-3.1-pro-preview"
-    project_id: "devbench-eval-sandbox"
-    location: "us-central1"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00150
-    cost_per_1k_output_usd: 0.00600
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 16384
-      top_p: 0.95
-      seed: 42
-
   gemini-3.8-flash:
     provider: "vertex_genai"
     model_name: "gemini-3.8-flash"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00015
     cost_per_1k_output_usd: 0.00060
@@ -55,23 +41,11 @@ models:
       top_p: 0.95
       seed: 42
 
-  claude-opus-5.5:
-    provider: "vertex_anthropic"
-    model_name: "claude-opus-5-5"
-    project_id: "devbench-eval-sandbox"
-    location: "us-east5"
-    role: "candidate"
-    cost_per_1k_input_usd: 0.00500
-    cost_per_1k_output_usd: 0.02500
-    generation_defaults:
-      temperature: 0.0
-      max_output_tokens: 8192
-
   claude-sonnet-5.5:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -110,7 +84,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-opus-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00500
     cost_per_1k_output_usd: 0.02500
@@ -136,7 +110,7 @@ models:
     provider: "vertex_genai"
     model_name: "gemini-4-argon"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
     cost_per_1k_output_usd: 0.00800
@@ -164,7 +138,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-5-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -193,7 +167,7 @@ models:
     provider: "vertex_genai"
     model_name: "gemini-3.1-pro-preview"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00200
     cost_per_1k_output_usd: 0.01200
@@ -205,9 +179,9 @@ models:
 
   gemini-3-flash:
     provider: "vertex_genai"
-    model_name: "gemini-3-flash-001"
+    model_name: "gemini-3-flash-preview"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00050
     cost_per_1k_output_usd: 0.00300
@@ -224,7 +198,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-4-6"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -236,7 +210,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-4-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -248,7 +222,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-haiku-4-5"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "candidate"
     cost_per_1k_input_usd: 0.00100
     cost_per_1k_output_usd: 0.00500
@@ -327,7 +301,7 @@ models:
 
   mistral-small:
     provider: "vertex_maas"
-    model_name: "mistralai/mistral-small-latest"
+    model_name: "mistralai/mistral-small-2503"
     project_id: "devbench-eval-sandbox"
     location: "europe-west4"
     role: "candidate"
@@ -376,7 +350,7 @@ models:
     provider: "vertex_anthropic"
     model_name: "claude-sonnet-4-6"
     project_id: "devbench-eval-sandbox"
-    location: "us-east5"
+    location: "global"
     role: "critic"
     cost_per_1k_input_usd: 0.00300
     cost_per_1k_output_usd: 0.01500
@@ -389,7 +363,7 @@ models:
     provider: "vertex_genai"
     model_name: "gemini-3.5-flash"
     project_id: "devbench-eval-sandbox"
-    location: "us-central1"
+    location: "global"
     role: "critic"
     cost_per_1k_input_usd: 0.00010
     cost_per_1k_output_usd: 0.00040
